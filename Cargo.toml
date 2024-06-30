@@ -1,0 +1,24 @@
+[package]
+name = "jni-simple"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Alexander Schütz <aschuetz@protonmail.com>"]
+keywords = ["jni", "java", "ffi"]
+categories = ["api-bindings"]
+description = "Simple Rust wrapper around the JNI (Java Native Interface) API."
+readme = "README.md"
+repository = "https://github.com/AlexanderSchuetz97/jni-simple"
+exclude = [
+    "example_project/*"
+]
+
+[dependencies]
+libloading = { version = "^0.8.4", optional = true }
+once_cell = "^1.19.0"
+
+
+
+[features]
+asserts = []
+loadjvm = ["libloading"]
