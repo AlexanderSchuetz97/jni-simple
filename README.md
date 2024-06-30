@@ -3,7 +3,7 @@
 This crate contains a simple dumb handwritten rust wrapper around the JNI (Java Native Interface) API.
 It does absolutely no magic around the JNI Calls and lets you just use it as you would in C.
 
-This crate is still early an early work in progress and may contain bugs or missing features.
+This crate is an early work in progress and may contain bugs or missing features.
 If you need something production ready I recommend using the `jni` crate.
 
 ### Examples
