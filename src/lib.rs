@@ -2371,6 +2371,10 @@ pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
 /// Will panic if the JVM shared library has not been loaded yet.
 ///
 pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM, JNIEnv), jint> {
+    #[cfg(feature = "asserts")]
+    {
+        assert!(!arguments.is_null(), "JNI_CreateJavaVM arguments must not be null");
+    }
     let link = get_link();
 
     let mut jvm : JNIInvPtr = null_mut();
@@ -2455,11 +2459,32 @@ pub unsafe fn JNI_CreateJavaVM_with_string_args(version: jint, arguments: &Vec<S
 
 impl JavaVM {
 
-    fn jnx<X>(&self, index: usize) -> X {
-        return unsafe {std::mem::transmute_copy(&(**self.functions)[index])};
+    unsafe fn jnx<X>(&self, index: usize) -> X {
+        return unsafe {mem::transmute_copy(&(**self.functions)[index])};
     }
 
-    pub fn AttachCurrentThread(&self, args: *mut JavaVMAttachArgs) -> Result<JNIEnv, jint> {
+    ///
+    /// Attaches the current thread to the JVM as a normal thread.
+    /// If a thread name is provided then it will be used as the java name of the current thread.
+    ///
+    pub unsafe fn AttachCurrentThread_str(&self, version: jint, thread_name: Option<&str>, thread_group: jobject) -> Result<JNIEnv, jint> {
+        if thread_name.is_some() {
+            let cstr = CString::new(thread_name.unwrap()).unwrap().into_raw();
+            let mut args = JavaVMAttachArgs::new(version, cstr, thread_group);
+            let result = self.AttachCurrentThread(&mut args);
+            _=CString::from_raw(cstr);
+            return result;
+        }
+
+        let mut args = JavaVMAttachArgs::new(version, null_mut(), thread_group);
+        return self.AttachCurrentThread(&mut args);
+    }
+
+    pub unsafe fn AttachCurrentThread(&self, args: *mut JavaVMAttachArgs) -> Result<JNIEnv, jint> {
+        #[cfg(feature = "asserts")]
+        {
+            assert!(!args.is_null(), "AttachCurrentThread args must not be null");
+        }
         let mut envptr : JNIEnvPtr = null_mut();
 
         let result = self.jnx::<fn(JNIInvPtr, *mut JNIEnvPtr, *mut JavaVMAttachArgs) -> jint>(4)
@@ -2475,11 +2500,33 @@ impl JavaVM {
         return Ok(JNIEnv{functions: envptr});
     }
 
-    pub fn AttachCurrentThreadAsDaemon(&self, args: *mut JavaVMAttachArgs) -> Result<JNIEnv, jint> {
+    ///
+    /// Attaches the current thread to the JVM as a daemon thread.
+    /// If a thread name is provided then it will be used as the java name of the current thread.
+    ///
+    pub unsafe fn AttachCurrentThreadAsDaemon_str(&self, version: jint, thread_name: Option<&str>, thread_group: jobject) -> Result<JNIEnv, jint> {
+        if thread_name.is_some() {
+            let cstr = CString::new(thread_name.unwrap()).unwrap().into_raw();
+            let mut args = JavaVMAttachArgs::new(version, cstr, thread_group);
+            let result = self.AttachCurrentThreadAsDaemon(&mut args);
+            _=CString::from_raw(cstr);
+            return result;
+        }
+
+        let mut args = JavaVMAttachArgs::new(version, null_mut(), thread_group);
+        return self.AttachCurrentThreadAsDaemon(&mut args);
+    }
+
+    pub unsafe fn AttachCurrentThreadAsDaemon(&self, args: *mut JavaVMAttachArgs) -> Result<JNIEnv, jint> {
+        #[cfg(feature = "asserts")]
+        {
+            assert!(!args.is_null(), "AttachCurrentThreadAsDaemon args must not be null");
+        }
         let mut envptr : JNIEnvPtr = null_mut();
 
         let result = self.jnx::<fn(JNIInvPtr, *mut JNIEnvPtr, *mut JavaVMAttachArgs) -> jint>(7)
             (self.functions, &mut envptr, args);
+
         if result != JNI_OK {
             return Err(result);
         }
@@ -2491,11 +2538,15 @@ impl JavaVM {
         return Ok(JNIEnv{functions: envptr});
     }
 
-    pub fn GetEnv(&self, jni_version: jint) -> Result<JNIEnv, jint> {
+    ///
+    /// Gets the JNIEnv for the current thread.
+    ///
+    pub unsafe fn GetEnv(&self, jni_version: jint) -> Result<JNIEnv, jint> {
         let mut envptr : JNIEnvPtr = null_mut();
 
         let result = self.jnx::<fn(JNIInvPtr, *mut JNIEnvPtr, jint) -> jint>(6)
             (self.functions, &mut envptr, jni_version);
+
         if result != JNI_OK {
             return Err(result);
         }
@@ -2507,12 +2558,20 @@ impl JavaVM {
         return Ok(JNIEnv{functions: envptr});
     }
 
-    pub fn DetachCurrentThread(&self) -> jint {
+    ///
+    /// Detaches the current thread from the jvm.
+    /// This should only be called on functions that were attached with AttachCurrentThread or AttachCurrentThreadAsDaemon.
+    ///
+    pub unsafe fn DetachCurrentThread(&self) -> jint {
         return self.jnx::<fn(JNIInvPtr) -> jint>(5)(self.functions);
     }
 
 
-    pub fn DestroyJavaVM(&self) {
+    ///
+    /// This function will block until all java threads have completed and then destroy the JVM.
+    /// It should not be called from a method that is called from the JVM.
+    ///
+    pub unsafe fn DestroyJavaVM(&self) {
         self.jnx::<fn(JNIInvPtr) -> ()>(3)(self.functions);
     }
 
