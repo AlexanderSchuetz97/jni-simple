@@ -111,6 +111,52 @@ pub union jtype {
     pub throwable: jthrowable
 }
 
+impl Into<jtype> for jlong {
+    fn into(self) -> jtype {
+        jtype { long: self }
+    }
+}
+
+impl Into<jtype> for jobject {
+    fn into(self) -> jtype {
+        jtype { object: self }
+    }
+}
+impl Into<jtype> for jint {
+    fn into(self) -> jtype {
+        jtype { int: self }
+    }
+}
+
+impl Into<jtype> for jshort {
+    fn into(self) -> jtype {
+        jtype { short: self }
+    }
+}
+
+impl Into<jtype> for jchar {
+    fn into(self) -> jtype {
+        jtype { char: self }
+    }
+}
+
+impl Into<jtype> for jfloat {
+    fn into(self) -> jtype {
+        jtype { float: self }
+    }
+}
+
+impl Into<jtype> for jdouble {
+    fn into(self) -> jtype {
+        jtype { double: self }
+    }
+}
+impl Into<jtype> for jboolean {
+    fn into(self) -> jtype {
+        jtype { boolean: self }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct JNINativeMethod {
@@ -199,11 +245,6 @@ impl JavaVMInitArgs {
     }
 }
 
-#[repr(C)]
-pub struct JNInvokerInternal {
-    functions: [*mut c_void; 10],
-}
-
 type JNIEnvPtr = *mut *mut [*mut c_void; 235];
 
 #[derive(Debug, Clone, Copy)]
@@ -213,7 +254,7 @@ pub struct JNIEnv {
 }
 
 impl JNINativeMethod {
-    fn new(name: *const c_char, signature: *const c_char, function_pointer: *const c_void) -> JNINativeMethod {
+    pub fn new(name: *const c_char, signature: *const c_char, function_pointer: *const c_void) -> JNINativeMethod {
         return JNINativeMethod {
             name,
             signature,
@@ -221,17 +262,17 @@ impl JNINativeMethod {
         };
     }
 
-    fn name(&self) -> *const c_char {
+    pub fn name(&self) -> *const c_char {
         self.name
     }
 
 
-    fn signature(&self) -> *const c_char {
+    pub fn signature(&self) -> *const c_char {
         self.signature
     }
 
 
-    fn fnPtr(&self) -> *const c_void {
+    pub fn fnPtr(&self) -> *const c_void {
         self.fnPtr
     }
 }
@@ -276,6 +317,11 @@ impl JNIEnv {
             (self.functions, name, classloader, data.as_ptr(), data.len() as i32);
     }
 
+    pub unsafe fn DefineClass_str(&self, name: &str, classloader: jobject, data: &[u8]) -> jclass {
+        let str = CString::new(name).unwrap();
+        return self.DefineClass(str.as_ptr(), classloader, data);
+    }
+
     pub unsafe fn FindClass(&self, name: *const c_char) -> jclass {
         #[cfg(feature = "asserts")]
         {
@@ -287,8 +333,7 @@ impl JNIEnv {
 
     pub unsafe fn FindClass_str(&self, name: &str) -> jclass {
         let str = CString::new(name).unwrap();
-        let res = self.FindClass(str.as_ptr());
-        return res;
+        return self.FindClass(str.as_ptr());
     }
 
     pub unsafe fn GetSuperclass(&self, clazz: jclass) -> jclass {
