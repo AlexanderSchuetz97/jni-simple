@@ -1347,7 +1347,7 @@ impl JNIEnv {
         #[cfg(feature = "asserts")]
         {
             self.check_no_exception("GetStringUTFRegion");
-            assert!(!string.is_null(), "GetStringCritical string must not be null");
+            assert!(!string.is_null(), "GetStringUTFRegion string must not be null");
             self.check_if_arg_is_string("GetStringUTFRegion", string);
         }
 
