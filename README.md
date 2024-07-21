@@ -3,9 +3,6 @@
 This crate contains a simple dumb handwritten rust wrapper around the JNI (Java Native Interface) API.
 It does absolutely no magic around the JNI Calls and lets you just use it as you would in C.
 
-This crate is an early work in progress and may contain bugs or missing features.
-If you need something production ready I recommend using the `jni` crate.
-
 ### Examples
 #### Loading a JVM on from a shared object file or dll
 Note: this example assumes the loadjvm feature is enabled!
@@ -126,8 +123,9 @@ This essentially makes them just hint to the user and doesn't enforce any type s
 be a big hindrance when working with JNI.
 
 #### Designed for runtime dynamic linking of the JVM
-While there are some ways of statically linking a JVM into the binary, they are usually cumbersome, 
-poorly documented and rarely tested. Alternatively one can provide the JVM on the linker path so ldd can find it, 
+The Problem: The existing jni crate that depends on the jni-sys crate requires the JVM to be resolvable by the dynamic linker.
+There are 2 ways to do this. The first is to statically link the JVM into the binary, this is rarely done, 
+very cumbersome, and poorly documented. The other is to provide the JVM on the linker path so ldd can find it, 
 but I have never seen this occur in the real world.
 
 This crate is developed for the more common use case that the JVM is available somewhere on the system and leaves it up to the user of 
@@ -144,8 +142,8 @@ This feature provides functions to dynamically link the jvm using the `libloadin
 from a string containing the absolute path to `libjvm.so` or `jvm.dll`.
 
 Note: If you do not want to use the `libloading` create but still start the JVM then there are methods provided to 
-load the JVM from a pointer to JNI_CreateJavaVM function instead of a dll/so file, 
-if you want to do dynamic linking yourself using `dlopen` or `LoadLibraryA` for example.
+load the JVM from a pointer to JNI_CreateJavaVM function instead of a dll/so file. 
+Do that if you want to do dynamic linking yourself using `dlopen` or `LoadLibraryA` for example.
 
 Note: This feature should not be used when writing a library that is loaded by `System.load` or `System.loadLibrary`. 
 It would just add a dependency that is not needed.
@@ -158,5 +156,5 @@ fool the JVM into thinking that your user code checks for exceptions, which it m
 
 I recommend using this feature before or after you have tested your code with `-Xcheck:jni` depending 
 on what problem your troubleshooting. The assertions are generally much better at detecting things like null pointers 
-or invalid parameters than the JVM checks, while the JVM checks are able to catch missing exception checks.
+or invalid parameters than the JVM checks, while the JVM checks are able to catch missing exception checks or JVM Local Stack overflows better.
 
