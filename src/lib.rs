@@ -396,12 +396,13 @@ impl JNIEnv {
             assert!(!msg.is_null(), "FatalError msg is null");
         }
         self.jni::<fn(JNIEnvPtr, *const c_char)>(18)(self.functions, msg);
+        unreachable!("FatalError");
     }
 
     pub unsafe fn FatalError_str(&self, message: &str) {
         let str = CString::new(message).unwrap().into_raw();
         self.FatalError(str);
-        unreachable!("FatalError")
+        unreachable!("FatalError");
     }
 
 
@@ -2309,26 +2310,6 @@ pub fn is_jvm_loaded() -> bool {
     return LINK.get().is_some();
 }
 
-
-#[cfg(feature = "loadjvm")]
-use std::sync::atomic::{AtomicBool, Ordering};
-
-#[cfg(feature = "loadjvm")]
-unsafe fn symbol_to_ptr<T>(symbol: libloading::Symbol<T>) -> *mut c_void {
-    //Why the library doesn't have a function for this is not really clear to me, this is the
-    //primary use case. Sad I have to do this myself...
-
-    #[cfg(target_os = "windows")]
-    {
-        return symbol.into_raw().into_raw().unwrap() as *mut c_void;
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        return symbol.into_raw().into_raw();
-    }
-}
-
 ///
 /// Convenience method to load the jvm from a path to libjvm.so or jvm.dll.
 /// On success this method does NOT close the handle to the shared object.
@@ -2337,6 +2318,7 @@ unsafe fn symbol_to_ptr<T>(symbol: libloading::Symbol<T>) -> *mut c_void {
 ///
 #[cfg(feature = "loadjvm")]
 pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
+    use std::sync::atomic::{AtomicBool, Ordering};
     let latch = AtomicBool::new(false);
 
     LINK.get_or_try_init(|| {
@@ -2345,18 +2327,18 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
             .map_err(|e| format!("Failed to load jvm from {} reason: {}", path, e))?;
 
         let JNI_CreateJavaVM_ptr = lib.get::<JNI_CreateJavaVM>(b"JNI_CreateJavaVM\0")
-            .map_err(|e| format!("Failed to load jvm from {} reason: JNI_CreateJavaVM -> {}", path, e))?;
-
-        let JNI_CreateJavaVM_ptr = symbol_to_ptr(JNI_CreateJavaVM_ptr);
+            .map_err(|e| format!("Failed to load jvm from {} reason: JNI_CreateJavaVM -> {}", path, e))?
+            .try_as_raw_ptr()
+            .ok_or_else(|| format!("Failed to load jvm from {} reason: JNI_CreateJavaVM -> failed to get raw ptr", path))?;
 
         if JNI_CreateJavaVM_ptr.is_null() {
             return Err(format!("Failed to load jvm from {} reason: JNI_CreateJavaVM not found", path))
         }
 
         let JNI_GetCreatedJavaVMs_ptr = lib.get::<JNI_GetCreatedJavaVMs>(b"JNI_GetCreatedJavaVMs\0")
-            .map_err(|e| format!("Failed to load jvm from {} reason: JNI_GetCreatedJavaVMs -> {}", path, e))?;
-
-        let JNI_GetCreatedJavaVMs_ptr = symbol_to_ptr(JNI_GetCreatedJavaVMs_ptr);
+            .map_err(|e| format!("Failed to load jvm from {} reason: JNI_GetCreatedJavaVMs -> {}", path, e))?
+            .try_as_raw_ptr()
+            .ok_or_else(|| format!("Failed to load jvm from {} reason: JNI_CreateJavaVM -> failed to get raw ptr", path))?;
 
         if JNI_GetCreatedJavaVMs_ptr.is_null() {
             return Err(format!("Failed to load jvm from {} reason: JNI_GetCreatedJavaVMs not found", path))
@@ -2381,6 +2363,8 @@ fn get_link() -> &'static JNIDynamicLink {
 ///
 /// Returns the created JavaVMs.
 /// This will only ever return 1 (or 0) JavaVM according to Oracle Documentation.
+///
+/// Will panic if the JVM shared library has not been loaded yet.
 ///
 pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
     let link = get_link();
