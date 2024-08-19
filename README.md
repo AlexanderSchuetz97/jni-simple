@@ -112,7 +112,7 @@ pub unsafe extern "system" fn Java_org_example_JNITest_test(env: JNIEnv, _class:
 ### Main goals of this crate
 
 #### Dont pretend that JNI is "safe"
-JNI is inherently unsafe (from a rust point of view) and any attempt to enforce safety will lead 
+JNI is inherently unsafe (from a rust point of view) and any attempt to enforce safety will lead to 
 performance or API complexity issues. All JNI methods provided by this crate are 
 marked as "unsafe" as they should be.
 
@@ -123,17 +123,17 @@ This essentially makes them just hint to the user and doesn't enforce any type s
 be a big hindrance when working with JNI.
 
 #### Designed for runtime dynamic linking of the JVM
-The Problem: The existing jni crate that depends on the jni-sys crate requires the JVM to be resolvable by the dynamic linker.
+The Problem: The existing jni crate that depends on the jni-sys crate which requires the JVM to be resolvable by the dynamic linker.
 There are 2 ways to do this. The first is to statically link the JVM into the binary, this is rarely done, 
-very cumbersome, and poorly documented. The other is to provide the JVM on the linker path so ldd can find it, 
-but I have never seen this occur in the real world.
+very cumbersome and poorly documented. The other is to provide the JVM on the linker path so ldd can find it, 
+but I have never seen this occur in the real world either.
 
 This crate is developed for the more common use case that the JVM is available somewhere on the system and leaves it up to the user of 
 the crate to write the necessary code to find and load the JVM. 
 
 This allows for maximum flexibility when writing a launcher app which for example may first download a JVM from the internet.
-As should be obvious, when writing a native library that does not launch the JVM itself because it's a library 
-implementing some native methods and loaded by `System.load` or `System.loadLibrary` then this is irrelevant.
+As should be obvious, when writing a native library that does not launch the JVM itself and 
+is loaded by `System.load` or `System.loadLibrary` then this is irrelevant.
 
 ### Features
 
@@ -150,9 +150,15 @@ It would just add a dependency that is not needed.
 
 #### asserts
 This feature enables assertions in the code. This is useful for debugging and testing purposes.
-As mentioned above these checks will cause a big performance hit and should not be used in production code.
-This feature should NOT be used with `-Xcheck:jni` as these checks contain calls to `env.ExceptionCheck()` which will 
-fool the JVM into thinking that your user code checks for exceptions, which it may not do. 
+These checks will cause a big performance hit and should not be used in production builds.
+
+I would not even recommend using this feature for normal debugging builds 
+unless you are specifically debugging issues that occur in relation to the JNI interface.
+There is no need to enable this feature when you are just debugging a problem that occurs in pure rust.
+
+This feature should NOT be used with the jvm launch option `-Xcheck:jni` 
+as the assertions contain calls to `env.ExceptionCheck()` which will fool the JVM into thinking 
+that your user code checks for exceptions, which it may not do. 
 
 I recommend using this feature before or after you have tested your code with `-Xcheck:jni` depending 
 on what problem your troubleshooting. The assertions are generally much better at detecting things like null pointers 
