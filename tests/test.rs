@@ -1,14 +1,13 @@
 #[cfg(feature = "loadjvm")]
-mod test {
+pub mod test {
     use std::ptr::{null, null_mut};
     use std::sync::Mutex;
     use jni_simple::*;
 
+    //Cargo runs the tests on different threads.
     static MUTEX: Mutex<()> = Mutex::new(());
 
     unsafe fn load_it() -> (JavaVM, JNIEnv){
-        //Cargo runs the tests on different threads.
-        let _lock = MUTEX.lock().unwrap();
         if !jni_simple::is_jvm_loaded() {
             // On linux/unix:
             jni_simple::load_jvm_from_library("/usr/lib/jvm/java-11-openjdk-amd64/lib/server/libjvm.so")
@@ -34,13 +33,14 @@ mod test {
             let env = jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).expect("failed to attach thread");
             return (jvm, env);
         }
-        return (jvm, env.unwrap());
+        (jvm, env.unwrap())
     }
 
 
 
     #[test]
     fn test() {
+        let _lock = MUTEX.lock().unwrap();
         unsafe {
             let (_jvm, env) = load_it();
 
@@ -54,9 +54,46 @@ mod test {
     }
 
 
+    #[test]
+    fn test_call2() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            let (_jvm, env) = load_it();
+
+            //This code does not check for failure or exceptions checks or "checks" for success in general.
+            let sys = env.FindClass_str("java/lang/System");
+            let get_prop = env.GetStaticMethodID_str(sys, "getProperty", "(Ljava/lang/String;)Ljava/lang/String;");
+
+            let str = env.NewStringUTF_str("os.name");
+            let obj = env.CallStaticObjectMethod1(sys, get_prop, str);
+            let uw = env.GetStringUTFChars_as_string(obj).unwrap().to_lowercase();
+            env.DeleteLocalRef(obj);
+            env.DeleteLocalRef(str);
+
+            #[cfg(target_os = "linux")]
+            assert_eq!(uw, "linux");
+            #[cfg(target_os = "windows")]
+            assert_eq!(uw, "windows");
+
+            let set_prop = env.GetStaticMethodID_str(sys, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+            let str = env.NewStringUTF_str("some_prop2");
+            let obj = env.CallStaticObjectMethod1(sys, get_prop, str);
+            assert!(obj.is_null());
+            let obj = env.CallStaticObjectMethod2(sys, set_prop, str, str);
+            assert!(obj.is_null());
+            let obj = env.CallStaticObjectMethod1(sys, get_prop, str);
+            assert!(!obj.is_null());
+            let uw = env.GetStringUTFChars_as_string(obj).unwrap().to_lowercase();
+            env.DeleteLocalRef(obj);
+            env.DeleteLocalRef(str);
+            assert_eq!(uw, "some_prop2");
+        }
+
+    }
 
     #[test]
     fn test_call() {
+        let _lock = MUTEX.lock().unwrap();
         unsafe {
             let (_jvm, env) = load_it();
 
