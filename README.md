@@ -1,7 +1,7 @@
 # jni-simple
 
 This crate contains a simple dumb handwritten rust wrapper around the JNI (Java Native Interface) API.
-It does absolutely no magic around the JNI Calls and lets you just use it as you would in C.
+It does absolutely no magic around the JNI Calls and lets you just use them as you would in C.
 
 ### Examples
 #### Loading a JVM on from a shared object file or dll
@@ -39,7 +39,7 @@ fn test() {
 }
 ```
 #### Writing a JNI shared library that implements a native method
-The complete version of this example can be found in the repository in the example_project folder.
+The complete version of this example can be found in the repository inside the example_project folder.
 ```rust
 #![allow(non_snake_case)]
 
@@ -123,7 +123,7 @@ This essentially makes them just hint to the user and doesn't enforce any type s
 be a big hindrance when working with JNI.
 
 #### Designed for runtime dynamic linking of the JVM
-The Problem: The existing jni crate that depends on the jni-sys crate which requires the JVM to be resolvable by the dynamic linker.
+The Problem: The existing jni crate depends on the jni-sys crate which requires the JVM to be resolvable by the dynamic linker.
 There are 2 ways to do this. The first is to statically link the JVM into the binary, this is rarely done, 
 very cumbersome and poorly documented. The other is to provide the JVM on the linker path so ldd can find it, 
 but I have never seen this occur in the real world either.
