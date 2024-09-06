@@ -9,13 +9,8 @@ pub mod test {
 
     unsafe fn load_it() -> (JavaVM, JNIEnv){
         if !jni_simple::is_jvm_loaded() {
-            // On linux/unix:
-            jni_simple::load_jvm_from_library("/usr/lib/jvm/java-11-openjdk-amd64/lib/server/libjvm.so")
+            jni_simple::load_jvm_from_java_home()
                 .expect("failed to load jvm");
-
-            // On windows:
-            //    jni_simple::load_jvm_from_library("C:\\Program Files\\Java\\jdk-17.0.1\\jre\\bin\\server\\jvm.dll")
-            //        .expect("failed to load jvm");
         }
 
         let thr = JNI_GetCreatedJavaVMs().expect("failed to get jvm");

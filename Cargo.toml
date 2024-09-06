@@ -1,6 +1,6 @@
 [package]
 name = "jni-simple"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Alexander Schütz <aschuetz@protonmail.com>"]
@@ -10,7 +10,8 @@ description = "Simple Rust wrapper around the JNI (Java Native Interface) API."
 readme = "README.md"
 repository = "https://github.com/AlexanderSchuetz97/jni-simple"
 exclude = [
-    "example_project/*"
+    "example_project/*",
+    "loop_test.sh"
 ]
 
 [package.metadata.docs.rs]
