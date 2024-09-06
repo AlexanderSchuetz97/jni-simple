@@ -164,3 +164,71 @@ I recommend using this feature before or after you have tested your code with `-
 on what problem your troubleshooting. The assertions are generally much better at detecting things like null pointers 
 or invalid parameters than the JVM checks, while the JVM checks are able to catch missing exception checks or JVM Local Stack overflows better.
 
+### Further Info
+### Variadic up-calls
+Currently, variadic up-calls into JVM code are only implemented for 0 to 3 parameters.
+(Do not confuse this with java "Variadic" methods, 
+for JNI they are just a single parameter that is an Array)
+
+JNI provides 3 ways of up-calling into JVM code:
+1. CallStatic(TYPE)Method(class, methodID, ...) 
+2. CallStatic(TYPE)MethodA(class, methodID, jtype*) 
+3. CallStatic(TYPE)MethodV(class, methodID, va_list)
+
+Substitute (TYPE) for the return type of the java method called. For example "Object" or "Int".
+
+This crate only implements variant 1 and 2.
+Variant 3 is not implemented by this crate because "va_list" cannot be created inside rust code.
+
+Variant 2 is relatively straight forward and fully supported by this crate. 
+This means you can call ANY java method using Variant 2.
+
+Variant 1 has a Variadic parameter. This is Variadic up-calls refers to.
+Rust does support this but only for explicit extern "C" functions and not for any
+functions implemented in rust itself. To call Variant 1 this crate provides concrete
+implementations to call this Variadic function with 0, 1, 2 and 3 parameters.
+This should cover 99% of your up-call needs. 
+To call methods with more than 3 parameters simply use Variant 2.
+
+As you can see calling Variant 2 is a bit unwieldy for so for most smaller functions using
+Variant 1 of up-calling is probably the better choice.
+Example:
+```rust
+use std::ptr::null;
+use jni_simple::{*};
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_some_package_ClassName_method(env: JNIEnv, class: jclass) {
+    let meth0 = env.GetStaticMethodID_str(class, "methodWith0IntParams", "()V");
+    let meth1 = env.GetStaticMethodID_str(class, "methodWith1IntParams", "(I)V");
+    let meth2 = env.GetStaticMethodID_str(class, "methodWith2IntParams", "(II)V");
+    let meth3 = env.GetStaticMethodID_str(class, "methodWith3IntParams", "(III)V");
+    //for example: public static void methodWith4IntParams(int a, int b, int c, int d) {}
+    let meth4 = env.GetStaticMethodID_str(class, "methodWith4IntParams", "(IIII)V");
+
+    //Variant 1: Variadic up-calls:
+    //BE CAREFUL, this method is sensitive to difference between i32/i16/i8 etc. 
+    //So always specify the type so that it matches the type of the Java Method.
+    //Letting the compiler choose the may or may not work!
+    //Passing a different argument than what the Java Method has is UB!
+    //A sealed trait ensures that only parameters that the JVM can understand can be passed here
+    //So for example accidentally passing a &str to these methods will not compile.
+    env.CallStaticVoidMethod0(class, meth0);
+    env.CallStaticVoidMethod1(class, meth1, 1i32);
+    env.CallStaticVoidMethod2(class, meth2, 1i32, 2i32);
+    env.CallStaticVoidMethod3(class, meth3, 1i32, 2i32, 3i32);
+    //meth4 cannot be called with a Variadic up-call because it has 4 parameters!
+
+    //Variant 2: Calls with a pointer to an array of jtype
+    //The array is of type [jtype; N] so the pointer passed is a *const jtype.
+    //jtype is a union defined in this crate where Into<jtype> 
+    //is implemented for all types that can be passed to java as a parameter.
+    //You could also use a Vec<jtype> to obtain your pointer to the jtype's!
+    env.CallStaticVoidMethodA(class, meth0, null());
+    env.CallStaticVoidMethodA(class, meth1, [1i32.into()].as_ptr());
+    env.CallStaticVoidMethodA(class, meth2, [1i32.into(), 1i32.into()].as_ptr());
+    env.CallStaticVoidMethodA(class, meth3, [1i32.into(), 1i32.into(), 1i32.into()].as_ptr());
+    env.CallStaticVoidMethodA(class, meth4, [1i32.into(), 1i32.into(), 1i32.into(), 1i32.into()].as_ptr());
+    //There is no "practical" limit to how large you could make this array/vec.
+}
+```
