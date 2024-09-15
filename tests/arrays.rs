@@ -1,9 +1,10 @@
 #[cfg(feature = "loadjvm")]
 pub mod test {
-    use std::ptr::{null_mut};
-    use std::sync::Mutex;
     use jni_simple::*;
-
+    use std::fmt::Debug;
+    use std::ptr::null_mut;
+    use std::slice;
+    use std::sync::Mutex;
 
     //Cargo runs the tests on different threads.
     static MUTEX: Mutex<()> = Mutex::new(());
@@ -19,7 +20,8 @@ pub mod test {
             //let args: Vec<String> = vec!["-Xint".to_string()];
             let args: Vec<String> = vec![];
 
-            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
+            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args)
+                .expect("failed to create jvm");
             return env;
         }
 
@@ -30,7 +32,8 @@ pub mod test {
                 panic!("JVM ERROR {}", c);
             }
 
-            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).expect("failed to attach thread")
+            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut())
+                .expect("failed to attach thread")
         });
 
         env
@@ -46,9 +49,9 @@ pub mod test {
             let ptr = env.GetPrimitiveArrayCritical(array, null_mut());
             assert!(!ptr.is_null());
             {
-                let critical_slice : &mut [i8] = std::slice::from_raw_parts_mut(ptr.cast(), 512);
+                let critical_slice: &mut [i8] = std::slice::from_raw_parts_mut(ptr.cast(), 512);
 
-                for i in 0usize .. 512 {
+                for i in 0usize..512 {
                     assert_eq!(critical_slice[i], 0); //JVM guarantees zeroed mem.
                     critical_slice[i] = i as i8;
                 }
@@ -58,7 +61,7 @@ pub mod test {
 
             let mut rust_buf = [0i8; 512];
             env.GetByteArrayRegion(array, 0, 512, rust_buf.as_mut_ptr());
-            for i in 0usize .. 512 {
+            for i in 0usize..512 {
                 assert_eq!(rust_buf[i], i as i8);
             }
         }
@@ -72,7 +75,7 @@ pub mod test {
             let env = get_env();
             let array = env.NewByteArray(512);
             assert!(!array.is_null());
-            let array2 =  env.NewByteArray(512);
+            let array2 = env.NewByteArray(512);
             assert!(!array2.is_null());
             let ptr = env.GetPrimitiveArrayCritical(array, null_mut());
             assert!(!ptr.is_null());
@@ -110,5 +113,264 @@ pub mod test {
             });
             assert!(result.is_err(), "No panic occurred");
         }
+    }
+
+    fn run_array_test<
+        T: Default + Copy + PartialEq + Debug,
+        Conv: Fn(usize) -> T,
+        NewFunc: Fn(&JNIEnv, jsize) -> jarray,
+        RegionFunc: Fn(&JNIEnv, jarray, jsize, jsize, *mut T),
+        RegionFunc2: Fn(&JNIEnv, jarray, jsize, jsize, *mut T),
+        GetEleFunc: Fn(&JNIEnv, jarray, *mut jboolean) -> *mut T,
+        ReleaseEleFunc: Fn(&JNIEnv, jarray, *mut T, jint),
+    >(
+        conv: Conv,
+        new_func: NewFunc,
+        get_region_func: RegionFunc,
+        set_region_func: RegionFunc2,
+        get_ele_func: GetEleFunc,
+        release_ele_func: ReleaseEleFunc,
+    ) {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            let env = get_env();
+            let array = new_func(&env, 512);
+            let arr = env.GetArrayLength(array);
+            assert_eq!(arr, 512);
+
+            let mut g = [T::default(); 512];
+            get_region_func(&env, array, 0, 512, g.as_mut_ptr());
+
+            for x in 0usize..512 {
+                assert_eq!(g[x], conv(0));
+                g[x] = conv(x);
+            }
+
+            set_region_func(&env, array, 0, 512, g.as_mut_ptr());
+
+            for x in 0usize..512 {
+                assert_eq!(g[x], conv(x));
+            }
+
+            let mut g = [T::default(); 512];
+
+            get_region_func(&env, array, 0, 256, g.as_mut_ptr());
+
+            for x in 0usize..256 {
+                assert_eq!(g[x], conv(x));
+                g[x] = conv(x + 1);
+            }
+
+            for x in 256usize..512 {
+                assert_eq!(g[x], conv(0));
+            }
+
+            get_region_func(&env, array, 256, 256, g.as_mut_ptr().add(256));
+
+            for x in 0usize..256 {
+                assert_eq!(g[x], conv(x + 1));
+            }
+
+            for x in 256usize..512 {
+                assert_eq!(g[x], conv(x));
+            }
+
+            let ele = get_ele_func(&env, array, null_mut());
+            let g = slice::from_raw_parts_mut(ele, 512);
+            for x in 0usize..512 {
+                assert_eq!(g[x], conv(x));
+                g[x] = conv(x + 1)
+            }
+
+            release_ele_func(&env, array, ele, JNI_ABORT);
+            let ele = get_ele_func(&env, array, null_mut());
+            let g = slice::from_raw_parts_mut(ele, 512);
+            for x in 0usize..512 {
+                assert_eq!(g[x], conv(x));
+                g[x] = conv(x + 2);
+            }
+            release_ele_func(&env, array, ele, JNI_OK);
+            let mut g = [T::default(); 512];
+
+            get_region_func(&env, array, 0, 512, g.as_mut_ptr());
+            for x in 0usize..512 {
+                assert_eq!(g[x], conv(x + 2));
+            }
+        }
+    }
+    #[test]
+    fn test_short_array() {
+        run_array_test(
+            |x: usize| x as i16,
+            |env, size| unsafe {
+                return env.NewShortArray(size);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.GetShortArrayRegion(array, from, to, copy);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.SetShortArrayRegion(array, from, to, copy);
+            },
+            |env, array, copy| unsafe {
+                return env.GetShortArrayElements(array, copy);
+            },
+            |env, array, elements, mode| unsafe {
+                return env.ReleaseShortArrayElements(array, elements, mode);
+            },
+        );
+    }
+
+    #[test]
+    fn test_byte_array() {
+        run_array_test(
+            |x: usize| x as i8,
+            |env, size| unsafe {
+                return env.NewByteArray(size);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.GetByteArrayRegion(array, from, to, copy);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.SetByteArrayRegion(array, from, to, copy);
+            },
+            |env, array, copy| unsafe {
+                return env.GetByteArrayElements(array, copy);
+            },
+            |env, array, elements, mode| unsafe {
+                return env.ReleaseByteArrayElements(array, elements, mode);
+            },
+        );
+    }
+
+    #[test]
+    fn test_char_array() {
+        run_array_test(
+            |x: usize| x as u16,
+            |env, size| unsafe {
+                return env.NewCharArray(size);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.GetCharArrayRegion(array, from, to, copy);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.SetCharArrayRegion(array, from, to, copy);
+            },
+            |env, array, copy| unsafe {
+                return env.GetCharArrayElements(array, copy);
+            },
+            |env, array, elements, mode| unsafe {
+                return env.ReleaseCharArrayElements(array, elements, mode);
+            },
+        );
+    }
+
+    #[test]
+    fn test_int_array() {
+        run_array_test(
+            |x: usize| x as i32,
+            |env, size| unsafe {
+                return env.NewIntArray(size);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.GetIntArrayRegion(array, from, to, copy);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.SetIntArrayRegion(array, from, to, copy);
+            },
+            |env, array, copy| unsafe {
+                return env.GetIntArrayElements(array, copy);
+            },
+            |env, array, elements, mode| unsafe {
+                return env.ReleaseIntArrayElements(array, elements, mode);
+            },
+        );
+    }
+
+    #[test]
+    fn test_long_array() {
+        run_array_test(
+            |x: usize| x as i64,
+            |env, size| unsafe {
+                return env.NewLongArray(size);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.GetLongArrayRegion(array, from, to, copy);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.SetLongArrayRegion(array, from, to, copy);
+            },
+            |env, array, copy| unsafe {
+                return env.GetLongArrayElements(array, copy);
+            },
+            |env, array, elements, mode| unsafe {
+                return env.ReleaseLongArrayElements(array, elements, mode);
+            },
+        );
+    }
+
+    #[test]
+    fn test_float_array() {
+        run_array_test(
+            |x: usize| x as f32,
+            |env, size| unsafe {
+                return env.NewFloatArray(size);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.GetFloatArrayRegion(array, from, to, copy);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.SetFloatArrayRegion(array, from, to, copy);
+            },
+            |env, array, copy| unsafe {
+                return env.GetFloatArrayElements(array, copy);
+            },
+            |env, array, elements, mode| unsafe {
+                return env.ReleaseFloatArrayElements(array, elements, mode);
+            },
+        );
+    }
+
+    #[test]
+    fn test_double_array() {
+        run_array_test(
+            |x: usize| x as f64,
+            |env, size| unsafe {
+                return env.NewDoubleArray(size);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.GetDoubleArrayRegion(array, from, to, copy);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.SetDoubleArrayRegion(array, from, to, copy);
+            },
+            |env, array, copy| unsafe {
+                return env.GetDoubleArrayElements(array, copy);
+            },
+            |env, array, elements, mode| unsafe {
+                return env.ReleaseDoubleArrayElements(array, elements, mode);
+            },
+        );
+    }
+
+    #[test]
+    fn test_boolean_array() {
+        run_array_test(
+            |x: usize| x % 2 == 1,
+            |env, size| unsafe {
+                return env.NewBooleanArray(size);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.GetBooleanArrayRegion(array, from, to, copy);
+            },
+            |env, array, from, to, copy| unsafe {
+                env.SetBooleanArrayRegion(array, from, to, copy);
+            },
+            |env, array, copy| unsafe {
+                return env.GetBooleanArrayElements(array, copy);
+            },
+            |env, array, elements, mode| unsafe {
+                return env.ReleaseBooleanArrayElements(array, elements, mode);
+            },
+        );
     }
 }

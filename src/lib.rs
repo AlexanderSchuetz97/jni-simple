@@ -2949,6 +2949,7 @@ impl JNIEnv {
             self.check_not_critical("GetArrayLength");
             self.check_no_exception("GetArrayLength");
             assert!(!array.is_null(), "GetArrayLength array must not be null");
+            self.check_is_array(array, "GetArrayLength");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jarray) -> jsize>(171)(self.functions, array)
@@ -3076,7 +3077,7 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jdoubleArray>(182)(self.functions, size)
     }
 
-    pub unsafe fn GetBooleanArrayElements(&self, array: jbooleanArray) -> *mut jboolean {
+    pub unsafe fn GetBooleanArrayElements(&self, array: jbooleanArray, is_copy: *mut jboolean) -> *mut jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("GetBooleanArrayElements");
@@ -3084,10 +3085,10 @@ impl JNIEnv {
             assert!(!array.is_null(), "GetBooleanArrayElements jarray must not be null");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray) -> *mut jboolean>(183)(self.functions, array)
+        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, *mut jboolean) -> *mut jboolean>(183)(self.functions, array, is_copy)
     }
 
-    pub unsafe fn GetByteArrayElements(&self, array: jbyteArray) -> *mut jbyte {
+    pub unsafe fn GetByteArrayElements(&self, array: jbyteArray, is_copy: *mut jboolean) -> *mut jbyte {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("GetByteArrayElements");
@@ -3095,10 +3096,10 @@ impl JNIEnv {
             assert!(!array.is_null(), "GetByteArrayElements jarray must not be null");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray) -> *mut jbyte>(184)(self.functions, array)
+        self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, *mut jboolean) -> *mut jbyte>(184)(self.functions, array, is_copy)
     }
 
-    pub unsafe fn GetCharArrayElements(&self, array: jcharArray) -> *mut jchar {
+    pub unsafe fn GetCharArrayElements(&self, array: jcharArray, is_copy: *mut jboolean) -> *mut jchar {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("GetCharArrayElements");
@@ -3106,10 +3107,10 @@ impl JNIEnv {
             assert!(!array.is_null(), "GetCharArrayElements jarray must not be null");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jcharArray) -> *mut jchar>(185)(self.functions, array)
+        self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, *mut jboolean) -> *mut jchar>(185)(self.functions, array, is_copy)
     }
 
-    pub unsafe fn GetShortArrayElements(&self, array: jshortArray) -> *mut jshort {
+    pub unsafe fn GetShortArrayElements(&self, array: jshortArray, is_copy: *mut jboolean) -> *mut jshort {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("GetShortArrayElements");
@@ -3117,10 +3118,10 @@ impl JNIEnv {
             assert!(!array.is_null(), "GetShortArrayElements jarray must not be null");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jshortArray) -> *mut jshort>(186)(self.functions, array)
+        self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, *mut jboolean) -> *mut jshort>(186)(self.functions, array, is_copy)
     }
 
-    pub unsafe fn GetIntArrayElements(&self, array: jintArray) -> *mut jint {
+    pub unsafe fn GetIntArrayElements(&self, array: jintArray, is_copy: *mut jboolean) -> *mut jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("GetIntArrayElements");
@@ -3128,10 +3129,10 @@ impl JNIEnv {
             assert!(!array.is_null(), "GetIntArrayElements jarray must not be null");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jintArray) -> *mut jint>(187)(self.functions, array)
+        self.jni::<extern "system" fn(JNIEnvVTable, jintArray, *mut jboolean) -> *mut jint>(187)(self.functions, array, is_copy)
     }
 
-    pub unsafe fn GetLongArrayElements(&self, array: jlongArray) -> *mut jlong {
+    pub unsafe fn GetLongArrayElements(&self, array: jlongArray, is_copy: *mut jboolean) -> *mut jlong {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("GetLongArrayElements");
@@ -3139,10 +3140,10 @@ impl JNIEnv {
             assert!(!array.is_null(), "GetLongArrayElements jarray must not be null");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jlongArray) -> *mut jlong>(188)(self.functions, array)
+        self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, *mut jboolean) -> *mut jlong>(188)(self.functions, array, is_copy)
     }
 
-    pub unsafe fn GetFloatArrayElements(&self, array: jfloatArray) -> *mut jfloat {
+    pub unsafe fn GetFloatArrayElements(&self, array: jfloatArray, is_copy: *mut jboolean) -> *mut jfloat {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("GetFloatArrayElements");
@@ -3150,10 +3151,10 @@ impl JNIEnv {
             assert!(!array.is_null(), "GetFloatArrayElements jarray must not be null");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray) -> *mut jfloat>(189)(self.functions, array)
+        self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, *mut jboolean) -> *mut jfloat>(189)(self.functions, array, is_copy)
     }
 
-    pub unsafe fn GetDoubleArrayElements(&self, array: jdoubleArray) -> *mut jdouble {
+    pub unsafe fn GetDoubleArrayElements(&self, array: jdoubleArray, is_copy: *mut jboolean) -> *mut jdouble {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("GetDoubleArrayElements");
@@ -3161,7 +3162,7 @@ impl JNIEnv {
             assert!(!array.is_null(), "GetDoubleArrayElements jarray must not be null");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray) -> *mut jdouble>(190)(self.functions, array)
+        self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, *mut jboolean) -> *mut jdouble>(190)(self.functions, array, is_copy)
     }
 
     pub unsafe fn ReleaseBooleanArrayElements(&self, array: jbooleanArray, elems: *mut jboolean, mode: jint) {
@@ -3719,6 +3720,36 @@ impl JNIEnv {
                 panic!("{} cannot be called now, because there are {} critical pointers into primitive arrays that have not been released by the current thread.", context, sz);
             }
         })
+    }
+
+    #[cfg(feature = "asserts")]
+    unsafe fn check_is_array(&self, obj: jobject, context: &str) {
+        if obj.is_null() {
+            panic!("{} cannot check if arg is array because arg is null", context);
+        }
+        let cl = self.GetObjectClass(obj);
+        if cl.is_null() {
+            panic!("{} arg.getClass() is null?", context);
+        }
+        let clazz = self.GetObjectClass(cl);
+        if clazz.is_null() {
+            panic!("{} Class#getClass() is null?", context);
+        }
+
+        let is_array = self.GetMethodID_str(clazz, "isArray", "()Z");
+        let r = self.CallBooleanMethod0(cl, is_array);
+        if self.ExceptionCheck() {
+            self.ExceptionDescribe();
+            self.ExceptionClear();
+            panic!("{} Class#isArray() is throws?", context);
+        }
+
+        if !r {
+            panic!("{} arg is not an array", context);
+        }
+
+        self.DeleteLocalRef(cl);
+        self.DeleteLocalRef(clazz);
     }
 
     #[cfg(feature = "asserts")]
