@@ -58,6 +58,48 @@ pub mod test {
         return class_global;
     }
 
+    unsafe fn get_nv_test_class() -> jclass {
+        let env = get_env();
+        let tc = get_test_class();
+
+        let class_loaded = env.FindClass_str("MethodCalls$NvChild");
+        if !class_loaded.is_null() {
+            let class_global = env.NewGlobalRef(class_loaded);
+            env.DeleteLocalRef(class_loaded);
+            return class_global;
+        }
+
+        env.ExceptionClear(); //Clear ClassNotFoundException
+        let class_blob = include_bytes!("../java_testcode/MethodCalls$NvChild.class");
+        let class_loaded = env.DefineClass_str("MethodCalls$NvChild", null_mut(), class_blob);
+        if class_loaded.is_null() {
+            env.ExceptionDescribe();
+            env.FatalError_str("failed to load class");
+        }
+
+        let class_global = env.NewGlobalRef(class_loaded);
+        env.DeleteLocalRef(class_loaded);
+        env.DeleteGlobalRef(tc);
+        return class_global;
+
+    }
+
+    unsafe fn get_test_obj() -> jobject {
+        let env = get_env();
+        let tc = get_test_class();
+        let local_obj = env.AllocObject(tc);
+        env.DeleteGlobalRef(tc);
+        local_obj
+    }
+
+    unsafe fn get_nv_test_obj() -> jobject {
+        let env = get_env();
+        let tc = get_nv_test_class();
+        let local_obj = env.AllocObject(tc);
+        env.DeleteGlobalRef(tc);
+        local_obj
+    }
+
     unsafe fn reset_it() {
         let env = get_env();
         let class = get_test_class();
@@ -121,6 +163,1866 @@ pub mod test {
         let value = env.GetStaticDoubleField(class, field);
         env.DeleteGlobalRef(class);
         assert_eq!(v, value, "RUST={} GOT={}", v, value);
+    }
+
+    #[test]
+    fn test_nv_void() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_nv_test_obj();
+            let base = get_test_class();
+            let child = get_nv_test_class();
+
+            let env = get_env();
+            let meth = env.GetMethodID_str(base, "dynVoidMethod0", "()V");
+            let meth_c = env.GetMethodID_str(child, "dynVoidMethod0", "()V");
+            env.CallVoidMethod0(inst, meth);
+            assert_fn_name("nvVoidMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualVoidMethod0(inst, base, meth);
+            assert_fn_name("dynVoidMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualVoidMethod0(inst, child, meth_c);
+            assert_fn_name("nvVoidMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            let meth = env.GetMethodID_str(base, "dynVoidMethod1", "(S)V");
+            let meth_c = env.GetMethodID_str(child, "dynVoidMethod1", "(S)V");
+            env.CallVoidMethod1(inst, meth, 15i16);
+            assert_fn_name("nvVoidMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualVoidMethod1(inst, base, meth, 15i16);
+            assert_fn_name("dynVoidMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualVoidMethod1(inst, child, meth_c, 15i16);
+            assert_fn_name("nvVoidMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynVoidMethod2", "(SLjava/lang/Object;)V");
+            let meth_c = env.GetMethodID_str(child, "dynVoidMethod2", "(SLjava/lang/Object;)V");
+            env.CallVoidMethod2(inst, meth, 1245i16, null_mut());
+            assert_fn_name("nvVoidMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            env.CallNonvirtualVoidMethod2(inst, base, meth, 15i16, null_mut());
+            assert_fn_name("dynVoidMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualVoidMethod2(inst, child, meth_c, 15i16, null_mut());
+            assert_fn_name("nvVoidMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynVoidMethod3", "(SLjava/lang/Object;D)V");
+            let meth_c = env.GetMethodID_str(child, "dynVoidMethod3", "(SLjava/lang/Object;D)V");
+            let my_value = 88 as std::ffi::c_double;
+            env.CallVoidMethod3(inst, meth, 26225i16, global, my_value);
+            assert_fn_name("nvVoidMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualVoidMethod3(inst, base, meth, 26225i16, global, my_value);
+            assert_fn_name("dynVoidMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualVoidMethod3(inst, child, meth_c, 26225i16, global, my_value);
+            assert_fn_name("nvVoidMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(base, "dynVoidMethod3", "(SLjava/lang/Object;D)V");
+            let meth_c = env.GetMethodID_str(child, "dynVoidMethod3", "(SLjava/lang/Object;D)V");
+            let my_value = 69.2 as std::ffi::c_double;
+            env.CallVoidMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvVoidMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualVoidMethodA(inst, base, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("dynVoidMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualVoidMethodA(inst, child, meth_c, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvVoidMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(base);
+            env.DeleteGlobalRef(child);
+        }
+    }
+
+    #[test]
+    fn test_nv_object() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_nv_test_obj();
+            let base = get_test_class();
+            let child = get_nv_test_class();
+
+            let env = get_env();
+            let meth = env.GetMethodID_str(base, "dynObjectMethod0", "()Ljava/lang/Object;");
+            let meth_c = env.GetMethodID_str(child, "dynObjectMethod0", "()Ljava/lang/Object;");
+            env.CallObjectMethod0(inst, meth);
+            assert_fn_name("nvObjectMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualObjectMethod0(inst, base, meth);
+            assert_fn_name("dynObjectMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualObjectMethod0(inst, child, meth_c);
+            assert_fn_name("nvObjectMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            let meth = env.GetMethodID_str(base, "dynObjectMethod1", "(S)Ljava/lang/Object;");
+            let meth_c = env.GetMethodID_str(child, "dynObjectMethod1", "(S)Ljava/lang/Object;");
+            env.CallObjectMethod1(inst, meth, 15i16);
+            assert_fn_name("nvObjectMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualObjectMethod1(inst, base, meth, 15i16);
+            assert_fn_name("dynObjectMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualObjectMethod1(inst, child, meth_c, 15i16);
+            assert_fn_name("nvObjectMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynObjectMethod2", "(SLjava/lang/Object;)Ljava/lang/Object;");
+            let meth_c = env.GetMethodID_str(child, "dynObjectMethod2", "(SLjava/lang/Object;)Ljava/lang/Object;");
+            env.CallObjectMethod2(inst, meth, 1245i16, null_mut());
+            assert_fn_name("nvObjectMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            env.CallNonvirtualObjectMethod2(inst, base, meth, 15i16, null_mut());
+            assert_fn_name("dynObjectMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualObjectMethod2(inst, child, meth_c, 15i16, null_mut());
+            assert_fn_name("nvObjectMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynObjectMethod3", "(SLjava/lang/Object;D)Ljava/lang/Object;");
+            let meth_c = env.GetMethodID_str(child, "dynObjectMethod3", "(SLjava/lang/Object;D)Ljava/lang/Object;");
+            let my_value = 88 as std::ffi::c_double;
+            env.CallObjectMethod3(inst, meth, 26225i16, global, my_value);
+            assert_fn_name("nvObjectMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualObjectMethod3(inst, base, meth, 26225i16, global, my_value);
+            assert_fn_name("dynObjectMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualObjectMethod3(inst, child, meth_c, 26225i16, global, my_value);
+            assert_fn_name("nvObjectMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(base, "dynObjectMethod3", "(SLjava/lang/Object;D)Ljava/lang/Object;");
+            let meth_c = env.GetMethodID_str(child, "dynObjectMethod3", "(SLjava/lang/Object;D)Ljava/lang/Object;");
+            let my_value = 69.2 as std::ffi::c_double;
+            env.CallObjectMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvObjectMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualObjectMethodA(inst, base, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("dynObjectMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualObjectMethodA(inst, child, meth_c, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvObjectMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(base);
+            env.DeleteGlobalRef(child);
+        }
+    }
+
+    #[test]
+    fn test_nv_boolean() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_nv_test_obj();
+            let base = get_test_class();
+            let child = get_nv_test_class();
+
+            let env = get_env();
+            let meth = env.GetMethodID_str(base, "dynBooleanMethod0", "()Z");
+            let meth_c = env.GetMethodID_str(child, "dynBooleanMethod0", "()Z");
+            env.CallBooleanMethod0(inst, meth);
+            assert_fn_name("nvBooleanMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualBooleanMethod0(inst, base, meth);
+            assert_fn_name("dynBooleanMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualBooleanMethod0(inst, child, meth_c);
+            assert_fn_name("nvBooleanMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            let meth = env.GetMethodID_str(base, "dynBooleanMethod1", "(S)Z");
+            let meth_c = env.GetMethodID_str(child, "dynBooleanMethod1", "(S)Z");
+            env.CallBooleanMethod1(inst, meth, 15i16);
+            assert_fn_name("nvBooleanMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualBooleanMethod1(inst, base, meth, 15i16);
+            assert_fn_name("dynBooleanMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualBooleanMethod1(inst, child, meth_c, 15i16);
+            assert_fn_name("nvBooleanMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynBooleanMethod2", "(SLjava/lang/Object;)Z");
+            let meth_c = env.GetMethodID_str(child, "dynBooleanMethod2", "(SLjava/lang/Object;)Z");
+            env.CallBooleanMethod2(inst, meth, 1245i16, null_mut());
+            assert_fn_name("nvBooleanMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            env.CallNonvirtualBooleanMethod2(inst, base, meth, 15i16, null_mut());
+            assert_fn_name("dynBooleanMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualBooleanMethod2(inst, child, meth_c, 15i16, null_mut());
+            assert_fn_name("nvBooleanMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynBooleanMethod3", "(SLjava/lang/Object;D)Z");
+            let meth_c = env.GetMethodID_str(child, "dynBooleanMethod3", "(SLjava/lang/Object;D)Z");
+            let my_value = 88 as std::ffi::c_double;
+            env.CallBooleanMethod3(inst, meth, 26225i16, global, my_value);
+            assert_fn_name("nvBooleanMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualBooleanMethod3(inst, base, meth, 26225i16, global, my_value);
+            assert_fn_name("dynBooleanMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualBooleanMethod3(inst, child, meth_c, 26225i16, global, my_value);
+            assert_fn_name("nvBooleanMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(base, "dynBooleanMethod3", "(SLjava/lang/Object;D)Z");
+            let meth_c = env.GetMethodID_str(child, "dynBooleanMethod3", "(SLjava/lang/Object;D)Z");
+            let my_value = 69.2 as std::ffi::c_double;
+            env.CallBooleanMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvBooleanMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualBooleanMethodA(inst, base, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("dynBooleanMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualBooleanMethodA(inst, child, meth_c, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvBooleanMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(base);
+            env.DeleteGlobalRef(child);
+        }
+    }
+
+    #[test]
+    fn test_nv_byte() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_nv_test_obj();
+            let base = get_test_class();
+            let child = get_nv_test_class();
+
+            let env = get_env();
+            let meth = env.GetMethodID_str(base, "dynByteMethod0", "()B");
+            let meth_c = env.GetMethodID_str(child, "dynByteMethod0", "()B");
+            env.CallByteMethod0(inst, meth);
+            assert_fn_name("nvByteMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualByteMethod0(inst, base, meth);
+            assert_fn_name("dynByteMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualByteMethod0(inst, child, meth_c);
+            assert_fn_name("nvByteMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            let meth = env.GetMethodID_str(base, "dynByteMethod1", "(S)B");
+            let meth_c = env.GetMethodID_str(child, "dynByteMethod1", "(S)B");
+            env.CallByteMethod1(inst, meth, 15i16);
+            assert_fn_name("nvByteMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualByteMethod1(inst, base, meth, 15i16);
+            assert_fn_name("dynByteMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualByteMethod1(inst, child, meth_c, 15i16);
+            assert_fn_name("nvByteMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynByteMethod2", "(SLjava/lang/Object;)B");
+            let meth_c = env.GetMethodID_str(child, "dynByteMethod2", "(SLjava/lang/Object;)B");
+            env.CallByteMethod2(inst, meth, 1245i16, null_mut());
+            assert_fn_name("nvByteMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            env.CallNonvirtualByteMethod2(inst, base, meth, 15i16, null_mut());
+            assert_fn_name("dynByteMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualByteMethod2(inst, child, meth_c, 15i16, null_mut());
+            assert_fn_name("nvByteMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynByteMethod3", "(SLjava/lang/Object;D)B");
+            let meth_c = env.GetMethodID_str(child, "dynByteMethod3", "(SLjava/lang/Object;D)B");
+            let my_value = 88 as std::ffi::c_double;
+            env.CallByteMethod3(inst, meth, 26225i16, global, my_value);
+            assert_fn_name("nvByteMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualByteMethod3(inst, base, meth, 26225i16, global, my_value);
+            assert_fn_name("dynByteMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualByteMethod3(inst, child, meth_c, 26225i16, global, my_value);
+            assert_fn_name("nvByteMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(base, "dynByteMethod3", "(SLjava/lang/Object;D)B");
+            let meth_c = env.GetMethodID_str(child, "dynByteMethod3", "(SLjava/lang/Object;D)B");
+            let my_value = 69.2 as std::ffi::c_double;
+            env.CallByteMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvByteMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualByteMethodA(inst, base, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("dynByteMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualByteMethodA(inst, child, meth_c, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvByteMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(base);
+            env.DeleteGlobalRef(child);
+        }
+    }
+
+    #[test]
+    fn test_nv_char() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_nv_test_obj();
+            let base = get_test_class();
+            let child = get_nv_test_class();
+
+            let env = get_env();
+            let meth = env.GetMethodID_str(base, "dynCharMethod0", "()C");
+            let meth_c = env.GetMethodID_str(child, "dynCharMethod0", "()C");
+            env.CallCharMethod0(inst, meth);
+            assert_fn_name("nvCharMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualCharMethod0(inst, base, meth);
+            assert_fn_name("dynCharMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualCharMethod0(inst, child, meth_c);
+            assert_fn_name("nvCharMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            let meth = env.GetMethodID_str(base, "dynCharMethod1", "(S)C");
+            let meth_c = env.GetMethodID_str(child, "dynCharMethod1", "(S)C");
+            env.CallCharMethod1(inst, meth, 15i16);
+            assert_fn_name("nvCharMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualCharMethod1(inst, base, meth, 15i16);
+            assert_fn_name("dynCharMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualCharMethod1(inst, child, meth_c, 15i16);
+            assert_fn_name("nvCharMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynCharMethod2", "(SLjava/lang/Object;)C");
+            let meth_c = env.GetMethodID_str(child, "dynCharMethod2", "(SLjava/lang/Object;)C");
+            env.CallCharMethod2(inst, meth, 1245i16, null_mut());
+            assert_fn_name("nvCharMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            env.CallNonvirtualCharMethod2(inst, base, meth, 15i16, null_mut());
+            assert_fn_name("dynCharMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualCharMethod2(inst, child, meth_c, 15i16, null_mut());
+            assert_fn_name("nvCharMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynCharMethod3", "(SLjava/lang/Object;D)C");
+            let meth_c = env.GetMethodID_str(child, "dynCharMethod3", "(SLjava/lang/Object;D)C");
+            let my_value = 88 as std::ffi::c_double;
+            env.CallCharMethod3(inst, meth, 26225i16, global, my_value);
+            assert_fn_name("nvCharMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualCharMethod3(inst, base, meth, 26225i16, global, my_value);
+            assert_fn_name("dynCharMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualCharMethod3(inst, child, meth_c, 26225i16, global, my_value);
+            assert_fn_name("nvCharMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(base, "dynCharMethod3", "(SLjava/lang/Object;D)C");
+            let meth_c = env.GetMethodID_str(child, "dynCharMethod3", "(SLjava/lang/Object;D)C");
+            let my_value = 69.2 as std::ffi::c_double;
+            env.CallCharMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvCharMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualCharMethodA(inst, base, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("dynCharMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualCharMethodA(inst, child, meth_c, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvCharMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(base);
+            env.DeleteGlobalRef(child);
+        }
+    }
+
+    #[test]
+    fn test_nv_short() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_nv_test_obj();
+            let base = get_test_class();
+            let child = get_nv_test_class();
+
+            let env = get_env();
+            let meth = env.GetMethodID_str(base, "dynShortMethod0", "()S");
+            let meth_c = env.GetMethodID_str(child, "dynShortMethod0", "()S");
+            env.CallShortMethod0(inst, meth);
+            assert_fn_name("nvShortMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualShortMethod0(inst, base, meth);
+            assert_fn_name("dynShortMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualShortMethod0(inst, child, meth_c);
+            assert_fn_name("nvShortMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            let meth = env.GetMethodID_str(base, "dynShortMethod1", "(S)S");
+            let meth_c = env.GetMethodID_str(child, "dynShortMethod1", "(S)S");
+            env.CallShortMethod1(inst, meth, 15i16);
+            assert_fn_name("nvShortMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualShortMethod1(inst, base, meth, 15i16);
+            assert_fn_name("dynShortMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualShortMethod1(inst, child, meth_c, 15i16);
+            assert_fn_name("nvShortMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynShortMethod2", "(SLjava/lang/Object;)S");
+            let meth_c = env.GetMethodID_str(child, "dynShortMethod2", "(SLjava/lang/Object;)S");
+            env.CallShortMethod2(inst, meth, 1245i16, null_mut());
+            assert_fn_name("nvShortMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            env.CallNonvirtualShortMethod2(inst, base, meth, 15i16, null_mut());
+            assert_fn_name("dynShortMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualShortMethod2(inst, child, meth_c, 15i16, null_mut());
+            assert_fn_name("nvShortMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynShortMethod3", "(SLjava/lang/Object;D)S");
+            let meth_c = env.GetMethodID_str(child, "dynShortMethod3", "(SLjava/lang/Object;D)S");
+            let my_value = 88 as std::ffi::c_double;
+            env.CallShortMethod3(inst, meth, 26225i16, global, my_value);
+            assert_fn_name("nvShortMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualShortMethod3(inst, base, meth, 26225i16, global, my_value);
+            assert_fn_name("dynShortMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualShortMethod3(inst, child, meth_c, 26225i16, global, my_value);
+            assert_fn_name("nvShortMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(base, "dynShortMethod3", "(SLjava/lang/Object;D)S");
+            let meth_c = env.GetMethodID_str(child, "dynShortMethod3", "(SLjava/lang/Object;D)S");
+            let my_value = 69.2 as std::ffi::c_double;
+            env.CallShortMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvShortMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualShortMethodA(inst, base, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("dynShortMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualShortMethodA(inst, child, meth_c, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvShortMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(base);
+            env.DeleteGlobalRef(child);
+        }
+    }
+
+    #[test]
+    fn test_nv_int() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_nv_test_obj();
+            let base = get_test_class();
+            let child = get_nv_test_class();
+
+            let env = get_env();
+            let meth = env.GetMethodID_str(base, "dynIntMethod0", "()I");
+            let meth_c = env.GetMethodID_str(child, "dynIntMethod0", "()I");
+            env.CallIntMethod0(inst, meth);
+            assert_fn_name("nvIntMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualIntMethod0(inst, base, meth);
+            assert_fn_name("dynIntMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualIntMethod0(inst, child, meth_c);
+            assert_fn_name("nvIntMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            let meth = env.GetMethodID_str(base, "dynIntMethod1", "(S)I");
+            let meth_c = env.GetMethodID_str(child, "dynIntMethod1", "(S)I");
+            env.CallIntMethod1(inst, meth, 15i16);
+            assert_fn_name("nvIntMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualIntMethod1(inst, base, meth, 15i16);
+            assert_fn_name("dynIntMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualIntMethod1(inst, child, meth_c, 15i16);
+            assert_fn_name("nvIntMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynIntMethod2", "(SLjava/lang/Object;)I");
+            let meth_c = env.GetMethodID_str(child, "dynIntMethod2", "(SLjava/lang/Object;)I");
+            env.CallIntMethod2(inst, meth, 1245i16, null_mut());
+            assert_fn_name("nvIntMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            env.CallNonvirtualIntMethod2(inst, base, meth, 15i16, null_mut());
+            assert_fn_name("dynIntMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualIntMethod2(inst, child, meth_c, 15i16, null_mut());
+            assert_fn_name("nvIntMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynIntMethod3", "(SLjava/lang/Object;D)I");
+            let meth_c = env.GetMethodID_str(child, "dynIntMethod3", "(SLjava/lang/Object;D)I");
+            let my_value = 88 as std::ffi::c_double;
+            env.CallIntMethod3(inst, meth, 26225i16, global, my_value);
+            assert_fn_name("nvIntMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualIntMethod3(inst, base, meth, 26225i16, global, my_value);
+            assert_fn_name("dynIntMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualIntMethod3(inst, child, meth_c, 26225i16, global, my_value);
+            assert_fn_name("nvIntMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(base, "dynIntMethod3", "(SLjava/lang/Object;D)I");
+            let meth_c = env.GetMethodID_str(child, "dynIntMethod3", "(SLjava/lang/Object;D)I");
+            let my_value = 69.2 as std::ffi::c_double;
+            env.CallIntMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvIntMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualIntMethodA(inst, base, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("dynIntMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualIntMethodA(inst, child, meth_c, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvIntMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(base);
+            env.DeleteGlobalRef(child);
+        }
+    }
+
+    #[test]
+    fn test_nv_long() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_nv_test_obj();
+            let base = get_test_class();
+            let child = get_nv_test_class();
+
+            let env = get_env();
+            let meth = env.GetMethodID_str(base, "dynLongMethod0", "()J");
+            let meth_c = env.GetMethodID_str(child, "dynLongMethod0", "()J");
+            env.CallLongMethod0(inst, meth);
+            assert_fn_name("nvLongMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualLongMethod0(inst, base, meth);
+            assert_fn_name("dynLongMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualLongMethod0(inst, child, meth_c);
+            assert_fn_name("nvLongMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            let meth = env.GetMethodID_str(base, "dynLongMethod1", "(S)J");
+            let meth_c = env.GetMethodID_str(child, "dynLongMethod1", "(S)J");
+            env.CallLongMethod1(inst, meth, 15i16);
+            assert_fn_name("nvLongMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualLongMethod1(inst, base, meth, 15i16);
+            assert_fn_name("dynLongMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualLongMethod1(inst, child, meth_c, 15i16);
+            assert_fn_name("nvLongMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynLongMethod2", "(SLjava/lang/Object;)J");
+            let meth_c = env.GetMethodID_str(child, "dynLongMethod2", "(SLjava/lang/Object;)J");
+            env.CallLongMethod2(inst, meth, 1245i16, null_mut());
+            assert_fn_name("nvLongMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            env.CallNonvirtualLongMethod2(inst, base, meth, 15i16, null_mut());
+            assert_fn_name("dynLongMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualLongMethod2(inst, child, meth_c, 15i16, null_mut());
+            assert_fn_name("nvLongMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynLongMethod3", "(SLjava/lang/Object;D)J");
+            let meth_c = env.GetMethodID_str(child, "dynLongMethod3", "(SLjava/lang/Object;D)J");
+            let my_value = 88 as std::ffi::c_double;
+            env.CallLongMethod3(inst, meth, 26225i16, global, my_value);
+            assert_fn_name("nvLongMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualLongMethod3(inst, base, meth, 26225i16, global, my_value);
+            assert_fn_name("dynLongMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualLongMethod3(inst, child, meth_c, 26225i16, global, my_value);
+            assert_fn_name("nvLongMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(base, "dynLongMethod3", "(SLjava/lang/Object;D)J");
+            let meth_c = env.GetMethodID_str(child, "dynLongMethod3", "(SLjava/lang/Object;D)J");
+            let my_value = 69.2 as std::ffi::c_double;
+            env.CallLongMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvLongMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualLongMethodA(inst, base, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("dynLongMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualLongMethodA(inst, child, meth_c, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvLongMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(base);
+            env.DeleteGlobalRef(child);
+        }
+    }
+
+    #[test]
+    fn test_nv_float() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_nv_test_obj();
+            let base = get_test_class();
+            let child = get_nv_test_class();
+
+            let env = get_env();
+            let meth = env.GetMethodID_str(base, "dynFloatMethod0", "()F");
+            let meth_c = env.GetMethodID_str(child, "dynFloatMethod0", "()F");
+            env.CallFloatMethod0(inst, meth);
+            assert_fn_name("nvFloatMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualFloatMethod0(inst, base, meth);
+            assert_fn_name("dynFloatMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualFloatMethod0(inst, child, meth_c);
+            assert_fn_name("nvFloatMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            let meth = env.GetMethodID_str(base, "dynFloatMethod1", "(S)F");
+            let meth_c = env.GetMethodID_str(child, "dynFloatMethod1", "(S)F");
+            env.CallFloatMethod1(inst, meth, 15i16);
+            assert_fn_name("nvFloatMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualFloatMethod1(inst, base, meth, 15i16);
+            assert_fn_name("dynFloatMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualFloatMethod1(inst, child, meth_c, 15i16);
+            assert_fn_name("nvFloatMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynFloatMethod2", "(SLjava/lang/Object;)F");
+            let meth_c = env.GetMethodID_str(child, "dynFloatMethod2", "(SLjava/lang/Object;)F");
+            env.CallFloatMethod2(inst, meth, 1245i16, null_mut());
+            assert_fn_name("nvFloatMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            env.CallNonvirtualFloatMethod2(inst, base, meth, 15i16, null_mut());
+            assert_fn_name("dynFloatMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualFloatMethod2(inst, child, meth_c, 15i16, null_mut());
+            assert_fn_name("nvFloatMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynFloatMethod3", "(SLjava/lang/Object;D)F");
+            let meth_c = env.GetMethodID_str(child, "dynFloatMethod3", "(SLjava/lang/Object;D)F");
+            let my_value = 88 as std::ffi::c_double;
+            env.CallFloatMethod3(inst, meth, 26225i16, global, my_value);
+            assert_fn_name("nvFloatMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualFloatMethod3(inst, base, meth, 26225i16, global, my_value);
+            assert_fn_name("dynFloatMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualFloatMethod3(inst, child, meth_c, 26225i16, global, my_value);
+            assert_fn_name("nvFloatMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(base, "dynFloatMethod3", "(SLjava/lang/Object;D)F");
+            let meth_c = env.GetMethodID_str(child, "dynFloatMethod3", "(SLjava/lang/Object;D)F");
+            let my_value = 69.2 as std::ffi::c_double;
+            env.CallFloatMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvFloatMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualFloatMethodA(inst, base, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("dynFloatMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualFloatMethodA(inst, child, meth_c, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvFloatMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(base);
+            env.DeleteGlobalRef(child);
+        }
+    }
+
+    #[test]
+    fn test_nv_double() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_nv_test_obj();
+            let base = get_test_class();
+            let child = get_nv_test_class();
+
+            let env = get_env();
+            let meth = env.GetMethodID_str(base, "dynDoubleMethod0", "()D");
+            let meth_c = env.GetMethodID_str(child, "dynDoubleMethod0", "()D");
+            env.CallDoubleMethod0(inst, meth);
+            assert_fn_name("nvDoubleMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualDoubleMethod0(inst, base, meth);
+            assert_fn_name("dynDoubleMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualDoubleMethod0(inst, child, meth_c);
+            assert_fn_name("nvDoubleMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            let meth = env.GetMethodID_str(base, "dynDoubleMethod1", "(S)D");
+            let meth_c = env.GetMethodID_str(child, "dynDoubleMethod1", "(S)D");
+            env.CallDoubleMethod1(inst, meth, 15i16);
+            assert_fn_name("nvDoubleMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualDoubleMethod1(inst, base, meth, 15i16);
+            assert_fn_name("dynDoubleMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualDoubleMethod1(inst, child, meth_c, 15i16);
+            assert_fn_name("nvDoubleMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynDoubleMethod2", "(SLjava/lang/Object;)D");
+            let meth_c = env.GetMethodID_str(child, "dynDoubleMethod2", "(SLjava/lang/Object;)D");
+            env.CallDoubleMethod2(inst, meth, 1245i16, null_mut());
+            assert_fn_name("nvDoubleMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+
+            env.CallNonvirtualDoubleMethod2(inst, base, meth, 15i16, null_mut());
+            assert_fn_name("dynDoubleMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            env.CallNonvirtualDoubleMethod2(inst, child, meth_c, 15i16, null_mut());
+            assert_fn_name("nvDoubleMethod2");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(base, "dynDoubleMethod3", "(SLjava/lang/Object;D)D");
+            let meth_c = env.GetMethodID_str(child, "dynDoubleMethod3", "(SLjava/lang/Object;D)D");
+            let my_value = 88 as std::ffi::c_double;
+            env.CallDoubleMethod3(inst, meth, 26225i16, global, my_value);
+            assert_fn_name("nvDoubleMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualDoubleMethod3(inst, base, meth, 26225i16, global, my_value);
+            assert_fn_name("dynDoubleMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            env.CallNonvirtualDoubleMethod3(inst, child, meth_c, 26225i16, global, my_value);
+            assert_fn_name("nvDoubleMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(base, "dynDoubleMethod3", "(SLjava/lang/Object;D)D");
+            let meth_c = env.GetMethodID_str(child, "dynDoubleMethod3", "(SLjava/lang/Object;D)D");
+            let my_value = 69.2 as std::ffi::c_double;
+            env.CallDoubleMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvDoubleMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualDoubleMethodA(inst, base, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("dynDoubleMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.CallNonvirtualDoubleMethodA(inst, child, meth_c, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("nvDoubleMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(base);
+            env.DeleteGlobalRef(child);
+        }
+    }
+
+    #[test]
+    fn test_init() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let env = get_env();
+            let class = get_test_class();
+
+            let void0 = env.GetMethodID_str(class, "<init>", "()V");
+            let g = env.NewObject0(class, void0);
+            assert!(!g.is_null());
+            env.DeleteLocalRef(g);
+            assert_fn_name("init0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let void = env.GetMethodID_str(class, "<init>", "(S)V");
+            let g = env.NewObject1(class, void, 15i16);
+            assert!(!g.is_null());
+            env.DeleteLocalRef(g);
+            assert_fn_name("init1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let void = env.GetMethodID_str(class, "<init>", "(SLjava/lang/Object;)V");
+            let g = env.NewObject2(class, void, 1245i16, null_mut());
+            assert!(!g.is_null());
+            env.DeleteLocalRef(g);
+            assert_fn_name("init2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let void = env.GetMethodID_str(class, "<init>", "(SLjava/lang/Object;D)V");
+            let my_value = 694.20 as std::ffi::c_double;
+            let g = env.NewObject3(class, void, 26225i16, global, my_value);
+            assert!(!g.is_null());
+            env.DeleteLocalRef(g);
+            assert_fn_name("init3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let void = env.GetMethodID_str(class, "<init>", "(SLjava/lang/Object;D)V");
+            let my_value = 69.2 as std::ffi::c_double;
+            let g = env.NewObjectA(class, void, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert!(!g.is_null());
+            env.DeleteLocalRef(g);
+            assert_fn_name("init3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
+    #[test]
+    fn test_dyn_void() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_test_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let void0 = env.GetMethodID_str(class, "dynVoidMethod0", "()V");
+            env.CallVoidMethod0(inst, void0);
+            assert_fn_name("dynVoidMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let void = env.GetMethodID_str(class, "dynVoidMethod1", "(S)V");
+            env.CallVoidMethod1(inst, void, 15i16);
+            assert_fn_name("dynVoidMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let void = env.GetMethodID_str(class, "dynVoidMethod2", "(SLjava/lang/Object;)V");
+            env.CallVoidMethod2(inst, void, 1245i16, null_mut());
+            assert_fn_name("dynVoidMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let void = env.GetMethodID_str(class, "dynVoidMethod3", "(SLjava/lang/Object;D)V");
+            let my_value = 88 as std::ffi::c_double;
+            env.CallVoidMethod3(inst, void, 26225i16, global, my_value);
+            assert_fn_name("dynVoidMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let void = env.GetMethodID_str(class, "dynVoidMethod3", "(SLjava/lang/Object;D)V");
+            let my_value = 69.2 as std::ffi::c_double;
+            env.CallVoidMethodA(inst, void, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_fn_name("dynVoidMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
+
+    #[test]
+    fn test_dyn_object() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_test_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let meth = env.GetMethodID_str(class, "dynObjectMethod0", "()Ljava/lang/Object;");
+            let result = env.CallObjectMethod0(inst, meth);
+            assert!(!result.is_null());
+            env.DeleteLocalRef(result);
+            assert_fn_name("dynObjectMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynObjectMethod1", "(S)Ljava/lang/Object;");
+            let result =env.CallObjectMethod1(inst, meth, 15i16);
+            assert!(!result.is_null());
+            env.DeleteLocalRef(result);
+            assert_fn_name("dynObjectMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynObjectMethod2", "(SLjava/lang/Object;)Ljava/lang/Object;");
+            let result =env.CallObjectMethod2(inst, meth, 1245i16, null_mut());
+            assert!(!result.is_null());
+            env.DeleteLocalRef(result);
+            assert_fn_name("dynObjectMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynObjectMethod3", "(SLjava/lang/Object;D)Ljava/lang/Object;");
+            let my_value = 88 as std::ffi::c_double;
+            let result =env.CallObjectMethod3(inst, meth, 26225i16, global, my_value);
+            assert!(!result.is_null());
+            env.DeleteLocalRef(result);
+            assert_fn_name("dynObjectMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(class, "dynObjectMethod3", "(SLjava/lang/Object;D)Ljava/lang/Object;");
+            let my_value = 69.2 as std::ffi::c_double;
+            let result =env.CallObjectMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert!(!result.is_null());
+            env.DeleteLocalRef(result);
+            assert_fn_name("dynObjectMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
+
+    #[test]
+    fn test_dyn_boolean() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_test_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let meth = env.GetMethodID_str(class, "dynBooleanMethod0", "()Z");
+            let result = env.CallBooleanMethod0(inst, meth);
+            assert_eq!(result, true);
+            assert_fn_name("dynBooleanMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynBooleanMethod1", "(S)Z");
+            let result = env.CallBooleanMethod1(inst, meth, 15i16);
+            assert_eq!(result, true);
+            assert_fn_name("dynBooleanMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynBooleanMethod2", "(SLjava/lang/Object;)Z");
+            let result = env.CallBooleanMethod2(inst, meth, 1245i16, null_mut());
+            assert_eq!(result, true);
+            assert_fn_name("dynBooleanMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynBooleanMethod3", "(SLjava/lang/Object;D)Z");
+            let my_value = 88 as std::ffi::c_double;
+            let result = env.CallBooleanMethod3(inst, meth, 26225i16, global, my_value);
+            assert_eq!(result, true);
+            assert_fn_name("dynBooleanMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(class, "dynBooleanMethod3", "(SLjava/lang/Object;D)Z");
+            let my_value = 69.2 as std::ffi::c_double;
+            let result = env.CallBooleanMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_eq!(result, true);
+            assert_fn_name("dynBooleanMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
+
+    #[test]
+    fn test_dyn_byte() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_test_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let meth = env.GetMethodID_str(class, "dynByteMethod0", "()B");
+            let result = env.CallByteMethod0(inst, meth);
+            assert_eq!(result, 1);
+            assert_fn_name("dynByteMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynByteMethod1", "(S)B");
+            let result = env.CallByteMethod1(inst, meth, 15i16);
+            assert_eq!(result, 1);
+            assert_fn_name("dynByteMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynByteMethod2", "(SLjava/lang/Object;)B");
+            let result = env.CallByteMethod2(inst, meth, 1245i16, null_mut());
+            assert_eq!(result, 1);
+            assert_fn_name("dynByteMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynByteMethod3", "(SLjava/lang/Object;D)B");
+            let my_value = 88 as std::ffi::c_double;
+            let result = env.CallByteMethod3(inst, meth, 26225i16, global, my_value);
+            assert_eq!(result, 1);
+            assert_fn_name("dynByteMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(class, "dynByteMethod3", "(SLjava/lang/Object;D)B");
+            let my_value = 69.2 as std::ffi::c_double;
+            let result = env.CallByteMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_eq!(result, 1);
+            assert_fn_name("dynByteMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
+
+    #[test]
+    fn test_dyn_char() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_test_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let meth = env.GetMethodID_str(class, "dynCharMethod0", "()C");
+            let result = env.CallCharMethod0(inst, meth);
+            assert_eq!(result, 1);
+            assert_fn_name("dynCharMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynCharMethod1", "(S)C");
+            let result = env.CallCharMethod1(inst, meth, 15i16);
+            assert_eq!(result, 1);
+            assert_fn_name("dynCharMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynCharMethod2", "(SLjava/lang/Object;)C");
+            let result = env.CallCharMethod2(inst, meth, 1245i16, null_mut());
+            assert_eq!(result, 1);
+            assert_fn_name("dynCharMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynCharMethod3", "(SLjava/lang/Object;D)C");
+            let my_value = 88 as std::ffi::c_double;
+            let result = env.CallCharMethod3(inst, meth, 26225i16, global, my_value);
+            assert_eq!(result, 1);
+            assert_fn_name("dynCharMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(class, "dynCharMethod3", "(SLjava/lang/Object;D)C");
+            let my_value = 69.2 as std::ffi::c_double;
+            let result = env.CallCharMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_eq!(result, 1);
+            assert_fn_name("dynCharMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
+
+    #[test]
+    fn test_dyn_short() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_test_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let meth = env.GetMethodID_str(class, "dynShortMethod0", "()S");
+            let result = env.CallShortMethod0(inst, meth);
+            assert_eq!(result, 1);
+            assert_fn_name("dynShortMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynShortMethod1", "(S)S");
+            let result = env.CallShortMethod1(inst, meth, 15i16);
+            assert_eq!(result, 1);
+            assert_fn_name("dynShortMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynShortMethod2", "(SLjava/lang/Object;)S");
+            let result = env.CallShortMethod2(inst, meth, 1245i16, null_mut());
+            assert_eq!(result, 1);
+            assert_fn_name("dynShortMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynShortMethod3", "(SLjava/lang/Object;D)S");
+            let my_value = 88 as std::ffi::c_double;
+            let result = env.CallShortMethod3(inst, meth, 26225i16, global, my_value);
+            assert_eq!(result, 1);
+            assert_fn_name("dynShortMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(class, "dynShortMethod3", "(SLjava/lang/Object;D)S");
+            let my_value = 69.2 as std::ffi::c_double;
+            let result = env.CallShortMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_eq!(result, 1);
+            assert_fn_name("dynShortMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
+
+    #[test]
+    fn test_dyn_int() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_test_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let meth = env.GetMethodID_str(class, "dynIntMethod0", "()I");
+            let result = env.CallIntMethod0(inst, meth);
+            assert_eq!(result, 1);
+            assert_fn_name("dynIntMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynIntMethod1", "(S)I");
+            let result = env.CallIntMethod1(inst, meth, 15i16);
+            assert_eq!(result, 1);
+            assert_fn_name("dynIntMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynIntMethod2", "(SLjava/lang/Object;)I");
+            let result = env.CallIntMethod2(inst, meth, 1245i16, null_mut());
+            assert_eq!(result, 1);
+            assert_fn_name("dynIntMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynIntMethod3", "(SLjava/lang/Object;D)I");
+            let my_value = 88 as std::ffi::c_double;
+            let result = env.CallIntMethod3(inst, meth, 26225i16, global, my_value);
+            assert_eq!(result, 1);
+            assert_fn_name("dynIntMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(class, "dynIntMethod3", "(SLjava/lang/Object;D)I");
+            let my_value = 69.2 as std::ffi::c_double;
+            let result = env.CallIntMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_eq!(result, 1);
+            assert_fn_name("dynIntMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
+
+    #[test]
+    fn test_dyn_long() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_test_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let meth = env.GetMethodID_str(class, "dynLongMethod0", "()J");
+            let result = env.CallLongMethod0(inst, meth);
+            assert_eq!(result, 1);
+            assert_fn_name("dynLongMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynLongMethod1", "(S)J");
+            let result = env.CallLongMethod1(inst, meth, 15i16);
+            assert_eq!(result, 1);
+            assert_fn_name("dynLongMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynLongMethod2", "(SLjava/lang/Object;)J");
+            let result = env.CallLongMethod2(inst, meth, 1245i16, null_mut());
+            assert_eq!(result, 1);
+            assert_fn_name("dynLongMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynLongMethod3", "(SLjava/lang/Object;D)J");
+            let my_value = 88 as std::ffi::c_double;
+            let result = env.CallLongMethod3(inst, meth, 26225i16, global, my_value);
+            assert_eq!(result, 1);
+            assert_fn_name("dynLongMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(class, "dynLongMethod3", "(SLjava/lang/Object;D)J");
+            let my_value = 69.2 as std::ffi::c_double;
+            let result = env.CallLongMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_eq!(result, 1);
+            assert_fn_name("dynLongMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
+
+    #[test]
+    fn test_dyn_float() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_test_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let meth = env.GetMethodID_str(class, "dynFloatMethod0", "()F");
+            let result = env.CallFloatMethod0(inst, meth);
+            assert_eq!(result, 1f32);
+            assert_fn_name("dynFloatMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynFloatMethod1", "(S)F");
+            let result = env.CallFloatMethod1(inst, meth, 15i16);
+            assert_eq!(result, 1f32);
+            assert_fn_name("dynFloatMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynFloatMethod2", "(SLjava/lang/Object;)F");
+            let result = env.CallFloatMethod2(inst, meth, 1245i16, null_mut());
+            assert_eq!(result, 1f32);
+            assert_fn_name("dynFloatMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynFloatMethod3", "(SLjava/lang/Object;D)F");
+            let my_value = 88 as std::ffi::c_double;
+            let result = env.CallFloatMethod3(inst, meth, 26225i16, global, my_value);
+            assert_eq!(result, 1f32);
+            assert_fn_name("dynFloatMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(class, "dynFloatMethod3", "(SLjava/lang/Object;D)F");
+            let my_value = 69.2 as std::ffi::c_double;
+            let result = env.CallFloatMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_eq!(result, 1f32);
+            assert_fn_name("dynFloatMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
+
+    #[test]
+    fn test_dyn_double() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_test_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let meth = env.GetMethodID_str(class, "dynDoubleMethod0", "()D");
+            let result = env.CallDoubleMethod0(inst, meth);
+            assert_eq!(result, 1f64);
+            assert_fn_name("dynDoubleMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynDoubleMethod1", "(S)D");
+            let result = env.CallDoubleMethod1(inst, meth, 15i16);
+            assert_eq!(result, 1f64);
+            assert_fn_name("dynDoubleMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynDoubleMethod2", "(SLjava/lang/Object;)D");
+            let result = env.CallDoubleMethod2(inst, meth, 1245i16, null_mut());
+            assert_eq!(result, 1f64);
+            assert_fn_name("dynDoubleMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynDoubleMethod3", "(SLjava/lang/Object;D)D");
+            let my_value = 88 as std::ffi::c_double;
+            let result = env.CallDoubleMethod3(inst, meth, 26225i16, global, my_value);
+            assert_eq!(result, 1f64);
+            assert_fn_name("dynDoubleMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(class, "dynDoubleMethod3", "(SLjava/lang/Object;D)D");
+            let my_value = 69.2 as std::ffi::c_double;
+            let result = env.CallDoubleMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_eq!(result, 1f64);
+            assert_fn_name("dynDoubleMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
     }
 
     #[test]

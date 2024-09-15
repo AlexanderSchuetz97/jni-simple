@@ -22,6 +22,11 @@ fn test() {
         //    jni_simple::load_jvm_from_library("C:\\Program Files\\Java\\jdk-17.0.1\\jre\\bin\\server\\jvm.dll")
         //        .expect("failed to load jvm");
 
+        // Works on Both, but requires JAVA_HOME environment variable to be set.
+        // This is usually done by the java installer.
+        // Fails if JAVA_HOME is not set.
+        //jni_simple::load_jvm_from_java_home().expect("failed to load jvm");
+        
 
         //Adjust JVM version and arguments here, args are just like the args you pass on the command line.
         //You could provide your classpath here for example or configure the jvm heap size.

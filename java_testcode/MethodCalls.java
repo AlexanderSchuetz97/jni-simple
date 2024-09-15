@@ -2,16 +2,645 @@ import java.lang.System;
 
 public class MethodCalls {
 
+
     public static volatile String name;
     public static volatile short a;
     public static volatile Object b;
     public static volatile double c;
+
+
+    public static class NvChild extends MethodCalls {
+        public void dynVoidMethod0() {
+            reset();
+            name = "nvVoidMethod0";
+        }
+
+        public void dynVoidMethod1(short a) {
+            reset();
+            name = "nvVoidMethod1";
+            MethodCalls.a = a;
+        }
+
+        public void dynVoidMethod2(short a, Object b) {
+            reset();
+            name = "nvVoidMethod2";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+        }
+
+        public void dynVoidMethod3(short a, Object b, double c) {
+            reset();
+            name = "nvVoidMethod3";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            MethodCalls.c = c;
+
+            System.err.println("dynVoidMethod3 C=" + c);
+        }
+
+        public Object dynObjectMethod0() {
+            reset();
+            name = "nvObjectMethod0";
+            return new Object();
+        }
+
+        public Object dynObjectMethod1(short a) {
+            reset();
+            name = "nvObjectMethod1";
+            MethodCalls.a = a;
+            return new Object();
+        }
+
+        public Object dynObjectMethod2(short a, Object b) {
+            reset();
+            name = "nvObjectMethod2";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            return new Object();
+        }
+
+        public Object dynObjectMethod3(short a, Object b, double c) {
+            reset();
+            name = "nvObjectMethod3";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            MethodCalls.c = c;
+            return new Object();
+        }
+
+        public boolean dynBooleanMethod0() {
+            reset();
+            name = "nvBooleanMethod0";
+            return true;
+        }
+
+        public boolean dynBooleanMethod1(short a) {
+            reset();
+            name = "nvBooleanMethod1";
+            MethodCalls.a = a;
+            return true;
+        }
+
+        public boolean dynBooleanMethod2(short a, Object b) {
+            reset();
+            name = "nvBooleanMethod2";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            return true;
+        }
+
+        public boolean dynBooleanMethod3(short a, Object b, double c) {
+            reset();
+            name = "nvBooleanMethod3";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            MethodCalls.c = c;
+            return true;
+        }
+
+        public byte dynByteMethod0() {
+            reset();
+            name = "nvByteMethod0";
+            return 1;
+        }
+
+        public byte dynByteMethod1(short a) {
+            reset();
+            name = "nvByteMethod1";
+            MethodCalls.a = a;
+            return 1;
+        }
+
+        public byte dynByteMethod2(short a, Object b) {
+            reset();
+            name = "nvByteMethod2";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            return 1;
+        }
+
+        public byte dynByteMethod3(short a, Object b, double c) {
+            reset();
+            name = "nvByteMethod3";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            MethodCalls.c = c;
+            return 1;
+        }
+
+        public char dynCharMethod0() {
+            reset();
+            name = "nvCharMethod0";
+            return 1;
+        }
+
+        public char dynCharMethod1(short a) {
+            reset();
+            name = "nvCharMethod1";
+            MethodCalls.a = a;
+            return 1;
+        }
+
+        public char dynCharMethod2(short a, Object b) {
+            reset();
+            name = "nvCharMethod2";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            return 1;
+        }
+
+        public char dynCharMethod3(short a, Object b, double c) {
+            reset();
+            name = "nvCharMethod3";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            MethodCalls.c = c;
+            return 1;
+        }
+
+        public short dynShortMethod0() {
+            reset();
+            name = "nvShortMethod0";
+            return 1;
+        }
+
+        public short dynShortMethod1(short a) {
+            reset();
+            name = "nvShortMethod1";
+            MethodCalls.a = a;
+            return 1;
+        }
+
+        public short dynShortMethod2(short a, Object b) {
+            reset();
+            name = "nvShortMethod2";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            return 1;
+        }
+
+        public short dynShortMethod3(short a, Object b, double c) {
+            reset();
+            name = "nvShortMethod3";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            MethodCalls.c = c;
+            System.err.println("dynShortMethod3 C=" + c);
+            return 1;
+        }
+
+        public int dynIntMethod0() {
+            reset();
+            name = "nvIntMethod0";
+            return 1;
+        }
+
+        public int dynIntMethod1(short a) {
+            reset();
+            name = "nvIntMethod1";
+            MethodCalls.a = a;
+            return 1;
+        }
+
+        public int dynIntMethod2(short a, Object b) {
+            reset();
+            name = "nvIntMethod2";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            return 1;
+        }
+
+        public int dynIntMethod3(short a, Object b, double c) {
+            reset();
+            name = "nvIntMethod3";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            MethodCalls.c = c;
+            return 1;
+        }
+
+        public long dynLongMethod0() {
+            reset();
+            name = "nvLongMethod0";
+            return 1;
+        }
+
+        public long dynLongMethod1(short a) {
+            reset();
+            name = "nvLongMethod1";
+            MethodCalls.a = a;
+            return 1;
+        }
+
+        public long dynLongMethod2(short a, Object b) {
+            reset();
+            name = "nvLongMethod2";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            return 1;
+        }
+
+        public long dynLongMethod3(short a, Object b, double c) {
+            reset();
+            name = "nvLongMethod3";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            MethodCalls.c = c;
+            return 1;
+        }
+
+        public float dynFloatMethod0() {
+            reset();
+            name = "nvFloatMethod0";
+            return 1;
+        }
+
+        public float dynFloatMethod1(short a) {
+            reset();
+            name = "nvFloatMethod1";
+            MethodCalls.a = a;
+            return 1;
+        }
+
+        public float dynFloatMethod2(short a, Object b) {
+            reset();
+            name = "nvFloatMethod2";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            return 1;
+        }
+
+        public float dynFloatMethod3(short a, Object b, double c) {
+            reset();
+            name = "nvFloatMethod3";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            MethodCalls.c = c;
+            return 1;
+        }
+
+        public double dynDoubleMethod0() {
+            reset();
+            name = "nvDoubleMethod0";
+            return 1;
+        }
+
+        public double dynDoubleMethod1(short a) {
+            reset();
+            name = "nvDoubleMethod1";
+            MethodCalls.a = a;
+            return 1;
+        }
+
+        public double dynDoubleMethod2(short a, Object b) {
+            reset();
+            name = "nvDoubleMethod2";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            return 1;
+        }
+
+        public double dynDoubleMethod3(short a, Object b, double c) {
+            reset();
+            name = "nvDoubleMethod3";
+            MethodCalls.a = a;
+            MethodCalls.b = b;
+            MethodCalls.c = c;
+            return 1;
+        }
+    }
 
     public static void reset() {
         a = 0;
         b = null;
         c = 0;
         name = null;
+    }
+
+    public MethodCalls() {
+        reset();
+        name = "init0";
+    }
+
+    public MethodCalls(short a) {
+        reset();
+        name = "init1";
+        MethodCalls.a = a;
+
+    }
+
+    public MethodCalls(short a, Object b) {
+        reset();
+        name = "init2";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+    }
+
+    public MethodCalls(short a, Object b, double c) {
+        reset();
+        name = "init3";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        MethodCalls.c = c;
+    }
+
+    public void dynVoidMethod0() {
+        reset();
+        name = "dynVoidMethod0";
+    }
+
+    public void dynVoidMethod1(short a) {
+        reset();
+        name = "dynVoidMethod1";
+        MethodCalls.a = a;
+    }
+
+    public void dynVoidMethod2(short a, Object b) {
+        reset();
+        name = "dynVoidMethod2";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+    }
+
+    public void dynVoidMethod3(short a, Object b, double c) {
+        reset();
+        name = "dynVoidMethod3";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        MethodCalls.c = c;
+
+        System.err.println("dynVoidMethod3 C=" + c);
+    }
+
+    public Object dynObjectMethod0() {
+        reset();
+        name = "dynObjectMethod0";
+        return new Object();
+    }
+
+    public Object dynObjectMethod1(short a) {
+        reset();
+        name = "dynObjectMethod1";
+        MethodCalls.a = a;
+        return new Object();
+    }
+
+    public Object dynObjectMethod2(short a, Object b) {
+        reset();
+        name = "dynObjectMethod2";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        return new Object();
+    }
+
+    public Object dynObjectMethod3(short a, Object b, double c) {
+        reset();
+        name = "dynObjectMethod3";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        MethodCalls.c = c;
+        return new Object();
+    }
+
+    public boolean dynBooleanMethod0() {
+        reset();
+        name = "dynBooleanMethod0";
+        return true;
+    }
+
+    public boolean dynBooleanMethod1(short a) {
+        reset();
+        name = "dynBooleanMethod1";
+        MethodCalls.a = a;
+        return true;
+    }
+
+    public boolean dynBooleanMethod2(short a, Object b) {
+        reset();
+        name = "dynBooleanMethod2";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        return true;
+    }
+
+    public boolean dynBooleanMethod3(short a, Object b, double c) {
+        reset();
+        name = "dynBooleanMethod3";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        MethodCalls.c = c;
+        return true;
+    }
+
+    public byte dynByteMethod0() {
+        reset();
+        name = "dynByteMethod0";
+        return 1;
+    }
+
+    public byte dynByteMethod1(short a) {
+        reset();
+        name = "dynByteMethod1";
+        MethodCalls.a = a;
+        return 1;
+    }
+
+    public byte dynByteMethod2(short a, Object b) {
+        reset();
+        name = "dynByteMethod2";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        return 1;
+    }
+
+    public byte dynByteMethod3(short a, Object b, double c) {
+        reset();
+        name = "dynByteMethod3";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        MethodCalls.c = c;
+        return 1;
+    }
+
+    public char dynCharMethod0() {
+        reset();
+        name = "dynCharMethod0";
+        return 1;
+    }
+
+    public char dynCharMethod1(short a) {
+        reset();
+        name = "dynCharMethod1";
+        MethodCalls.a = a;
+        return 1;
+    }
+
+    public char dynCharMethod2(short a, Object b) {
+        reset();
+        name = "dynCharMethod2";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        return 1;
+    }
+
+    public char dynCharMethod3(short a, Object b, double c) {
+        reset();
+        name = "dynCharMethod3";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        MethodCalls.c = c;
+        return 1;
+    }
+
+    public short dynShortMethod0() {
+        reset();
+        name = "dynShortMethod0";
+        return 1;
+    }
+
+    public short dynShortMethod1(short a) {
+        reset();
+        name = "dynShortMethod1";
+        MethodCalls.a = a;
+        return 1;
+    }
+
+    public short dynShortMethod2(short a, Object b) {
+        reset();
+        name = "dynShortMethod2";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        return 1;
+    }
+
+    public short dynShortMethod3(short a, Object b, double c) {
+        reset();
+        name = "dynShortMethod3";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        MethodCalls.c = c;
+        System.err.println("dynShortMethod3 C=" + c);
+        return 1;
+    }
+
+    public int dynIntMethod0() {
+        reset();
+        name = "dynIntMethod0";
+        return 1;
+    }
+
+    public int dynIntMethod1(short a) {
+        reset();
+        name = "dynIntMethod1";
+        MethodCalls.a = a;
+        return 1;
+    }
+
+    public int dynIntMethod2(short a, Object b) {
+        reset();
+        name = "dynIntMethod2";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        return 1;
+    }
+
+    public int dynIntMethod3(short a, Object b, double c) {
+        reset();
+        name = "dynIntMethod3";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        MethodCalls.c = c;
+        return 1;
+    }
+
+    public long dynLongMethod0() {
+        reset();
+        name = "dynLongMethod0";
+        return 1;
+    }
+
+    public long dynLongMethod1(short a) {
+        reset();
+        name = "dynLongMethod1";
+        MethodCalls.a = a;
+        return 1;
+    }
+
+    public long dynLongMethod2(short a, Object b) {
+        reset();
+        name = "dynLongMethod2";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        return 1;
+    }
+
+    public long dynLongMethod3(short a, Object b, double c) {
+        reset();
+        name = "dynLongMethod3";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        MethodCalls.c = c;
+        return 1;
+    }
+
+    public float dynFloatMethod0() {
+        reset();
+        name = "dynFloatMethod0";
+        return 1;
+    }
+
+    public float dynFloatMethod1(short a) {
+        reset();
+        name = "dynFloatMethod1";
+        MethodCalls.a = a;
+        return 1;
+    }
+
+    public float dynFloatMethod2(short a, Object b) {
+        reset();
+        name = "dynFloatMethod2";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        return 1;
+    }
+
+    public float dynFloatMethod3(short a, Object b, double c) {
+        reset();
+        name = "dynFloatMethod3";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        MethodCalls.c = c;
+        return 1;
+    }
+
+    public double dynDoubleMethod0() {
+        reset();
+        name = "dynDoubleMethod0";
+        return 1;
+    }
+
+    public double dynDoubleMethod1(short a) {
+        reset();
+        name = "dynDoubleMethod1";
+        MethodCalls.a = a;
+        return 1;
+    }
+
+    public double dynDoubleMethod2(short a, Object b) {
+        reset();
+        name = "dynDoubleMethod2";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        return 1;
+    }
+
+    public double dynDoubleMethod3(short a, Object b, double c) {
+        reset();
+        name = "dynDoubleMethod3";
+        MethodCalls.a = a;
+        MethodCalls.b = b;
+        MethodCalls.c = c;
+        return 1;
     }
 
     public static void staticVoidMethod0() {
