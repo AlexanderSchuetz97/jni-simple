@@ -1,0 +1,79 @@
+#[cfg(feature = "loadjvm")]
+pub mod test {
+    use jni_simple::*;
+    use std::ptr::null_mut;
+    use std::sync::{Arc, Condvar, Mutex};
+    use std::time::Duration;
+
+    #[test]
+    fn test() {
+        unsafe {
+            load_jvm_from_java_home().expect("failed to load jvm");
+            let args: Vec<String> = vec![];
+            let (vm, _env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
+
+            let vm_clone = vm.clone();
+            std::thread::spawn(move || {
+                assert_eq!(JNI_EDETACHED, vm_clone.GetEnv(JNI_VERSION_1_8).unwrap_err());
+                let _env = vm_clone.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).unwrap();
+                assert!(vm_clone.GetEnv(JNI_VERSION_1_8).is_ok());
+                let _env = vm_clone.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).unwrap();
+                assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
+                assert_eq!(JNI_EDETACHED, vm_clone.GetEnv(JNI_VERSION_1_8).unwrap_err());
+                let env = vm_clone.AttachCurrentThread_str(JNI_VERSION_1_8, Some("HelloWorld"), null_mut()).unwrap();
+                let n = env.FindClass_str("java/lang/Thread");
+                let gt = env.GetStaticMethodID_str(n, "currentThread", "()Ljava/lang/Thread;");
+                let gn = env.GetMethodID_str(n, "getName", "()Ljava/lang/String;");
+                let thread = env.CallStaticObjectMethod0(n, gt);
+                let thread_name_j = env.CallObjectMethod0(thread, gn);
+                let jn = env.GetStringUTFChars_as_string(thread_name_j).unwrap();
+                assert_eq!("HelloWorld", jn.as_str());
+                env.DeleteLocalRef(thread_name_j);
+                env.DeleteLocalRef(thread);
+                env.DeleteLocalRef(n);
+                assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
+                assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
+            }).join().unwrap();
+
+            let vm_clone = vm.clone();
+
+            let l1 = Arc::new((Mutex::new(()), Condvar::new(), Condvar::new()));
+            let l2 = l1.clone();
+            let l3 = l2.clone();
+
+
+            let guard = l1.0.lock().unwrap();
+
+
+            std::thread::spawn(move || {
+                let guard = l2.0.lock().unwrap();
+                let _env = vm_clone.AttachCurrentThreadAsDaemon_str(JNI_VERSION_1_8, None, null_mut()).unwrap();
+                assert!(vm_clone.GetEnv(JNI_VERSION_1_8).is_ok());
+                l2.1.notify_all();
+                let _guard = l2.1.wait(guard).unwrap();
+            });
+
+            let guard = l1.1.wait(guard).unwrap();
+            let vm_clone = vm.clone();
+            let jh = std::thread::spawn(move || {
+                let _guard = l3.0.lock().unwrap();
+                vm_clone.DestroyJavaVM();
+                l3.2.notify_all();
+            });
+            assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
+
+            let n = JNI_GetCreatedJavaVMs().unwrap();
+            assert!(!n.is_empty());
+
+            let (_guard, tm) = l1.2.wait_timeout(guard, Duration::from_millis(5000)).unwrap();
+            assert_eq!(false, tm.timed_out());
+            jh.join().unwrap();
+            l1.1.notify_all();
+            let n = JNI_GetCreatedJavaVMs().unwrap();
+            assert!(n.is_empty());
+
+            //This is a bit of "imagination" but j8 has this behavior.
+            assert_eq!(JNI_ERR, vm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).unwrap_err());
+        }
+    }
+}
