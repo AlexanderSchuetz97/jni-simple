@@ -2584,4 +2584,158 @@ pub mod test {
             env.DeleteGlobalRef(class);
         }
     }
+
+    #[test]
+    fn test_dyn_long_reflected() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+            let inst = get_test_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let meth = env.GetMethodID_str(class, "dynLongMethod0", "()J");
+            let refl = env.ToReflectedMethod(class, meth, false);
+            let meth = env.FromReflectedMethod(refl);
+            env.DeleteLocalRef(refl);
+
+            let result = env.CallLongMethod0(inst, meth);
+            assert_eq!(result, 1);
+            assert_fn_name("dynLongMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynLongMethod1", "(S)J");
+            let refl = env.ToReflectedMethod(class, meth, false);
+            let meth = env.FromReflectedMethod(refl);
+            env.DeleteLocalRef(refl);
+
+            let result = env.CallLongMethod1(inst, meth, 15i16);
+            assert_eq!(result, 1);
+            assert_fn_name("dynLongMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynLongMethod2", "(SLjava/lang/Object;)J");
+            let refl = env.ToReflectedMethod(class, meth, false);
+            let meth = env.FromReflectedMethod(refl);
+            env.DeleteLocalRef(refl);
+
+            let result = env.CallLongMethod2(inst, meth, 1245i16, null_mut());
+            assert_eq!(result, 1);
+            assert_fn_name("dynLongMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetMethodID_str(class, "dynLongMethod3", "(SLjava/lang/Object;D)J");
+            let refl = env.ToReflectedMethod(class, meth, false);
+            let meth = env.FromReflectedMethod(refl);
+            env.DeleteLocalRef(refl);
+
+            let my_value = 88 as std::ffi::c_double;
+            let result = env.CallLongMethod3(inst, meth, 26225i16, global, my_value);
+            assert_eq!(result, 1);
+            assert_fn_name("dynLongMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetMethodID_str(class, "dynLongMethod3", "(SLjava/lang/Object;D)J");
+            let refl = env.ToReflectedMethod(class, meth, false);
+            let meth = env.FromReflectedMethod(refl);
+            env.DeleteLocalRef(refl);
+
+            let my_value = 69.2 as std::ffi::c_double;
+            let result = env.CallLongMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_eq!(result, 1);
+            assert_fn_name("dynLongMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteLocalRef(inst);
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
+
+    #[test]
+    fn test_static_long_reflected() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let global = new_global_obj();
+
+            let env = get_env();
+            let class = get_test_class();
+            let meth = env.GetStaticMethodID_str(class, "staticLongMethod0", "()J");
+            let refl = env.ToReflectedMethod(class, meth, true);
+            let meth = env.FromReflectedMethod(refl);
+            env.DeleteLocalRef(refl);
+
+            let result = env.CallStaticLongMethod0(class, meth);
+            assert_eq!(result, 1);
+            assert_fn_name("staticLongMethod0");
+            assert_a(0i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetStaticMethodID_str(class, "staticLongMethod1", "(S)J");
+            let refl = env.ToReflectedMethod(class, meth, true);
+            let meth = env.FromReflectedMethod(refl);
+            env.DeleteLocalRef(refl);
+
+            let result = env.CallStaticLongMethod1(class, meth, 15i16);
+            assert_eq!(result, 1);
+            assert_fn_name("staticLongMethod1");
+            assert_a(15i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetStaticMethodID_str(class, "staticLongMethod2", "(SLjava/lang/Object;)J");
+            let refl = env.ToReflectedMethod(class, meth, true);
+            let meth = env.FromReflectedMethod(refl);
+            env.DeleteLocalRef(refl);
+
+            let result = env.CallStaticLongMethod2(class, meth, 1245i16, null_mut());
+            assert_eq!(result, 1);
+            assert_fn_name("staticLongMethod2");
+            assert_a(1245i16);
+            assert_b(null_mut());
+            assert_c(0f64);
+
+            let meth = env.GetStaticMethodID_str(class, "staticLongMethod3", "(SLjava/lang/Object;D)J");
+            let refl = env.ToReflectedMethod(class, meth, true);
+            let meth = env.FromReflectedMethod(refl);
+            env.DeleteLocalRef(refl);
+
+            let my_value = 88 as std::ffi::c_double;
+            let result = env.CallStaticLongMethod3(class, meth, 26225i16, global, my_value);
+            assert_eq!(result, 1);
+            assert_fn_name("staticLongMethod3");
+            assert_a(26225i16);
+            assert_b(global);
+            assert_c(my_value);
+
+            let meth = env.GetStaticMethodID_str(class, "staticLongMethod3", "(SLjava/lang/Object;D)J");
+            let refl = env.ToReflectedMethod(class, meth, true);
+            let meth = env.FromReflectedMethod(refl);
+            env.DeleteLocalRef(refl);
+
+            let my_value = 69.2 as std::ffi::c_double;
+            let result = env.CallStaticLongMethodA(class, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
+            assert_eq!(result, 1);
+            assert_fn_name("staticLongMethod3");
+            assert_a(32695i16);
+            assert_b(null_mut());
+            assert_c(my_value);
+
+            env.DeleteGlobalRef(global);
+            env.DeleteGlobalRef(class);
+        }
+    }
 }

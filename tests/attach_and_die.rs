@@ -10,7 +10,14 @@ pub mod test {
         unsafe {
             load_jvm_from_java_home().expect("failed to load jvm");
             let args: Vec<String> = vec![];
-            let (vm, _env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
+            let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
+            let version = env.GetVersion();
+            match version {
+                JNI_VERSION_1_8 | JNI_VERSION_9 | JNI_VERSION_10 | JNI_VERSION_19 | JNI_VERSION_20 | JNI_VERSION_21 => (),
+                _ => {
+                    panic!("Invalid or unknown JVM JNI version {}. This test is only aware of versions up to 21. If the jvm is newer than this then point your JAVA_HOME to a jvm version >= 8 and <= 21", version);
+                }
+            }
 
             let vm_clone = vm.clone();
             std::thread::spawn(move || {
@@ -35,7 +42,7 @@ pub mod test {
                 assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
             }).join().unwrap();
 
-            let vm_clone = vm.clone();
+            let vm_clone = env.GetJavaVM().unwrap();
 
             let l1 = Arc::new((Mutex::new(()), Condvar::new(), Condvar::new()));
             let l2 = l1.clone();
@@ -52,6 +59,19 @@ pub mod test {
                 l2.1.notify_all();
                 let _guard = l2.1.wait(guard).unwrap();
             });
+
+            std::thread::spawn(move || {
+                let env = vm_clone.AttachCurrentThreadAsDaemon_str(JNI_VERSION_1_8, Some("HelloWorld"), null_mut()).unwrap();
+                let n = env.FindClass_str("java/lang/Thread");
+                let gt = env.GetStaticMethodID_str(n, "currentThread", "()Ljava/lang/Thread;");
+                let gn = env.GetMethodID_str(n, "getName", "()Ljava/lang/String;");
+                let thread = env.CallStaticObjectMethod0(n, gt);
+                let thread_name_j = env.CallObjectMethod0(thread, gn);
+                let jn = env.GetStringUTFChars_as_string(thread_name_j).unwrap();
+                assert_eq!("HelloWorld", jn.as_str());
+                assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
+            }).join().unwrap();
+
 
             let guard = l1.1.wait(guard).unwrap();
             let vm_clone = vm.clone();

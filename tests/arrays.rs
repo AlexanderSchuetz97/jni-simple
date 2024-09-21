@@ -373,4 +373,30 @@ pub mod test {
             },
         );
     }
+
+    #[test]
+    fn test_object_array() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            let env = get_env();
+            let str_class = env.FindClass_str("java/lang/String");
+            let array = env.NewObjectArray(16, str_class, null_mut());
+            for x in 0..16 {
+                let element = env.GetObjectArrayElement(array, x);
+                assert!(element.is_null());
+                let nstr = env.NewStringUTF_str(format!("{}", x).as_str());
+                env.SetObjectArrayElement(array, x, nstr);
+                env.DeleteLocalRef(nstr);
+            }
+            for x in 0..16 {
+                let element = env.GetObjectArrayElement(array, x);
+                assert!(!element.is_null());
+                let rstring = env.GetStringUTFChars_as_string(element).unwrap();
+                env.DeleteLocalRef(element);
+                assert_eq!(format!("{}", x), rstring);
+            }
+
+            env.DeleteLocalRef(array);
+        }
+    }
 }

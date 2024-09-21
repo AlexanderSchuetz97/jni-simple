@@ -224,6 +224,48 @@ pub mod test {
     }
 
     #[test]
+    fn test_char() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            reset_it();
+            let env = get_env();
+            let test_class = get_test_class();
+            let field = env.GetStaticFieldID_str(test_class, "staticChar", "C");
+            env.SetStaticCharField(test_class, field, 1);
+            assert_eq!(1, env.GetStaticCharField(test_class, field));
+            env.SetStaticCharField(test_class, field, 1);
+            assert_eq!(1, env.GetStaticCharField(test_class, field));
+            env.SetStaticCharField(test_class, field, 2);
+            assert_eq!(2, env.GetStaticCharField(test_class, field));
+            env.SetStaticCharField(test_class, field, 11);
+            env.SetStaticCharField(test_class, field, 11);
+            assert_eq!(11, env.GetStaticCharField(test_class, field));
+
+            add_it();
+            assert_eq!(12, env.GetStaticCharField(test_class, field));
+
+            let test_obj = get_test_obj();
+            let field = env.GetFieldID_str(test_class, "dynChar", "C");
+            env.SetCharField(test_obj, field, 1);
+            assert_eq!(1, env.GetCharField(test_obj, field));
+            env.SetCharField(test_obj, field, 1);
+            assert_eq!(1, env.GetCharField(test_obj, field));
+            env.SetCharField(test_obj, field, 2);
+            assert_eq!(2, env.GetCharField(test_obj, field));
+            env.SetCharField(test_obj, field, 11);
+            env.SetCharField(test_obj, field, 11);
+            assert_eq!(11, env.GetCharField(test_obj, field));
+
+            add_it();
+            assert_eq!(12, env.GetCharField(test_obj, field));
+
+            env.DeleteLocalRef(test_obj);
+            env.DeleteGlobalRef(test_class);
+        }
+    }
+
+
+    #[test]
     fn test_int() {
         let _lock = MUTEX.lock().unwrap();
         unsafe {
@@ -424,6 +466,64 @@ pub mod test {
             env.DeleteGlobalRef(test_class);
             env.DeleteGlobalRef(g1);
             env.DeleteGlobalRef(g2);
+        }
+    }
+
+    #[test]
+    fn test_reflect() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            let env = get_env();
+            let test_class = get_test_class();
+
+            let field_static = env.GetStaticFieldID_str(test_class, "staticObject", "Ljava/lang/Object;");
+            assert!(!field_static.is_null());
+
+            let field_dyn = env.GetFieldID_str(test_class, "dynObject", "Ljava/lang/Object;");
+            assert!(!field_dyn.is_null());
+
+            let reflect_static = env.ToReflectedField(test_class, field_static, true);
+            assert!(!reflect_static.is_null());
+
+            let reflect_dyn = env.ToReflectedField(test_class, field_dyn, false);
+            assert!(!reflect_dyn.is_null());
+
+            let de_static = env.FromReflectedField(reflect_static);
+            let de_dyn = env.FromReflectedField(reflect_dyn);
+
+
+            let g1 = new_global_obj();
+            let g2 = new_global_obj();
+
+            env.SetStaticObjectField(test_class, de_static, g1);
+            assert!(env.IsSameObject(g1, env.GetStaticObjectField(test_class, de_static)));
+            env.SetStaticObjectField(test_class, de_static, g1);
+            assert!(env.IsSameObject(g1, env.GetStaticObjectField(test_class, de_static)));
+            env.SetStaticObjectField(test_class, de_static, null_mut());
+            assert!(env.IsSameObject(null_mut(), env.GetStaticObjectField(test_class, de_static)));
+            env.SetStaticObjectField(test_class, de_static, g2);
+            env.SetStaticObjectField(test_class, de_static, g2);
+            assert!(env.IsSameObject(g2, env.GetStaticObjectField(test_class, de_static)));
+
+            let test_obj = get_test_obj();
+            env.SetObjectField(test_obj, de_dyn, g1);
+            assert!(env.IsSameObject(g1, env.GetObjectField(test_obj, de_dyn)));
+            env.SetObjectField(test_obj, de_dyn, g1);
+            assert!(env.IsSameObject(g1, env.GetObjectField(test_obj, de_dyn)));
+            env.SetObjectField(test_obj, de_dyn, null_mut());
+            assert!(env.IsSameObject(null_mut(), env.GetObjectField(test_obj, de_dyn)));
+            env.SetObjectField(test_obj, de_dyn, g2);
+            env.SetObjectField(test_obj, de_dyn, g2);
+            assert!(env.IsSameObject(g2, env.GetObjectField(test_obj, de_dyn)));
+
+            env.DeleteLocalRef(reflect_static);
+            env.DeleteLocalRef(reflect_dyn);
+            env.DeleteLocalRef(test_obj);
+            env.DeleteGlobalRef(test_class);
+            env.DeleteGlobalRef(g1);
+            env.DeleteGlobalRef(g2);
+
+
         }
     }
 }

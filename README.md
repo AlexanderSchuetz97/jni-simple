@@ -169,6 +169,12 @@ I recommend using this feature before or after you have tested your code with `-
 on what problem your troubleshooting. The assertions are generally much better at detecting things like null pointers 
 or invalid parameters than the JVM checks, while the JVM checks are able to catch missing exception checks or JVM Local Stack overflows better.
 
+Since asserts are implemented using unwinding panics the panics can be caught. 
+It is not recommended to continue or try to "recover" from this as the 
+assertions do NOT perform cleanup actions when a panic occurs so you will leak JVM memory.
+I recommend aborting the processes on such a panic as such a panic only occurs if the rust code had triggered UB in the JVM.
+This can either be done by calling abort when "catching" the panic or compiling your rust code with panic=abort
+
 ### Further Info
 ### Variadic up-calls
 Currently, variadic up-calls into JVM code are only implemented for 0 to 3 parameters.
