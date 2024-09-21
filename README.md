@@ -158,22 +158,31 @@ This feature enables assertions in the code. This is useful for debugging and te
 These checks will cause a big performance hit and should not be used in production builds.
 
 I would not even recommend using this feature for normal debugging builds 
-unless you are specifically debugging issues that occur in relation to the JNI interface.
-There is no need to enable this feature when you are just debugging a problem that occurs in pure rust.
+unless you are specifically debugging issues that occur in relation to UB with the JNI interface.
+There is no need to enable this feature when you are just debugging a problem that occurs in pure rust code.
+
+Enabling this feature for automated unit/integration tests that perform complicated JNI calls can be a good idea if you
+can tolerate the performance penalty of enabling this feature.
+Enabling this feature for benchmarks is not recommended as it falsifies the results of the benchmark.
 
 This feature should NOT be used with the jvm launch option `-Xcheck:jni` 
-as the assertions contain calls to `env.ExceptionCheck()` which will fool the JVM into thinking 
-that your user code checks for exceptions, which it may not do. 
+as the assertions contain calls to `env.ExceptionCheck()` before nearly every normal call to the jvm, 
+which will fool the JVM into thinking that your user code checks for exceptions, which it may not do. 
+It will also generate many false negatives as some 'assertion' code does not call `env.ExceptionCheck()`
+as the only realistic scenario for some calls that are made to fail is for the JVM to run out of memory.
 
 I recommend using this feature before or after you have tested your code with `-Xcheck:jni` depending 
 on what problem your troubleshooting. The assertions are generally much better at detecting things like null pointers 
 or invalid parameters than the JVM checks, while the JVM checks are able to catch missing exception checks or JVM Local Stack overflows better.
 
-Since asserts are implemented using unwinding panics the panics can be caught. 
-It is not recommended to continue or try to "recover" from this as the 
-assertions do NOT perform cleanup actions when a panic occurs so you will leak JVM memory.
-I recommend aborting the processes on such a panic as such a panic only occurs if the rust code had triggered UB in the JVM.
+The asserts are implemented using rust panics. 
+If you compile your project with unwinding panics the panics can be caught. 
+It is not recommended to continue or try to "recover" from these panics as the 
+assertions do NOT perform cleanup actions when a panic occurs, so you will leak JVM locals or leave the JVM in an
+otherwise unrecoverable state. I recommend aborting the processes on such a panic as such a panic only occurs, 
+if the rust code had triggered UB in the JVM in the absence of the assertions.
 This can either be done by calling abort when "catching" the panic or compiling your rust code with panic=abort
+if you do not need to catch panics anywhere in your rust code.
 
 ### Further Info
 ### Variadic up-calls

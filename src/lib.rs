@@ -105,27 +105,90 @@ pub type jmethodID = jobject;
 pub type jfieldID = jobject;
 
 ///
-/// Marker traits for all types that are valid to use to make variadic JNI Up-calls with.
+/// Marker trait for all types that are valid to use to make variadic JNI Up-calls with.
 ///
-pub trait Jtype : private::Sealed+Into<jtype> {}
+pub trait JType: private::Sealed+Into<jtype>+Clone+Copy {
+
+    ///
+    /// Returns a single character that equals the type's JNI signature.
+    ///
+    /// Boolean -> Z
+    /// Byte -> B
+    /// Short -> S
+    /// Char -> C
+    /// Int -> I
+    /// Long -> J
+    /// Float -> F
+    /// Double -> D
+    /// any java.lang.Object -> L
+    ///
+    ///
+    fn jtype_id() -> char;
+}
 impl private::Sealed for jobject {}
-impl Jtype for jobject {}
+impl JType for jobject {
+    #[inline(always)]
+    fn jtype_id() -> char {
+        'L'
+    }
+}
 impl private::Sealed for jboolean {}
-impl Jtype for jboolean {}
+impl JType for jboolean {
+
+    #[inline(always)]
+    fn jtype_id() -> char {
+        'Z'
+    }
+}
 impl private::Sealed for jbyte {}
-impl Jtype for jbyte {}
+impl JType for jbyte {
+    #[inline(always)]
+    fn jtype_id() -> char {
+        'B'
+    }
+}
 impl private::Sealed for jshort {}
-impl Jtype for jshort {}
+impl JType for jshort {
+    #[inline(always)]
+    fn jtype_id() -> char {
+        'S'
+    }
+}
 impl private::Sealed for jchar {}
-impl Jtype for jchar {}
+impl JType for jchar {
+    #[inline(always)]
+    fn jtype_id() -> char {
+        'C'
+    }
+}
 impl private::Sealed for jint {}
-impl Jtype for jint {}
+impl JType for jint {
+    #[inline(always)]
+    fn jtype_id() -> char {
+        'I'
+    }
+}
 impl private::Sealed for jlong {}
-impl Jtype for jlong {}
+impl JType for jlong {
+    #[inline(always)]
+    fn jtype_id() -> char {
+        'J'
+    }
+}
 impl private::Sealed for jfloat {}
-impl Jtype for jfloat {}
+impl JType for jfloat {
+    #[inline(always)]
+    fn jtype_id() -> char {
+        'F'
+    }
+}
 impl private::Sealed for jdouble {}
-impl Jtype for jdouble {}
+impl JType for jdouble {
+    #[inline(always)]
+    fn jtype_id() -> char {
+        'D'
+    }
+}
 
 #[repr(C)]
 pub union jtype {
@@ -607,35 +670,41 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID) -> jobject>(28)(self.vtable, clazz, constructor)
     }
 
-    pub unsafe fn NewObject1<A: Jtype>(&self, clazz: jclass, constructor: jmethodID, arg1: A) -> jobject {
+    pub unsafe fn NewObject1<A: JType>(&self, clazz: jclass, constructor: jmethodID, arg1: A) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewObject");
             self.check_no_exception("NewObject");
             assert!(!constructor.is_null(), "NewObject constructor is null");
             self.check_is_class("NewObject", clazz);
+            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1)
     }
 
-    pub unsafe fn NewObject2<A: Jtype, B: Jtype>(&self, clazz: jclass, constructor: jmethodID, arg1: A, arg2: B) -> jobject {
+    pub unsafe fn NewObject2<A: JType, B: JType>(&self, clazz: jclass, constructor: jmethodID, arg1: A, arg2: B) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewObject");
             self.check_no_exception("NewObject");
             assert!(!constructor.is_null(), "NewObject constructor is null");
             self.check_is_class("NewObject", clazz);
+            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg1, 0, 2);
+            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1, arg2)
     }
 
-    pub unsafe fn NewObject3<A: Jtype, B: Jtype, C: Jtype>(&self, clazz: jclass, constructor: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
+    pub unsafe fn NewObject3<A: JType, B: JType, C: JType>(&self, clazz: jclass, constructor: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewObject");
             self.check_no_exception("NewObject");
             assert!(!constructor.is_null(), "NewObject constructor is null");
             self.check_is_class("NewObject", clazz);
+            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg1, 0, 3);
+            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg2, 1, 3);
+            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1, arg2, arg3)
     }
@@ -920,34 +989,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallVoidMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) {
+    pub unsafe fn CallVoidMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallVoidMethod");
             self.check_no_exception("CallVoidMethod");
             self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
+            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallVoidMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) {
+    pub unsafe fn CallVoidMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallVoidMethod");
             self.check_no_exception("CallVoidMethod");
             self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
+            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallVoidMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
+    pub unsafe fn CallVoidMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallVoidMethod");
             self.check_no_exception("CallVoidMethod");
             self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
+            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -973,34 +1048,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallObjectMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jobject {
+    pub unsafe fn CallObjectMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallObjectMethod");
             self.check_no_exception("CallObjectMethod");
             self.check_return_type_object("CallObjectMethod", obj, methodID, "object");
+            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallObjectMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
+    pub unsafe fn CallObjectMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallObjectMethod");
             self.check_no_exception("CallObjectMethod");
             self.check_return_type_object("CallObjectMethod", obj, methodID, "object");
+            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallObjectMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
+    pub unsafe fn CallObjectMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallObjectMethod");
             self.check_no_exception("CallObjectMethod");
             self.check_return_type_object("CallObjectMethod", obj, methodID, "object");
+            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -1026,34 +1107,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallBooleanMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jboolean {
+    pub unsafe fn CallBooleanMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallBooleanMethod");
             self.check_no_exception("CallBooleanMethod");
             self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
+            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallBooleanMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
+    pub unsafe fn CallBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallBooleanMethod");
             self.check_no_exception("CallBooleanMethod");
             self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
+            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallBooleanMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
+    pub unsafe fn CallBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallBooleanMethod");
             self.check_no_exception("CallBooleanMethod");
             self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
+            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -1079,34 +1166,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallByteMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jbyte {
+    pub unsafe fn CallByteMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jbyte {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallByteMethod1");
             self.check_no_exception("CallByteMethod1");
             self.check_return_type_object("CallByteMethod1", obj, methodID, "byte");
+            self.check_parameter_types_object("CallByteMethod1", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallByteMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
+    pub unsafe fn CallByteMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallByteMethod2");
             self.check_no_exception("CallByteMethod2");
             self.check_return_type_object("CallByteMethod2", obj, methodID, "byte");
+            self.check_parameter_types_object("CallByteMethod2", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallByteMethod2", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallByteMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
+    pub unsafe fn CallByteMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallByteMethod3");
             self.check_no_exception("CallByteMethod3");
             self.check_return_type_object("CallByteMethod3", obj, methodID, "byte");
+            self.check_parameter_types_object("CallByteMethod3", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallByteMethod3", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallByteMethod3", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -1132,34 +1225,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallCharMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jchar {
+    pub unsafe fn CallCharMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jchar {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallCharMethod");
             self.check_no_exception("CallCharMethod");
             self.check_return_type_object("CallCharMethod", obj, methodID, "char");
+            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallCharMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
+    pub unsafe fn CallCharMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallCharMethod");
             self.check_no_exception("CallCharMethod");
             self.check_return_type_object("CallCharMethod", obj, methodID, "char");
+            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallCharMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
+    pub unsafe fn CallCharMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallCharMethod");
             self.check_no_exception("CallCharMethod");
             self.check_return_type_object("CallCharMethod", obj, methodID, "char");
+            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -1185,34 +1284,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallShortMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jshort {
+    pub unsafe fn CallShortMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jshort {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallShortMethod");
             self.check_no_exception("CallShortMethod");
             self.check_return_type_object("CallShortMethod", obj, methodID, "short");
+            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallShortMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
+    pub unsafe fn CallShortMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallShortMethod");
             self.check_no_exception("CallShortMethod");
             self.check_return_type_object("CallShortMethod", obj, methodID, "short");
+            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallShortMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
+    pub unsafe fn CallShortMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallShortMethod");
             self.check_no_exception("CallShortMethod");
             self.check_return_type_object("CallShortMethod", obj, methodID, "short");
+            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -1238,34 +1343,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallIntMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jint {
+    pub unsafe fn CallIntMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallIntMethod");
             self.check_no_exception("CallIntMethod");
             self.check_return_type_object("CallIntMethod", obj, methodID, "int");
+            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallIntMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jint {
+    pub unsafe fn CallIntMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallIntMethod");
             self.check_no_exception("CallIntMethod");
             self.check_return_type_object("CallIntMethod", obj, methodID, "int");
+            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallIntMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
+    pub unsafe fn CallIntMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallIntMethod");
             self.check_no_exception("CallIntMethod");
             self.check_return_type_object("CallIntMethod", obj, methodID, "int");
+            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -1291,34 +1402,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallLongMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jlong {
+    pub unsafe fn CallLongMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jlong {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallLongMethod");
             self.check_no_exception("CallLongMethod");
             self.check_return_type_object("CallLongMethod", obj, methodID, "long");
+            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallLongMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
+    pub unsafe fn CallLongMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallLongMethod");
             self.check_no_exception("CallLongMethod");
             self.check_return_type_object("CallLongMethod", obj, methodID, "long");
+            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallLongMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
+    pub unsafe fn CallLongMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallLongMethod");
             self.check_no_exception("CallLongMethod");
             self.check_return_type_object("CallLongMethod", obj, methodID, "long");
+            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -1344,34 +1461,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallFloatMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jfloat {
+    pub unsafe fn CallFloatMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jfloat {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallFloatMethod");
             self.check_no_exception("CallFloatMethod");
             self.check_return_type_object("CallFloatMethod", obj, methodID, "float");
+            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallFloatMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
+    pub unsafe fn CallFloatMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallFloatMethod");
             self.check_no_exception("CallFloatMethod");
             self.check_return_type_object("CallFloatMethod", obj, methodID, "float");
+            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallFloatMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
+    pub unsafe fn CallFloatMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallFloatMethod");
             self.check_no_exception("CallFloatMethod");
             self.check_return_type_object("CallFloatMethod", obj, methodID, "float");
+            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -1397,34 +1520,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallDoubleMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jdouble {
+    pub unsafe fn CallDoubleMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jdouble {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallDoubleMethod");
             self.check_no_exception("CallDoubleMethod");
             self.check_return_type_object("CallDoubleMethod", obj, methodID, "double");
+            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallDoubleMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
+    pub unsafe fn CallDoubleMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallDoubleMethod");
             self.check_no_exception("CallDoubleMethod");
             self.check_return_type_object("CallDoubleMethod", obj, methodID, "double");
+            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallDoubleMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
+    pub unsafe fn CallDoubleMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallDoubleMethod");
             self.check_no_exception("CallDoubleMethod");
             self.check_return_type_object("CallDoubleMethod", obj, methodID, "double");
+            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -1453,37 +1582,43 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallNonvirtualVoidMethod1<A: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) {
+    pub unsafe fn CallNonvirtualVoidMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualVoidMethod");
             self.check_no_exception("CallNonvirtualVoidMethod");
             self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
             self.check_is_class("CallNonvirtualVoidMethod", class);
+            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1)
     }
 
     
-    pub unsafe fn CallNonvirtualVoidMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) {
+    pub unsafe fn CallNonvirtualVoidMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualVoidMethod");
             self.check_no_exception("CallNonvirtualVoidMethod");
             self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
             self.check_is_class("CallNonvirtualVoidMethod", class);
+            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallNonvirtualVoidMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
+    pub unsafe fn CallNonvirtualVoidMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualVoidMethod");
             self.check_no_exception("CallNonvirtualVoidMethod");
             self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
             self.check_is_class("CallNonvirtualVoidMethod", class);
+            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
@@ -1511,37 +1646,43 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallNonvirtualObjectMethod1<A: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jobject {
+    pub unsafe fn CallNonvirtualObjectMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualObjectMethod");
             self.check_no_exception("CallNonvirtualObjectMethod");
             self.check_return_type_object("CallNonvirtualObjectMethod", obj, methodID, "object");
             self.check_is_class("CallNonvirtualObjectMethod", class);
+            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1)
     }
 
     
-    pub unsafe fn CallNonvirtualObjectMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
+    pub unsafe fn CallNonvirtualObjectMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualObjectMethod");
             self.check_no_exception("CallNonvirtualObjectMethod");
             self.check_return_type_object("CallNonvirtualObjectMethod", obj, methodID, "object");
             self.check_is_class("CallNonvirtualObjectMethod", class);
+            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallNonvirtualObjectMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
+    pub unsafe fn CallNonvirtualObjectMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualObjectMethod");
             self.check_no_exception("CallNonvirtualObjectMethod");
             self.check_return_type_object("CallNonvirtualObjectMethod", obj, methodID, "object");
             self.check_is_class("CallNonvirtualObjectMethod", class);
+            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
@@ -1569,37 +1710,43 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallNonvirtualBooleanMethod1<A: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jboolean {
+    pub unsafe fn CallNonvirtualBooleanMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualBooleanMethod");
             self.check_no_exception("CallNonvirtualBooleanMethod");
             self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
             self.check_is_class("CallNonvirtualBooleanMethod", class);
+            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1)
     }
 
     
-    pub unsafe fn CallNonvirtualBooleanMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
+    pub unsafe fn CallNonvirtualBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualBooleanMethod");
             self.check_no_exception("CallNonvirtualBooleanMethod");
             self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
             self.check_is_class("CallNonvirtualBooleanMethod", class);
+            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallNonvirtualBooleanMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
+    pub unsafe fn CallNonvirtualBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualBooleanMethod");
             self.check_no_exception("CallNonvirtualBooleanMethod");
             self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
             self.check_is_class("CallNonvirtualBooleanMethod", class);
+            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
@@ -1627,37 +1774,43 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallNonvirtualByteMethod1<A: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jbyte {
+    pub unsafe fn CallNonvirtualByteMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jbyte {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualByteMethod");
             self.check_no_exception("CallNonvirtualByteMethod");
             self.check_return_type_object("CallNonvirtualByteMethod", obj, methodID, "byte");
             self.check_is_class("CallNonvirtualByteMethod", class);
+            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1)
     }
 
     
-    pub unsafe fn CallNonvirtualByteMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
+    pub unsafe fn CallNonvirtualByteMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualByteMethod");
             self.check_no_exception("CallNonvirtualByteMethod");
             self.check_return_type_object("CallNonvirtualByteMethod", obj, methodID, "byte");
             self.check_is_class("CallNonvirtualByteMethod", class);
+            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallNonvirtualByteMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
+    pub unsafe fn CallNonvirtualByteMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualByteMethod");
             self.check_no_exception("CallNonvirtualByteMethod");
             self.check_return_type_object("CallNonvirtualByteMethod", obj, methodID, "byte");
             self.check_is_class("CallNonvirtualByteMethod", class);
+            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
@@ -1685,37 +1838,43 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallNonvirtualCharMethod1<A: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jchar {
+    pub unsafe fn CallNonvirtualCharMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jchar {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualCharMethod");
             self.check_no_exception("CallNonvirtualCharMethod");
             self.check_return_type_object("CallNonvirtualCharMethod", obj, methodID, "char");
             self.check_is_class("CallNonvirtualCharMethod", class);
+            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1)
     }
 
     
-    pub unsafe fn CallNonvirtualCharMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
+    pub unsafe fn CallNonvirtualCharMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualCharMethod");
             self.check_no_exception("CallNonvirtualCharMethod");
             self.check_return_type_object("CallNonvirtualCharMethod", obj, methodID, "char");
             self.check_is_class("CallNonvirtualCharMethod", class);
+            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallNonvirtualCharMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
+    pub unsafe fn CallNonvirtualCharMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualCharMethod");
             self.check_no_exception("CallNonvirtualCharMethod");
             self.check_return_type_object("CallNonvirtualCharMethod", obj, methodID, "char");
             self.check_is_class("CallNonvirtualCharMethod", class);
+            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
@@ -1745,37 +1904,43 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallNonvirtualShortMethod1<A: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jshort {
+    pub unsafe fn CallNonvirtualShortMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jshort {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualShortMethod");
             self.check_no_exception("CallNonvirtualShortMethod");
             self.check_return_type_object("CallNonvirtualShortMethod", obj, methodID, "short");
             self.check_is_class("CallNonvirtualShortMethod", class);
+            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1)
     }
 
     
-    pub unsafe fn CallNonvirtualShortMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
+    pub unsafe fn CallNonvirtualShortMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualShortMethod");
             self.check_no_exception("CallNonvirtualShortMethod");
             self.check_return_type_object("CallNonvirtualShortMethod", obj, methodID, "short");
             self.check_is_class("CallNonvirtualShortMethod", class);
+            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallNonvirtualShortMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
+    pub unsafe fn CallNonvirtualShortMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualShortMethod");
             self.check_no_exception("CallNonvirtualShortMethod");
             self.check_return_type_object("CallNonvirtualShortMethod", obj, methodID, "short");
             self.check_is_class("CallNonvirtualShortMethod", class);
+            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
@@ -1803,37 +1968,43 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallNonvirtualIntMethod1<A: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jint {
+    pub unsafe fn CallNonvirtualIntMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualIntMethod");
             self.check_no_exception("CallNonvirtualIntMethod");
             self.check_return_type_object("CallNonvirtualIntMethod", obj, methodID, "int");
             self.check_is_class("CallNonvirtualIntMethod", class);
+            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1)
     }
 
     
-    pub unsafe fn CallNonvirtualIntMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jint {
+    pub unsafe fn CallNonvirtualIntMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualIntMethod");
             self.check_no_exception("CallNonvirtualIntMethod");
             self.check_return_type_object("CallNonvirtualIntMethod", obj, methodID, "int");
             self.check_is_class("CallNonvirtualIntMethod", class);
+            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallNonvirtualIntMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
+    pub unsafe fn CallNonvirtualIntMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualIntMethod");
             self.check_no_exception("CallNonvirtualIntMethod");
             self.check_return_type_object("CallNonvirtualIntMethod", obj, methodID, "int");
             self.check_is_class("CallNonvirtualIntMethod", class);
+            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
@@ -1861,37 +2032,43 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallNonvirtualLongMethod1<A: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jlong {
+    pub unsafe fn CallNonvirtualLongMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jlong {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualLongMethod");
             self.check_no_exception("CallNonvirtualLongMethod");
             self.check_return_type_object("CallNonvirtualLongMethod", obj, methodID, "long");
             self.check_is_class("CallNonvirtualLongMethod", class);
+            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1)
     }
 
     
-    pub unsafe fn CallNonvirtualLongMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
+    pub unsafe fn CallNonvirtualLongMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualLongMethod");
             self.check_no_exception("CallNonvirtualLongMethod");
             self.check_return_type_object("CallNonvirtualLongMethod", obj, methodID, "long");
             self.check_is_class("CallNonvirtualLongMethod", class);
+            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallNonvirtualLongMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
+    pub unsafe fn CallNonvirtualLongMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualLongMethod");
             self.check_no_exception("CallNonvirtualLongMethod");
             self.check_return_type_object("CallNonvirtualLongMethod", obj, methodID, "long");
             self.check_is_class("CallNonvirtualLongMethod", class);
+            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
@@ -1919,37 +2096,43 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallNonvirtualFloatMethod1<A: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jfloat {
+    pub unsafe fn CallNonvirtualFloatMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jfloat {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualFloatMethod");
             self.check_no_exception("CallNonvirtualFloatMethod");
             self.check_return_type_object("CallNonvirtualFloatMethod", obj, methodID, "float");
             self.check_is_class("CallNonvirtualFloatMethod", class);
+            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1)
     }
 
     
-    pub unsafe fn CallNonvirtualFloatMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
+    pub unsafe fn CallNonvirtualFloatMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualFloatMethod");
             self.check_no_exception("CallNonvirtualFloatMethod");
             self.check_return_type_object("CallNonvirtualFloatMethod", obj, methodID, "float");
             self.check_is_class("CallNonvirtualFloatMethod", class);
+            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallNonvirtualFloatMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
+    pub unsafe fn CallNonvirtualFloatMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualFloatMethod");
             self.check_no_exception("CallNonvirtualFloatMethod");
             self.check_return_type_object("CallNonvirtualFloatMethod", obj, methodID, "float");
             self.check_is_class("CallNonvirtualFloatMethod", class);
+            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
@@ -1977,37 +2160,43 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallNonvirtualDoubleMethod1<A: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jdouble {
+    pub unsafe fn CallNonvirtualDoubleMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jdouble {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualDoubleMethod");
             self.check_no_exception("CallNonvirtualDoubleMethod");
             self.check_return_type_object("CallNonvirtualDoubleMethod", obj, methodID, "double");
             self.check_is_class("CallNonvirtualDoubleMethod", class);
+            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1)
     }
 
     
-    pub unsafe fn CallNonvirtualDoubleMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
+    pub unsafe fn CallNonvirtualDoubleMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualDoubleMethod");
             self.check_no_exception("CallNonvirtualDoubleMethod");
             self.check_return_type_object("CallNonvirtualDoubleMethod", obj, methodID, "double");
             self.check_is_class("CallNonvirtualDoubleMethod", class);
+            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallNonvirtualDoubleMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
+    pub unsafe fn CallNonvirtualDoubleMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallNonvirtualDoubleMethod");
             self.check_no_exception("CallNonvirtualDoubleMethod");
             self.check_return_type_object("CallNonvirtualDoubleMethod", obj, methodID, "double");
             self.check_is_class("CallNonvirtualDoubleMethod", class);
+            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
@@ -2249,42 +2438,48 @@ impl JNIEnv {
     pub unsafe fn CallStaticVoidMethod0(&self, obj: jobject, methodID: jmethodID) {
         #[cfg(feature = "asserts")]
         {
-            self.check_not_critical("CallStaticObjectMethod");
-            self.check_no_exception("CallStaticObjectMethod");
-            self.check_return_type_object("CallStaticObjectMethod", obj, methodID, "void");
+            self.check_not_critical("CallStaticVoidMethod");
+            self.check_no_exception("CallStaticVoidMethod");
+            self.check_return_type_object("CallStaticVoidMethod", obj, methodID, "void");
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, obj, methodID)
     }
 
     
-    pub unsafe fn CallStaticVoidMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) {
+    pub unsafe fn CallStaticVoidMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) {
         #[cfg(feature = "asserts")]
         {
-            self.check_not_critical("CallStaticObjectMethod");
-            self.check_no_exception("CallStaticObjectMethod");
-            self.check_return_type_object("CallStaticObjectMethod", obj, methodID, "void");
+            self.check_not_critical("CallStaticVoidMethod");
+            self.check_no_exception("CallStaticVoidMethod");
+            self.check_return_type_object("CallStaticVoidMethod", obj, methodID, "void");
+            self.check_parameter_types_static("CallStaticVoidMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallStaticVoidMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) {
+    pub unsafe fn CallStaticVoidMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) {
         #[cfg(feature = "asserts")]
         {
-            self.check_not_critical("CallStaticObjectMethod");
-            self.check_no_exception("CallStaticObjectMethod");
-            self.check_return_type_object("CallStaticObjectMethod", obj, methodID, "void");
+            self.check_not_critical("CallStaticVoidMethod");
+            self.check_no_exception("CallStaticVoidMethod");
+            self.check_return_type_object("CallStaticVoidMethod", obj, methodID, "void");
+            self.check_parameter_types_static("CallStaticVoidMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_static("CallStaticVoidMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallStaticVoidMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
+    pub unsafe fn CallStaticVoidMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
         #[cfg(feature = "asserts")]
         {
-            self.check_not_critical("CallStaticObjectMethod");
-            self.check_no_exception("CallStaticObjectMethod");
-            self.check_return_type_object("CallStaticObjectMethod", obj, methodID, "void");
+            self.check_not_critical("CallStaticVoidMethod");
+            self.check_no_exception("CallStaticVoidMethod");
+            self.check_return_type_object("CallStaticVoidMethod", obj, methodID, "void");
+            self.check_parameter_types_static("CallStaticVoidMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_static("CallStaticVoidMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_static("CallStaticVoidMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -2310,34 +2505,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallStaticObjectMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jobject {
+    pub unsafe fn CallStaticObjectMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticObjectMethod");
             self.check_no_exception("CallStaticObjectMethod");
             self.check_return_type_object("CallStaticObjectMethod", obj, methodID, "object");
+            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallStaticObjectMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
+    pub unsafe fn CallStaticObjectMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticObjectMethod");
             self.check_no_exception("CallStaticObjectMethod");
             self.check_return_type_object("CallStaticObjectMethod", obj, methodID, "object");
+            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallStaticObjectMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
+    pub unsafe fn CallStaticObjectMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticObjectMethod");
             self.check_no_exception("CallStaticObjectMethod");
             self.check_return_type_object("CallStaticObjectMethod", obj, methodID, "object");
+            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -2363,34 +2564,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallStaticBooleanMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jboolean {
+    pub unsafe fn CallStaticBooleanMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticBooleanMethod");
             self.check_no_exception("CallStaticBooleanMethod");
             self.check_return_type_object("CallStaticBooleanMethod", obj, methodID, "boolean");
+            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallStaticBooleanMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
+    pub unsafe fn CallStaticBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticBooleanMethod");
             self.check_no_exception("CallStaticBooleanMethod");
             self.check_return_type_object("CallStaticBooleanMethod", obj, methodID, "boolean");
+            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallStaticBooleanMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
+    pub unsafe fn CallStaticBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticBooleanMethod");
             self.check_no_exception("CallStaticBooleanMethod");
             self.check_return_type_object("CallStaticBooleanMethod", obj, methodID, "boolean");
+            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -2415,32 +2622,38 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jbyte>(120)(self.vtable, obj, methodID)
     }
 
-    pub unsafe fn CallStaticByteMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jbyte {
+    pub unsafe fn CallStaticByteMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jbyte {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticByteMethod");
             self.check_no_exception("CallStaticByteMethod");
             self.check_return_type_object("CallStaticByteMethod", obj, methodID, "byte");
+            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1)
     }
 
-    pub unsafe fn CallStaticByteMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
+    pub unsafe fn CallStaticByteMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticByteMethod");
             self.check_no_exception("CallStaticByteMethod");
             self.check_return_type_object("CallStaticByteMethod", obj, methodID, "byte");
+            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    pub unsafe fn CallStaticByteMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
+    pub unsafe fn CallStaticByteMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticByteMethod");
             self.check_no_exception("CallStaticByteMethod");
             self.check_return_type_object("CallStaticByteMethod", obj, methodID, "byte");
+            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -2466,34 +2679,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallStaticCharMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jchar {
+    pub unsafe fn CallStaticCharMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jchar {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticCharMethod");
             self.check_no_exception("CallStaticCharMethod");
             self.check_return_type_object("CallStaticCharMethod", obj, methodID, "char");
+            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallStaticCharMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
+    pub unsafe fn CallStaticCharMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticCharMethod");
             self.check_no_exception("CallStaticCharMethod");
             self.check_return_type_object("CallStaticCharMethod", obj, methodID, "char");
+            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallStaticCharMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
+    pub unsafe fn CallStaticCharMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticCharMethod");
             self.check_no_exception("CallStaticCharMethod");
             self.check_return_type_object("CallStaticCharMethod", obj, methodID, "char");
+            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -2519,34 +2738,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallStaticShortMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jshort {
+    pub unsafe fn CallStaticShortMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jshort {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticShortMethod");
             self.check_no_exception("CallStaticShortMethod");
             self.check_return_type_object("CallStaticShortMethod", obj, methodID, "short");
+            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallStaticShortMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
+    pub unsafe fn CallStaticShortMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticShortMethod");
             self.check_no_exception("CallStaticShortMethod");
             self.check_return_type_object("CallStaticShortMethod", obj, methodID, "short");
+            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallStaticShortMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
+    pub unsafe fn CallStaticShortMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticShortMethod");
             self.check_no_exception("CallStaticShortMethod");
             self.check_return_type_object("CallStaticShortMethod", obj, methodID, "short");
+            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -2572,34 +2797,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallStaticIntMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jint {
+    pub unsafe fn CallStaticIntMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticIntMethod");
             self.check_no_exception("CallStaticIntMethod");
             self.check_return_type_object("CallStaticIntMethod", obj, methodID, "int");
+            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallStaticIntMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jint {
+    pub unsafe fn CallStaticIntMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticIntMethod");
             self.check_no_exception("CallStaticIntMethod");
             self.check_return_type_object("CallStaticIntMethod", obj, methodID, "int");
+            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallStaticIntMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
+    pub unsafe fn CallStaticIntMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticIntMethod");
             self.check_no_exception("CallStaticIntMethod");
             self.check_return_type_object("CallStaticIntMethod", obj, methodID, "int");
+            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -2625,34 +2856,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallStaticLongMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jlong {
+    pub unsafe fn CallStaticLongMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jlong {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticLongMethod");
             self.check_no_exception("CallStaticLongMethod");
             self.check_return_type_object("CallStaticLongMethod", obj, methodID, "long");
+            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallStaticLongMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
+    pub unsafe fn CallStaticLongMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticLongMethod");
             self.check_no_exception("CallStaticLongMethod");
             self.check_return_type_object("CallStaticLongMethod", obj, methodID, "long");
+            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallStaticLongMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
+    pub unsafe fn CallStaticLongMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticLongMethod");
             self.check_no_exception("CallStaticLongMethod");
             self.check_return_type_object("CallStaticLongMethod", obj, methodID, "long");
+            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -2678,34 +2915,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallStaticFloatMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jfloat {
+    pub unsafe fn CallStaticFloatMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jfloat {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticFloatMethod");
             self.check_no_exception("CallStaticFloatMethod");
             self.check_return_type_object("CallStaticFloatMethod", obj, methodID, "float");
+            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallStaticFloatMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
+    pub unsafe fn CallStaticFloatMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticFloatMethod");
             self.check_no_exception("CallStaticFloatMethod");
             self.check_return_type_object("CallStaticFloatMethod", obj, methodID, "float");
+            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallStaticFloatMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
+    pub unsafe fn CallStaticFloatMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticFloatMethod");
             self.check_no_exception("CallStaticFloatMethod");
             self.check_return_type_object("CallStaticFloatMethod", obj, methodID, "float");
+            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -2731,34 +2974,40 @@ impl JNIEnv {
     }
 
     
-    pub unsafe fn CallStaticDoubleMethod1<A: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jdouble {
+    pub unsafe fn CallStaticDoubleMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jdouble {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticDoubleMethod");
             self.check_no_exception("CallStaticDoubleMethod");
             self.check_return_type_object("CallStaticDoubleMethod", obj, methodID, "double");
+            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1)
     }
 
     
-    pub unsafe fn CallStaticDoubleMethod2<A: Jtype, B: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
+    pub unsafe fn CallStaticDoubleMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticDoubleMethod");
             self.check_no_exception("CallStaticDoubleMethod");
             self.check_return_type_object("CallStaticDoubleMethod", obj, methodID, "double");
+            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg1, 0, 2);
+            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     
-    pub unsafe fn CallStaticDoubleMethod3<A: Jtype, B: Jtype, C: Jtype>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
+    pub unsafe fn CallStaticDoubleMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("CallStaticDoubleMethod");
             self.check_no_exception("CallStaticDoubleMethod");
             self.check_return_type_object("CallStaticDoubleMethod", obj, methodID, "double");
+            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg1, 0, 3);
+            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg2, 1, 3);
+            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
@@ -3625,6 +3874,10 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut c_void, jint)>(223)(self.vtable, array, carray, mode);
     }
 
+    pub unsafe fn RegisterNatives_slice(&self, clazz: jclass, methods : &[JNINativeMethod]) -> jint {
+        self.RegisterNatives(clazz, methods.as_ptr(), methods.len() as jint)
+    }
+
     pub unsafe fn RegisterNatives(&self, clazz: jclass, methods : *const JNINativeMethod, size: jint) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -3996,6 +4249,197 @@ impl JNIEnv {
     }
 
     #[cfg(feature = "asserts")]
+    unsafe fn check_parameter_types_static<T: JType>(&self, context: &str, clazz: jclass, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
+        self.check_is_class(context, clazz);
+        assert!(!methodID.is_null(), "{} methodID is null", context);
+        let java_method = self.ToReflectedMethod(clazz, methodID, true);
+        assert!(!java_method.is_null(), "{} -> ToReflectedMethod returned null", context);
+        let meth_cl = self.FindClass_str("java/lang/reflect/Method");
+        assert!(!java_method.is_null(), "{} java/lang/reflect/Method not found???", context);
+        let meth_params = self.GetMethodID_str(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
+        assert!(!meth_params.is_null(), "{} java/lang/reflect/Method#getParameterTypes not found???", context);
+
+        //CallObjectMethodA
+        let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
+        self.DeleteLocalRef(meth_cl);
+        self.DeleteLocalRef(java_method);
+        assert!(!parameter_array.is_null(), "{} java/lang/reflect/Method#getParameterTypes return null???", context);
+        let parameter_count = self.GetArrayLength(parameter_array);
+        assert_eq!(parameter_count, count, "{} wrong number of method parameters", context);
+        let param1_class = self.GetObjectArrayElement(parameter_array, idx);
+        assert!(!param1_class.is_null(), "{} java/lang/reflect/Method#getParameterTypes[{}] is null???", context, idx);
+        self.DeleteLocalRef(parameter_array);
+
+        let class_cl = self.FindClass_str("java/lang/Class");
+        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        let class_name = self.GetMethodID_str(class_cl, "getName", "()Ljava/lang/String;");
+        assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
+        let class_is_primitive = self.GetMethodID_str(class_cl, "isPrimitive", "()Z");
+        assert!(!class_is_primitive.is_null(), "{} java/lang/Class#isPrimitive not found???", context);
+
+        //CallObjectMethodA
+        let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
+        assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
+        //CallBooleanMethodA
+        let param1_is_primitive = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
+
+        let the_name = self.GetStringUTFChars_as_string(name_str).expect(format!("{} failed to get/parse classname???", context).as_str());
+        self.DeleteLocalRef(class_cl);
+        self.DeleteLocalRef(name_str);
+
+        match T::jtype_id() {
+            'Z' => assert_eq!("boolean", the_name, "{} param{} wrong type. Method has {} but passed boolean", context, idx, the_name),
+            'B' => assert_eq!("byte", the_name, "{} param{} wrong type. Method has {} but passed byte", context, idx, the_name),
+            'S' => assert_eq!("short", the_name, "{} param{} wrong type. Method has {} but passed short", context, idx, the_name),
+            'C' => assert_eq!("char", the_name, "{} param{} wrong type. Method has {} but passed char", context, idx, the_name),
+            'I' => assert_eq!("int", the_name, "{} param{} wrong type. Method has {} but passed int", context, idx, the_name),
+            'J' => assert_eq!("long", the_name, "{} param{} wrong type. Method has {} but passed long", context, idx, the_name),
+            'F' => assert_eq!("float", the_name, "{} param{} wrong type. Method has {} but passed float", context, idx, the_name),
+            'D' => assert_eq!("double", the_name, "{} param{} wrong type. Method has {} but passed double", context, idx, the_name),
+            'L' => {
+                assert!(!param1_is_primitive, "{} param{} wrong type. Method has {} but passed an object or null", context, idx, the_name);
+                let jt : jtype = param1.into();
+                let obj = jt.object;
+                if !obj.is_null() {
+                    assert!(self.IsInstanceOf(obj, param1_class), "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof", context, idx, the_name);
+                }
+            }
+            _=> unreachable!("{}", T::jtype_id())
+        }
+
+        self.DeleteLocalRef(param1_class);
+    }
+
+    #[cfg(feature = "asserts")]
+    unsafe fn check_parameter_types_constructor<T: JType>(&self, context: &str, clazz: jclass, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
+        self.check_ref_obj(context, clazz);
+        assert!(!clazz.is_null(), "{} obj.class is null??", context);
+        assert!(!methodID.is_null(), "{} methodID is null", context);
+        let java_method = self.ToReflectedMethod(clazz, methodID, false);
+        assert!(!java_method.is_null(), "{} -> ToReflectedMethod returned null", context);
+        let meth_cl = self.FindClass_str("java/lang/reflect/Method");
+        assert!(!java_method.is_null(), "{} java/lang/reflect/Method not found???", context);
+        let meth_params = self.GetMethodID_str(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
+        assert!(!meth_params.is_null(), "{} java/lang/reflect/Method#getParameterTypes not found???", context);
+
+        //CallObjectMethodA
+        let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
+        self.DeleteLocalRef(meth_cl);
+        self.DeleteLocalRef(java_method);
+        assert!(!parameter_array.is_null(), "{} java/lang/reflect/Method#getParameterTypes return null???", context);
+        let parameter_count = self.GetArrayLength(parameter_array);
+        assert_eq!(parameter_count, count, "{} wrong number of method parameters", context);
+        let param1_class = self.GetObjectArrayElement(parameter_array, idx);
+        assert!(!param1_class.is_null(), "{} java/lang/reflect/Method#getParameterTypes[{}] is null???", context, idx);
+        self.DeleteLocalRef(parameter_array);
+
+        let class_cl = self.FindClass_str("java/lang/Class");
+        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        let class_name = self.GetMethodID_str(class_cl, "getName", "()Ljava/lang/String;");
+        assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
+        let class_is_primitive = self.GetMethodID_str(class_cl, "isPrimitive", "()Z");
+        assert!(!class_is_primitive.is_null(), "{} java/lang/Class#isPrimitive not found???", context);
+
+        //CallObjectMethodA
+        let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
+        assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
+        //CallBooleanMethodA
+        let param1_is_primitive = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
+
+        let the_name = self.GetStringUTFChars_as_string(name_str).expect(format!("{} failed to get/parse classname???", context).as_str());
+        self.DeleteLocalRef(class_cl);
+        self.DeleteLocalRef(name_str);
+
+        match T::jtype_id() {
+            'Z' => assert_eq!("boolean", the_name, "{} param{} wrong type. Method has {} but passed boolean", context, idx, the_name),
+            'B' => assert_eq!("byte", the_name, "{} param{} wrong type. Method has {} but passed byte", context, idx, the_name),
+            'S' => assert_eq!("short", the_name, "{} param{} wrong type. Method has {} but passed short", context, idx, the_name),
+            'C' => assert_eq!("char", the_name, "{} param{} wrong type. Method has {} but passed char", context, idx, the_name),
+            'I' => assert_eq!("int", the_name, "{} param{} wrong type. Method has {} but passed int", context, idx, the_name),
+            'J' => assert_eq!("long", the_name, "{} param{} wrong type. Method has {} but passed long", context, idx, the_name),
+            'F' => assert_eq!("float", the_name, "{} param{} wrong type. Method has {} but passed float", context, idx, the_name),
+            'D' => assert_eq!("double", the_name, "{} param{} wrong type. Method has {} but passed double", context, idx, the_name),
+            'L' => {
+                assert!(!param1_is_primitive, "{} param{} wrong type. Method has {} but passed an object or null", context, idx, the_name);
+                let jt : jtype = param1.into();
+                let obj = jt.object;
+                if !obj.is_null() {
+                    assert!(self.IsInstanceOf(obj, param1_class), "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof", context, idx, the_name);
+                }
+            }
+            _=> unreachable!("{}", T::jtype_id())
+        }
+
+        self.DeleteLocalRef(param1_class);
+    }
+
+    #[cfg(feature = "asserts")]
+    unsafe fn check_parameter_types_object<T: JType>(&self, context: &str, obj: jobject, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
+        assert!(!obj.is_null(), "{} obj is null", context);
+        self.check_ref_obj(context, obj);
+        let clazz = self.GetObjectClass(obj);
+        assert!(!clazz.is_null(), "{} obj.class is null??", context);
+        assert!(!methodID.is_null(), "{} methodID is null", context);
+        let java_method = self.ToReflectedMethod(clazz, methodID, false);
+        assert!(!java_method.is_null(), "{} -> ToReflectedMethod returned null", context);
+        self.DeleteLocalRef(clazz);
+        let meth_cl = self.FindClass_str("java/lang/reflect/Method");
+        assert!(!java_method.is_null(), "{} java/lang/reflect/Method not found???", context);
+        let meth_params = self.GetMethodID_str(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
+        assert!(!meth_params.is_null(), "{} java/lang/reflect/Method#getParameterTypes not found???", context);
+
+        //CallObjectMethodA
+        let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
+        self.DeleteLocalRef(meth_cl);
+        self.DeleteLocalRef(java_method);
+        assert!(!parameter_array.is_null(), "{} java/lang/reflect/Method#getParameterTypes return null???", context);
+        let parameter_count = self.GetArrayLength(parameter_array);
+        assert_eq!(parameter_count, count, "{} wrong number of method parameters", context);
+        let param1_class = self.GetObjectArrayElement(parameter_array, idx);
+        assert!(!param1_class.is_null(), "{} java/lang/reflect/Method#getParameterTypes[{}] is null???", context, idx);
+        self.DeleteLocalRef(parameter_array);
+
+        let class_cl = self.FindClass_str("java/lang/Class");
+        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        let class_name = self.GetMethodID_str(class_cl, "getName", "()Ljava/lang/String;");
+        assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
+        let class_is_primitive = self.GetMethodID_str(class_cl, "isPrimitive", "()Z");
+        assert!(!class_is_primitive.is_null(), "{} java/lang/Class#isPrimitive not found???", context);
+
+        //CallObjectMethodA
+        let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
+        assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
+        //CallBooleanMethodA
+        let param1_is_primitive = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
+
+        let the_name = self.GetStringUTFChars_as_string(name_str).expect(format!("{} failed to get/parse classname???", context).as_str());
+        self.DeleteLocalRef(class_cl);
+        self.DeleteLocalRef(name_str);
+
+        match T::jtype_id() {
+            'Z' => assert_eq!("boolean", the_name, "{} param{} wrong type. Method has {} but passed boolean", context, idx, the_name),
+            'B' => assert_eq!("byte", the_name, "{} param{} wrong type. Method has {} but passed byte", context, idx, the_name),
+            'S' => assert_eq!("short", the_name, "{} param{} wrong type. Method has {} but passed short", context, idx, the_name),
+            'C' => assert_eq!("char", the_name, "{} param{} wrong type. Method has {} but passed char", context, idx, the_name),
+            'I' => assert_eq!("int", the_name, "{} param{} wrong type. Method has {} but passed int", context, idx, the_name),
+            'J' => assert_eq!("long", the_name, "{} param{} wrong type. Method has {} but passed long", context, idx, the_name),
+            'F' => assert_eq!("float", the_name, "{} param{} wrong type. Method has {} but passed float", context, idx, the_name),
+            'D' => assert_eq!("double", the_name, "{} param{} wrong type. Method has {} but passed double", context, idx, the_name),
+            'L' => {
+                assert!(!param1_is_primitive, "{} param{} wrong type. Method has {} but passed an object or null", context, idx, the_name);
+                let jt : jtype = param1.into();
+                let obj = jt.object;
+                if !obj.is_null() {
+                    assert!(self.IsInstanceOf(obj, param1_class), "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof", context, idx, the_name);
+                }
+            }
+            _=> unreachable!("{}", T::jtype_id())
+        }
+
+        self.DeleteLocalRef(param1_class);
+    }
+
+    #[cfg(feature = "asserts")]
     unsafe fn check_return_type_object(&self, context: &str, obj: jobject, methodID: jmethodID, ty: &str) {
         assert!(!obj.is_null(), "{} obj is null", context);
         self.check_ref_obj(context, obj);
@@ -4003,6 +4447,7 @@ impl JNIEnv {
         assert!(!clazz.is_null(), "{} obj.class is null??", context);
         assert!(!methodID.is_null(), "{} methodID is null", context);
         let m = self.ToReflectedMethod(clazz, methodID, false);
+        self.DeleteLocalRef(clazz);
         assert!(!m.is_null(), "{} -> ToReflectedMethod returned null", context);
         let meth_cl = self.FindClass_str("java/lang/reflect/Method");
         assert!(!m.is_null(), "{} java/lang/reflect/Method not found???", context);
