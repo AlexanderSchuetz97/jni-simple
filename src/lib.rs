@@ -12,6 +12,7 @@
 #![allow(non_camel_case_types)]
 
 use std::ffi::{c_char, c_void, CStr, CString};
+use std::fmt::{Debug, Formatter};
 use std::mem;
 #[cfg(feature = "loadjvm")]
 use std::path::{PathBuf};
@@ -190,19 +191,37 @@ impl JType for jdouble {
     }
 }
 
+
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub union jtype {
-    pub long: jlong,
-    pub int: jint,
-    pub short: jshort,
-    pub char: jchar,
-    pub byte: jbyte,
-    pub boolean: jboolean,
-    pub float: jfloat,
-    pub double: jdouble,
-    pub object: jobject,
-    pub class: jclass,
-    pub throwable: jthrowable
+    long: jlong,
+    int: jint,
+    short: jshort,
+    char: jchar,
+    byte: jbyte,
+    boolean: jboolean,
+    float: jfloat,
+    double: jdouble,
+    object: jobject,
+    class: jclass,
+    throwable: jthrowable
+}
+
+impl Debug for jtype {
+    #[inline(never)]
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        unsafe {
+            let long = std::ptr::read_unaligned(&self.long as *const jlong);
+            let int = std::ptr::read_unaligned(&self.int as *const jint);
+            let short = std::ptr::read_unaligned(&self.short as *const jshort);
+            let byte = std::ptr::read_unaligned(&self.byte as *const jbyte);
+            let float = std::ptr::read_unaligned(&self.float as *const jfloat);
+            let double = std::ptr::read_unaligned(&self.double as *const jdouble);
+
+            f.write_fmt(format_args!("jtype union[long=0x{:x} int=0x{:x} short=0x{:x} byte=0x{:x} float={:e} double={:e}]", long, int, short, byte, float, double))
+        }
+    }
 }
 
 impl jtype {
@@ -210,60 +229,151 @@ impl jtype {
     ///
     /// Helper function to "create" a jtype with a null jobject.
     ///
+    #[inline(always)]
     pub const fn null() -> jtype {
-        jtype { object: null_mut() }
+        #[cfg(target_pointer_width = "32")]
+        {
+            let mut jt = jtype {long: 0};
+            jt.object = null_mut();
+            jt
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            jtype { object: null_mut() }
+        }
+    }
+
+    #[inline(always)]
+    pub const unsafe fn long(&self) -> jlong {
+        self.long
+    }
+
+    #[inline(always)]
+    pub const unsafe fn int(&self) -> jint {
+        self.int
+    }
+
+    #[inline(always)]
+    pub const unsafe fn short(&self) -> jshort {
+        self.short
+    }
+
+    #[inline(always)]
+    pub const unsafe fn char(&self) -> jchar {
+        self.char
+    }
+
+    #[inline(always)]
+    pub const unsafe fn byte(&self) -> jbyte {
+        self.byte
+    }
+
+    #[inline(always)]
+    pub const unsafe fn boolean(&self) -> jboolean {
+        self.boolean
+    }
+
+    #[inline(always)]
+    pub const unsafe fn float(&self) -> jfloat {
+        self.float
+    }
+
+    #[inline(always)]
+    pub const unsafe fn double(&self) -> jdouble {
+        self.double
+    }
+
+    #[inline(always)]
+    pub const unsafe fn object(&self) -> jobject {
+        self.object
+    }
+
+    #[inline(always)]
+    pub const unsafe fn class(&self) -> jclass {
+        self.class
+    }
+
+    #[inline(always)]
+    pub const unsafe fn throwable(&self) -> jthrowable {
+        self.throwable
+    }
+
+    #[inline(always)]
+    pub fn set<T: Into<jtype>>(&mut self, value: T) {
+        *self = value.into();
     }
 }
 
-impl Into<jtype> for jlong {
-    fn into(self) -> jtype {
-        jtype { long: self }
+impl From<jlong> for jtype {
+    fn from(value: jlong) -> Self {
+        jtype { long: value }
     }
 }
 
-impl Into<jtype> for jobject {
-    fn into(self) -> jtype {
-        jtype { object: self }
+impl From<jobject> for jtype {
+
+    #[cfg(target_pointer_width = "64")]
+    fn from(value: jobject) -> Self {
+        jtype { object: value }
+    }
+
+    #[cfg(target_pointer_width = "32")]
+    fn from(value: jobject) -> Self {
+        let mut jt = jtype {long: 0};
+        jt.object = value;
+        jt
     }
 }
-impl Into<jtype> for jint {
-    fn into(self) -> jtype {
-        jtype { int: self }
+impl From<jint> for jtype {
+    fn from(value: jint) -> Self {
+        let mut jt = jtype {long: 0};
+        jt.int = value;
+        jt
     }
 }
 
-impl Into<jtype> for jshort {
-    fn into(self) -> jtype {
-        jtype { short: self }
+impl From<jshort> for jtype {
+    fn from(value: jshort) -> Self {
+        let mut jt = jtype {long: 0};
+        jt.short = value;
+        jt
     }
 }
 
-impl Into<jtype> for jbyte {
-    fn into(self) -> jtype {
-        jtype { byte: self }
+impl From<jbyte> for jtype {
+    fn from(value: jbyte) -> Self {
+        let mut jt = jtype {long: 0};
+        jt.byte = value;
+        jt
     }
 }
 
-impl Into<jtype> for jchar {
-    fn into(self) -> jtype {
-        jtype { char: self }
+impl From<jchar> for jtype {
+    fn from(value: jchar) -> Self {
+        let mut jt = jtype {long: 0};
+        jt.char = value;
+        jt
     }
 }
 
-impl Into<jtype> for jfloat {
-    fn into(self) -> jtype {
-        jtype { float: self }
+impl From<jfloat> for jtype {
+    fn from(value: jfloat) -> Self {
+        let mut jt = jtype {long: 0};
+        jt.float = value;
+        jt
     }
 }
 
-impl Into<jtype> for jdouble {
-    fn into(self) -> jtype {
-        jtype { double: self }
+impl From<jdouble> for jtype {
+    fn from(value: jdouble) -> Self {
+        jtype { double: value }
     }
 }
-impl Into<jtype> for jboolean {
-    fn into(self) -> jtype {
-        jtype { boolean: self }
+impl From<jboolean> for jtype {
+    fn from(value: jboolean) -> Self {
+        let mut jt = jtype {long: 0};
+        jt.boolean = value;
+        jt
     }
 }
 
@@ -3593,6 +3703,50 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jboolean)>(199)(self.vtable, array, start, len, buf);
     }
 
+    ///
+    /// Copies data from the jbyteArray `array` starting from the given `start` index into the memory pointed to by `buf`.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jbyteArray
+    /// * `start` - the index of the first element to copy in the Java jbyteArray
+    /// * `len` - amount of data to be copied
+    /// * `buf` - pointer to memory where the data should be copied to
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is larger than the amount of remaining elements in the `array`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or >= env.GetArrayLength(array)
+    ///
+    /// It is JVM implementation specific what is written into `buf` if this function throws an exception.
+    /// * Data partially written
+    /// * No data written
+    ///
+    /// # Safety
+    /// `array` must be a valid non-null reference to a jbyteArray.
+    /// `buf` must be valid non-null pointer to memory with enough capacity to store `len` bytes.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
+    ///         array: jbyteArray, chunk_buffer: &mut [i8], chunk_number: usize) -> bool {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///     let start_idx = (chunk_buffer.len() * chunk_number) as jsize;
+    ///
+    ///     env.GetByteArrayRegion(array, start_idx, chunk_buffer.len() as jsize, chunk_buffer.as_mut_ptr());
+    ///     if env.ExceptionCheck() {
+    ///         //ArrayIndexOutOfBoundsException
+    ///         env.ExceptionClear();
+    ///         return false;
+    ///     }
+    ///     true
+    /// }
+    /// ```
+    ///
     pub unsafe fn GetByteArrayRegion(&self, array: jbyteArray, start: jsize, len: jsize, buf: *mut jbyte) {
         #[cfg(feature = "asserts")]
         {
@@ -3605,6 +3759,187 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jbyte)>(200)(self.vtable, array, start, len, buf);
     }
 
+    ///
+    /// Copies data from the jbyteArray `array` starting from the given `start` index into the slice `buf`.
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jbyteArray.
+    /// * `start` - the index of the first element to copy in the Java jbyteArray
+    /// * `buf` - the slice to copy data into
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if the slice `buf` is larger than the amount of remaining elements in the `array`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or >= env.GetArrayLength(array)
+    ///
+    /// It is JVM implementation specific what is stored inside buf if this function throws an exception.
+    /// * Data partially written
+    /// * No data written
+    ///
+    /// # Safety
+    /// `array` must be a valid non-null reference to a jbyteArray.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
+    ///         array: jbyteArray, chunk_buffer: &mut [i8], chunk_number: usize) -> bool {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///     let start_idx = (chunk_buffer.len() * chunk_number) as jsize;
+    ///
+    ///     env.GetByteArrayRegion_into_slice(array, start_idx, chunk_buffer);
+    ///     if env.ExceptionCheck() {
+    ///         //ArrayIndexOutOfBoundsException
+    ///         env.ExceptionClear();
+    ///         return false;
+    ///     }
+    ///     true
+    /// }
+    /// ```
+    ///
+    pub unsafe fn GetByteArrayRegion_into_slice(&self, array: jbyteArray, start: jsize, buf: &mut [i8]) {
+        self.GetByteArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
+    }
+
+    ///
+    /// Copies data from the slice `buf` into the jbyteArray `array` starting at the given `start` index.
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jbyteArray.
+    /// * `start` - the index where the first element should be coped into in the Java jybteArray
+    /// * `buf` - the slice where data is copied from
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if the slice `buf` is larger than the amount of remaining elements in the `array`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or >= env.GetArrayLength(array)
+    ///
+    /// It is JVM implementation specific what is stored inside `array` if this function throws an exception.
+    /// * Data partially written
+    /// * No data written
+    ///
+    /// # Safety
+    /// `array` must be a valid non-null reference to a jbyteArray.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_chunk_from_rust_to_java(env: JNIEnv,
+    ///         array: jbyteArray, chunk_buffer: &[i8], chunk_number: usize) -> bool {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///     let start_idx = (chunk_buffer.len() * chunk_number) as jsize;
+    ///
+    ///     env.SetByteArrayRegion_from_slice(array, start_idx, chunk_buffer);
+    ///     if env.ExceptionCheck() {
+    ///         //ArrayIndexOutOfBoundsException
+    ///         env.ExceptionClear();
+    ///         return false;
+    ///     }
+    ///     true
+    /// }
+    /// ```
+    ///
+    pub unsafe fn SetByteArrayRegion_from_slice(&self, array: jbyteArray, start: jsize, buf: &[i8]) {
+        self.SetByteArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+    }
+
+    ///
+    /// Copies data from a Java jbyteArray `array` into a new Vec<i8>
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jbyteArray.
+    /// * `start` - the index of the first element to copy in the Java jbyteArray
+    /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
+    ///
+    /// If `len` is `Some` and negative or 0 then an empty Vec<i8> is returned.
+    ///
+    /// # Returns:
+    /// a new Vec<i8> that contains the copied data.
+    ///
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
+    ///
+    /// It is JVM implementation specific what is stored inside the returned Vec<i8> if this function throws an exception
+    /// * Data partially written
+    /// * No data written
+    ///
+    /// It is only guaranteed that this function never returns uninitialized memory.
+    ///
+    /// # Safety
+    /// `array` must be a valid non-null reference to a jbyteArray.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jbyteArray) -> Vec<i8> {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///     env.GetByteArrayRegion_as_vec(array, 0, None)
+    /// }
+    /// ```
+    ///
+    pub unsafe fn GetByteArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<i8> {
+        let len = len.unwrap_or_else(||self.GetArrayLength(array)-start);
+        if len < 0 {
+           return Vec::new();
+        }
+        let mut data = vec![0i8; len as usize];
+        self.GetByteArrayRegion_into_slice(array, start, data.as_mut_slice());
+        data
+    }
+
+    ///
+    /// Copies data from the jcharArray `array` starting from the given `start` index into the memory pointed to by `buf`.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jcharArray
+    /// * `start` - the index of the first element to copy in the Java jcharArray
+    /// * `len` - amount of data to be copied
+    /// * `buf` - pointer to memory where the data should be copied to
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is larger than the amount of remaining elements in the `array`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or >= env.GetArrayLength(array)
+    ///
+    /// It is JVM implementation specific what is written into `buf` if this function throws an exception.
+    /// * Data partially written
+    /// * No data written
+    ///
+    /// # Safety
+    /// `array` must be a valid non-null reference to a jcharArray.
+    /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jchar's.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
+    ///         array: jcharArray, chunk_buffer: &mut [u16], chunk_number: usize) -> bool {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///     let start_idx = (chunk_buffer.len() * chunk_number) as jsize;
+    ///
+    ///     env.GetCharArrayRegion(array, start_idx, chunk_buffer.len() as jsize, chunk_buffer.as_mut_ptr());
+    ///     if env.ExceptionCheck() {
+    ///         //ArrayIndexOutOfBoundsException
+    ///         env.ExceptionClear();
+    ///         return false;
+    ///     }
+    ///     true
+    /// }
+    /// ```
+    ///
     pub unsafe fn GetCharArrayRegion(&self, array: jcharArray, start: jsize, len: jsize, buf: *mut jchar) {
         #[cfg(feature = "asserts")]
         {
@@ -3615,6 +3950,143 @@ impl JNIEnv {
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jchar)>(201)(self.vtable, array, start, len, buf);
+    }
+
+    ///
+    /// Copies data from the jcharArray `array` starting from the given `start` index into the slice `buf`.
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jcharArray.
+    /// * `start` - the index of the first element to copy in the Java jcharArray
+    /// * `buf` - the slice to copy data into
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if the slice `buf` is larger than the amount of remaining elements in the `array`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or >= env.GetArrayLength(array)
+    ///
+    /// It is JVM implementation specific what is stored inside buf if this function throws an exception.
+    /// * Data partially written
+    /// * No data written
+    ///
+    /// # Safety
+    /// `array` must be a valid non-null reference to a jcharArray.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
+    ///         array: jcharArray, chunk_buffer: &mut [u16], chunk_number: usize) -> bool {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///     let start_idx = (chunk_buffer.len() * chunk_number) as jsize;
+    ///
+    ///     env.GetCharArrayRegion_into_slice(array, start_idx, chunk_buffer);
+    ///     if env.ExceptionCheck() {
+    ///         //ArrayIndexOutOfBoundsException
+    ///         env.ExceptionClear();
+    ///         return false;
+    ///     }
+    ///     true
+    /// }
+    /// ```
+    ///
+    pub unsafe fn GetCharArrayRegion_into_slice(&self, array: jcharArray, start: jsize, buf: &mut [u16]) {
+        self.GetCharArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
+    }
+
+    ///
+    /// Copies data from the slice `buf` into the jcharArray `array` starting at the given `start` index.
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jcharArray.
+    /// * `start` - the index where the first element should be coped into in the Java jcharArray
+    /// * `buf` - the slice where data is copied from
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if the slice `buf` is larger than the amount of remaining elements in the `array`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or >= env.GetArrayLength(array)
+    ///
+    /// It is JVM implementation specific what is stored inside `array` if this function throws an exception.
+    /// * Data partially written
+    /// * No data written
+    ///
+    /// # Safety
+    /// `array` must be a valid non-null reference to a jcharArray.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_chunk_from_rust_to_java(env: JNIEnv,
+    ///         array: jcharArray, chunk_buffer: &[u16], chunk_number: usize) -> bool {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///     let start_idx = (chunk_buffer.len() * chunk_number) as jsize;
+    ///
+    ///     env.SetCharArrayRegion_from_slice(array, start_idx, chunk_buffer);
+    ///     if env.ExceptionCheck() {
+    ///         //ArrayIndexOutOfBoundsException
+    ///         env.ExceptionClear();
+    ///         return false;
+    ///     }
+    ///     true
+    /// }
+    /// ```
+    ///
+    pub unsafe fn SetCharArrayRegion_from_slice(&self, array: jcharArray, start: jsize, buf: &[u16]) {
+        self.SetCharArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+    }
+
+    ///
+    /// Copies data from a Java jcharArray `array` into a new Vec<u16>
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jbyteArray.
+    /// * `start` - the index of the first element to copy in the Java jbyteArray
+    /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
+    ///
+    /// If `len` is `Some` and negative or 0 then an empty Vec<u16> is returned.
+    ///
+    /// # Returns:
+    /// a new Vec<u16> that contains the copied data.
+    ///
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
+    ///
+    /// It is JVM implementation specific what is stored inside the returned Vec<i8> if this function throws an exception
+    /// * Data partially written
+    /// * No data written
+    ///
+    /// It is only guaranteed that this function never returns uninitialized memory.
+    ///
+    /// # Safety
+    /// `array` must be a valid non-null reference to a jbyteArray.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jcharArray) -> Vec<u16> {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///     env.GetCharArrayRegion_as_vec(array, 0, None)
+    /// }
+    /// ```
+    ///
+    pub unsafe fn GetCharArrayRegion_as_vec(&self, array: jcharArray, start: jsize, len: Option<jsize>) -> Vec<u16> {
+        let len = len.unwrap_or_else(||self.GetArrayLength(array)-start);
+        if len < 0 {
+            return Vec::new();
+        }
+        let mut data = vec![0u16; len as usize];
+        self.GetCharArrayRegion_into_slice(array, start, data.as_mut_slice());
+        data
     }
 
     pub unsafe fn GetShortArrayRegion(&self, array: jshortArray, start: jsize, len: jsize, buf: *mut jshort) {
