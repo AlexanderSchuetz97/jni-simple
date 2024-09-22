@@ -3947,6 +3947,7 @@ impl JNIEnv {
             self.check_no_exception("GetCharArrayRegion");
             assert!(!array.is_null(), "GetCharArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "GetCharArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jchar>()), "GetCharArrayRegion buf pointer is not aligned");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jchar)>(201)(self.vtable, array, start, len, buf);
@@ -4096,6 +4097,7 @@ impl JNIEnv {
             self.check_no_exception("GetShortArrayRegion");
             assert!(!array.is_null(), "GetShortArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "GetShortArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jshort>()), "GetShortArrayRegion buf pointer is not aligned");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jshort)>(202)(self.vtable, array, start, len, buf);
@@ -4108,6 +4110,7 @@ impl JNIEnv {
             self.check_no_exception("GetIntArrayRegion");
             assert!(!array.is_null(), "GetIntArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "GetIntArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jint>()), "GetIntArrayRegion buf pointer is not aligned");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jint)>(203)(self.vtable, array, start, len, buf);
@@ -4120,6 +4123,7 @@ impl JNIEnv {
             self.check_no_exception("GetLongArrayRegion");
             assert!(!array.is_null(), "GetLongArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "GetLongArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jlong>()), "GetLongArrayRegion buf pointer is not aligned");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jlong)>(204)(self.vtable, array, start, len, buf);
@@ -4132,6 +4136,7 @@ impl JNIEnv {
             self.check_no_exception("GetFloatArrayRegion");
             assert!(!array.is_null(), "GetFloatArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "GetFloatArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jfloat>()), "GetFloatArrayRegion buf pointer is not aligned");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jfloat)>(205)(self.vtable, array, start, len, buf);
@@ -4144,6 +4149,7 @@ impl JNIEnv {
             self.check_no_exception("GetDoubleArrayRegion");
             assert!(!array.is_null(), "GetDoubleArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "GetDoubleArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jdouble>()), "GetDoubleArrayRegion buf pointer is not aligned");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jdouble)>(206)(self.vtable, array, start, len, buf);
@@ -4180,6 +4186,7 @@ impl JNIEnv {
             self.check_no_exception("SetCharArrayRegion");
             assert!(!array.is_null(), "SetCharArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "SetCharArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jchar>()), "SetCharArrayRegion buf pointer is not aligned");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jchar)>(209)(self.vtable, array, start, len, buf);
@@ -4192,6 +4199,7 @@ impl JNIEnv {
             self.check_no_exception("SetShortArrayRegion");
             assert!(!array.is_null(), "SetShortArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "SetShortArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jshort>()), "SetShortArrayRegion buf pointer is not aligned");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jshort)>(210)(self.vtable, array, start, len, buf);
@@ -4204,6 +4212,7 @@ impl JNIEnv {
             self.check_no_exception("SetIntArrayRegion");
             assert!(!array.is_null(), "SetIntArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "SetIntArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jint>()), "SetIntArrayRegion buf pointer is not aligned");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jint)>(211)(self.vtable, array, start, len, buf);
@@ -4216,6 +4225,7 @@ impl JNIEnv {
             self.check_no_exception("SetLongArrayRegion");
             assert!(!array.is_null(), "SetLongArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "SetLongArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jlong>()), "SetLongArrayRegion buf pointer is not aligned");
         }
 
 
@@ -4229,6 +4239,7 @@ impl JNIEnv {
             self.check_no_exception("SetFloatArrayRegion");
             assert!(!array.is_null(), "SetFloatArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "SetFloatArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jfloat>()), "SetFloatArrayRegion buf pointer is not aligned");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jfloat)>(213)(self.vtable, array, start, len, buf);
@@ -4241,6 +4252,7 @@ impl JNIEnv {
             self.check_no_exception("SetDoubleArrayRegion");
             assert!(!array.is_null(), "SetDoubleArrayRegion jarray must not be null");
             assert!(!buf.is_null(), "SetDoubleArrayRegion buf must not be null");
+            assert_eq!(0, buf.align_offset(align_of::<jdouble>()), "SetDoubleArrayRegion buf pointer is not aligned");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jdouble)>(214)(self.vtable, array, start, len, buf);
