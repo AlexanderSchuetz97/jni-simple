@@ -530,7 +530,15 @@ impl JNIEnv {
     /// Only java versions where a function in the JNI interface was added has one.
     ///
     /// # Safety
-    /// Current Thread must not be detached from JNI.
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
     ///
     /// # Example
     /// ```rust
@@ -542,6 +550,11 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetVersion(&self) -> jint {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("GetVersion");
+            self.check_no_exception("GetVersion");
+        }
         self.jni::<extern "system" fn(JNIEnvVTable) -> jint>(4)(self.vtable)
     }
 
@@ -567,9 +580,17 @@ impl JNIEnv {
     /// * `SecurityException` - if the caller attempts to define a class in the "java" package tree.
     ///
     /// # Safety
+    ///
     /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
     /// The `classloader` handle must be a valid handle if it is not null.
-    /// `name` must not be null.
+    /// `name` must be a valid pointer to a 0 terminated utf-8 string. It must not be null.
     ///
     /// # Example
     /// ```rust
@@ -597,6 +618,7 @@ impl JNIEnv {
         {
             self.check_not_critical("DefineClass");
             self.check_no_exception("DefineClass");
+            //TODO check if classloader is valid or null
             assert!(!name.is_null(), "DefineClass name is null");
         }
         self.jni::<extern "system" fn(JNIEnvVTable, *const c_char, jobject, *const u8, i32) -> jclass>(5)
@@ -626,12 +648,19 @@ impl JNIEnv {
     /// * `SecurityException` - if the caller attempts to define a class in the "java" package tree.
     ///
     /// # Safety
-    /// Current Thread must not be detached from JNI.
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
     /// The `classloader` handle must be a valid handle if it is not null.
     ///
     /// # Example
     /// ```rust
-    /// use std::ffi::CString;
     /// use std::ptr::null_mut;
     /// use jni_simple::{*};
     ///
@@ -660,8 +689,10 @@ impl JNIEnv {
     /// If the class was not previously loaded then the current JNI Classloader will attempt to
     /// load it.
     ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FindClass
+    ///
     /// # Arguments
-    /// * `name` - name of the class
+    /// * `name` - name of the class in jni notation (i.e: "java/lang/Object")
     ///
     /// # Returns
     /// A local ref handle to the java.lang.Class (jclass) object.
@@ -674,13 +705,20 @@ impl JNIEnv {
     /// * `NoClassDefFoundError` -  if no definition for a requested class or interface can be found.
     ///
     /// # Safety
-    /// Current Thread must not be detached from JNI.
-    /// `name` must not be null.
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// `name` must be a valid pointer to a 0 terminated utf-8 string. It must not be null.
     ///
     /// # Example
     /// ```rust
     /// use std::ffi::CString;
-    /// use std::ptr::null_mut;
     /// use jni_simple::{*};
     ///
     /// unsafe fn find_main_class(env: JNIEnv) -> jclass {
@@ -707,57 +745,354 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, *const c_char) -> jclass>(6)(self.vtable, name)
     }
 
+    ///
+    /// Finds or loads a class.
+    /// If the class was previously loaded by the current JNI Classloader or any parent of it then the class is simply returned.
+    /// If the class was not previously loaded then the current JNI Classloader will attempt to find and load it.
+    ///
+    /// # Arguments
+    /// * `name` - name of the class in jni notation (i.e: "java/lang/Object")
+    ///
+    /// # Panics
+    /// if `name` contains a 0 byte.
+    ///
+    /// # Returns
+    /// A local ref handle to the java.lang.Class (jclass) object.
+    /// On error null is returned.
+    ///
+    /// # Throws Java Exception:
+    /// * `ClassFormatError` - if the class data does not specify a valid class.
+    /// * `ClassCircularityError` - if a class or interface would be its own superclass or superinterface.
+    /// * `OutOfMemoryError` - if the system runs out of memory.
+    /// * `NoClassDefFoundError` -  if no definition for a requested class or interface can be found.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn find_main_class(env: JNIEnv) -> jclass {
+    ///     let class = env.FindClass_str("org/example/Main");
+    ///     if env.ExceptionCheck() {
+    ///         env.ExceptionDescribe();
+    ///         panic!("Failed to find main class check stderr for an error");
+    ///     }
+    ///     if class.is_null() {
+    ///         panic!("Failed to find main class. JVM did not throw an exception!"); //Unlikely
+    ///     }
+    ///     class
+    /// }
+    /// ```
+    ///
     pub unsafe fn FindClass_str(&self, name: &str) -> jclass {
         let str = CString::new(name).unwrap();
         self.FindClass(str.as_ptr())
     }
 
-    pub unsafe fn GetSuperclass(&self, clazz: jclass) -> jclass {
+    ///
+    /// Gets the superclass of the class `class`.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetSuperclass
+    ///
+    /// # Arguments
+    /// * `class` - handle to a class object. must not be null.
+    ///
+    /// # Returns
+    /// A local ref handle to the superclass or null.
+    /// If `class` refers to java.lang.Object class then null is returned.
+    /// If `class` refers to any Interface then null is returned.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// `class` must be a valid non-null handle to a class object.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn has_parent(env: JNIEnv, class: jclass) -> bool {
+    ///     if class.is_null() {
+    ///         return false;
+    ///     }
+    ///     let local = env.NewLocalRef(class);
+    ///     let parent_or_null = env.GetSuperclass(local);
+    ///     env.DeleteLocalRef(local);
+    ///     if parent_or_null.is_null() {
+    ///         return false;
+    ///     }
+    ///     env.DeleteLocalRef(parent_or_null);
+    ///     true
+    /// }
+    /// ```
+    ///
+    pub unsafe fn GetSuperclass(&self, class: jclass) -> jclass {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("GetSuperclass");
             self.check_no_exception("GetSuperclass");
-            self.check_is_class("GetSuperclass", clazz);
+            self.check_is_class("GetSuperclass", class);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jclass>(10)(self.vtable, clazz)
+        self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jclass>(10)(self.vtable, class)
     }
 
-    pub unsafe fn IsAssignableFrom(&self, clazz1: jclass, clazz2: jclass) -> jboolean {
+    ///
+    /// Determines whether an object of clazz1 can be safely cast to clazz2.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#IsAssignableFrom
+    ///
+    /// # Arguments
+    /// * `class1` - handle to a class object. must not be null.
+    /// * `class2` - handle to a class object. must not be null.
+    ///
+    /// # Returns
+    /// true if either:
+    /// * class1 and class2 refer to the same class.
+    /// * class1 is a subclass of class2.
+    /// * class1 has class2 as one of its interfaces.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// `class1` and `class2` must be valid non-null handles to class objects.
+    ///
+    pub unsafe fn IsAssignableFrom(&self, class1: jclass, class2: jclass) -> jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("IsAssignableFrom");
             self.check_no_exception("IsAssignableFrom");
-            self.check_is_class("IsAssignableFrom", clazz1);
-            self.check_is_class("IsAssignableFrom", clazz2);
+            self.check_is_class("IsAssignableFrom", class1);
+            self.check_is_class("IsAssignableFrom", class2);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass, jclass) -> jboolean>(11)(self.vtable, clazz1, clazz2)
+        self.jni::<extern "system" fn(JNIEnvVTable, jclass, jclass) -> jboolean>(11)(self.vtable, class1, class2)
     }
 
-    pub unsafe fn Throw(&self, obj: jthrowable) -> jint {
+    ///
+    /// Throws a java.lang.Throwable. This is roughly equal to the throw keyword in Java.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Throw
+    ///
+    /// # Arguments
+    /// * `throwable` - handle to an object which is instanceof java.lang.Throwable. must not be null.
+    ///
+    /// # Returns
+    /// JNI_OK on success. a negative value on failure.
+    ///
+    /// ## If JNI_OK was returned
+    /// The JVM will be throwing an exception as a result of this call.
+    ///
+    /// When the current thread is throwing an exception you may only call the following JNI functions:
+    /// * ExceptionOccurred
+    /// * ExceptionDescribe
+    /// * ExceptionClear
+    /// * ExceptionCheck
+    /// * ReleaseStringChars
+    /// * ReleaseStringUTFChars
+    /// * ReleaseStringCritical
+    /// * Release<Type>ArrayElements
+    /// * ReleasePrimitiveArrayCritical
+    /// * DeleteLocalRef
+    /// * DeleteGlobalRef
+    /// * DeleteWeakGlobalRef
+    /// * MonitorExit
+    /// * PushLocalFrame
+    /// * PopLocalFrame
+    ///
+    /// Calling any other JNI function is UB.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// `throwable` must be a valid non-null handle to an object which is instanceof java.lang.Throwable.
+    ///
+    pub unsafe fn Throw(&self, throwable: jthrowable) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("Throw");
             self.check_no_exception("Throw");
-            assert!(!obj.is_null(), "Throw throwable is null");
+            assert!(!throwable.is_null(), "Throw throwable is null");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jthrowable) -> jint>(13)(self.vtable, obj)
+        self.jni::<extern "system" fn(JNIEnvVTable, jthrowable) -> jint>(13)(self.vtable, throwable)
     }
 
-    pub unsafe fn ThrowNew(&self, clazz: jclass, message: *const c_char) -> jint {
+    ///
+    /// Throws a new instance `class`. This is roughly equal to `throw new ...` in Java.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ThrowNew
+    ///
+    /// # Arguments
+    /// * `class` - handle to a non-abstract class instances of which can be cast to java.lang.Throwable. Must not be null.
+    /// * `message` - the exception message. Must be null or a pointer to a 0 terminated utf-8 string.
+    ///
+    /// # Returns
+    /// JNI_OK on success. a negative value on failure.
+    ///
+    /// ## If JNI_OK was returned
+    /// The JVM will be throwing an exception as a result of this call.
+    ///
+    /// When the current thread is throwing an exception you may only call the following JNI functions:
+    /// * ExceptionOccurred
+    /// * ExceptionDescribe
+    /// * ExceptionClear
+    /// * ExceptionCheck
+    /// * ReleaseStringChars
+    /// * ReleaseStringUTFChars
+    /// * ReleaseStringCritical
+    /// * Release<Type>ArrayElements
+    /// * ReleasePrimitiveArrayCritical
+    /// * DeleteLocalRef
+    /// * DeleteGlobalRef
+    /// * DeleteWeakGlobalRef
+    /// * MonitorExit
+    /// * PushLocalFrame
+    /// * PopLocalFrame
+    ///
+    /// Calling any other JNI function is UB.
+    ///
+    /// # Throws Java Exception:
+    /// * NoSuchMethodError if the class has no suitable constructor for the argument supplied. Note: the return value remains JNI_OK!
+    ///   - null `message`: no zero arg or one arg String constructor exists.
+    ///   - non-null `message`: no one arg String constructor exists.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// `class` must be a valid non-null handle to a class which is:
+    /// * Not abstract
+    /// * Is a descendant of java.lang.Throwable (instances can be cast to Throwable)
+    ///
+    /// `message` must be a pointer to a 0 terminated utf-8 string or null.
+    ///
+    pub unsafe fn ThrowNew(&self, class: jclass, message: *const c_char) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("ThrowNew");
             self.check_no_exception("ThrowNew");
-            self.check_is_class("ThrowNew", clazz);
+            self.check_is_exception_class("ThrowNew", class);
+            self.check_is_not_abstract("ThrowNew", class);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char) -> jint>(14)(self.vtable, clazz, message)
+        self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char) -> jint>(14)(self.vtable, class, message)
     }
 
+
+    ///
+    /// Throws a new instance `class`. This is roughly equal to `throw new ...` in Java.
+    ///
+    /// # Arguments
+    /// * `class` - handle to a non-abstract class instances of which can be cast to java.lang.Throwable. Must not be null.
+    /// * `message` - the exception message.
+    ///
+    /// # Panics
+    /// If `message` contains any 0 bytes.
+    ///
+    /// # Returns
+    /// JNI_OK on success. a negative value on failure.
+    ///
+    /// ## If JNI_OK was returned
+    /// The JVM will be throwing an exception as a result of this call.
+    ///
+    /// When the current thread is throwing an exception you may only call the following JNI functions:
+    /// * ExceptionOccurred
+    /// * ExceptionDescribe
+    /// * ExceptionClear
+    /// * ExceptionCheck
+    /// * ReleaseStringChars
+    /// * ReleaseStringUTFChars
+    /// * ReleaseStringCritical
+    /// * Release<Type>ArrayElements
+    /// * ReleasePrimitiveArrayCritical
+    /// * DeleteLocalRef
+    /// * DeleteGlobalRef
+    /// * DeleteWeakGlobalRef
+    /// * MonitorExit
+    /// * PushLocalFrame
+    /// * PopLocalFrame
+    ///
+    /// Calling any other JNI function is UB.
+    ///
+    /// # Throws Java Exception:
+    /// * NoSuchMethodError if no single argument String constructor exists in the given class.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// `class` must be a valid non-null handle to a class which is:
+    /// * Not abstract
+    /// * Is a descendant of java.lang.Throwable (instances can be cast to Throwable)
+    ///
     pub unsafe fn ThrowNew_str(&self, clazz: jclass, message: &str) -> jint {
         let str = CString::new(message).unwrap();
         self.ThrowNew(clazz, str.as_ptr())
     }
 
+    ///
+    /// Returns a local reference to the exception currently being thrown.
+    /// Calling this function does not clear the exception.
+    /// It stays thrown until for example `ExceptionClear` is called.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionOccurred
+    ///
+    /// # Returns
+    /// A local ref to the throwable that is currently being thrown.
+    /// null if no throwable is currently thrown.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
     pub unsafe fn ExceptionOccurred(&self) -> jthrowable {
         #[cfg(feature = "asserts")]
         {
@@ -766,6 +1101,25 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable) -> jthrowable>(15)(self.vtable)
     }
 
+    ///
+    /// Print the stacktrace and message currently thrown to STDOUT.
+    /// A side effect of this function is that the exception is also cleared.
+    /// This is roughly equivalent to calling `java.lang.Throwable#printStackTrace()` in java.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionDescribe
+    ///
+    /// If no exception is currently thrown then this method is a no-op.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
     pub unsafe fn ExceptionDescribe(&self) {
         #[cfg(feature = "asserts")]
         {
@@ -774,6 +1128,25 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable)>(16)(self.vtable);
     }
 
+    ///
+    /// Print the stacktrace and message currently thrown to STDOUT.
+    /// A side effect of this function is that the exception is also cleared.
+    /// This is roughly equivalent to calling `java.lang.Throwable#printStackTrace()` in java.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionDescribe
+    ///
+    /// If no exception is currently thrown then this method is a no-op.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
     pub unsafe fn ExceptionClear(&self) {
         #[cfg(feature = "asserts")]
         {
@@ -782,6 +1155,20 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable)>(17)(self.vtable);
     }
 
+    ///
+    /// Raises a fatal error and does not expect the VM to recover. This function does not return.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FatalError
+    ///
+    /// # Arguments
+    /// * `msg` - message that should be present in the error report. 0 terminated utf-8. Must not be null.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// `msg` must be a non-null pointer to a valid 0 terminated utf-8 string.
+    ///
     pub unsafe fn FatalError(&self, msg: *const c_char) {
         #[cfg(feature = "asserts")]
         {
@@ -791,6 +1178,19 @@ impl JNIEnv {
         unreachable!("FatalError");
     }
 
+    ///
+    /// Raises a fatal error and does not expect the VM to recover. This function does not return.
+    ///
+    /// # Arguments
+    /// * `message` - message that should be present in the jvm error report that will be printed to stdout/stderr.
+    ///
+    /// # Panics
+    /// If `message` contains any 0 bytes.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
     pub unsafe fn FatalError_str(&self, message: &str) {
         let str = CString::new(message).unwrap().into_raw();
         self.FatalError(str);
@@ -5690,6 +6090,44 @@ impl JNIEnv {
             _=> {}
         }
     }
+
+
+    #[cfg(feature = "asserts")]
+    unsafe fn check_is_exception_class(&self, context: &str, obj: jclass) {
+        self.check_is_class(context, obj);
+        let throwable_cl = self.FindClass_str("java/lang/Throwable");
+        assert!(!throwable_cl.is_null(), "{} java/lang/Throwable not found???", context);
+        assert!(self.IsAssignableFrom(obj, throwable_cl), "{} class is not throwable", context);
+        self.DeleteLocalRef(throwable_cl);
+    }
+
+    #[cfg(feature = "asserts")]
+    unsafe fn check_is_not_abstract(&self, context: &str, obj: jclass) {
+        self.check_is_class(context, obj);
+        let class_cl = self.FindClass_str("java/lang/Class");
+        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        let meth = self.GetMethodID_str(class_cl, "getModifiers", "()I");
+        assert!(!meth.is_null(), "{} java/lang/Class#getModifiers not found???", context);
+        let mods = self.CallIntMethod0(obj, meth);
+        self.DeleteLocalRef(class_cl);
+        if self.ExceptionCheck() {
+            self.ExceptionDescribe();
+            panic!("{} java/lang/Class#getModifiers throws?", context);
+        }
+
+        let mod_cl = self.FindClass_str("java/lang/reflect/Modifier");
+        assert!(!mod_cl.is_null(), "{} java/lang/reflect/Modifier not found???", context);
+        let mod_fl = self.GetStaticFieldID_str(mod_cl, "ABSTRACT", "I");
+        assert!(!mod_fl.is_null(), "{} java/lang/reflect/Modifier.ABSTRACT not found???", context);
+        let amod = self.GetStaticIntField(mod_cl, mod_fl);
+        self.DeleteLocalRef(mod_cl);
+
+        if mods & amod != 0 {
+            panic!("{} class is abstract", context);
+        }
+    }
+
+
 
     #[cfg(feature = "asserts")]
     unsafe fn check_is_class(&self, context: &str, obj: jclass) {
