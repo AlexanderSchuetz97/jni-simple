@@ -881,6 +881,28 @@ impl JNIEnv {
     ///
     /// `class1` and `class2` must be valid non-null handles to class objects.
     ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn is_throwable_class(env: JNIEnv, class: jclass) -> bool {
+    ///     let throwable_class = env.FindClass_str("java/lang/Throwable");
+    ///     if throwable_class.is_null() {
+    ///         env.ExceptionDescribe();
+    ///         panic!("java/lang/Throwable not found! See stderr!");
+    ///     }
+    ///     let local = env.NewLocalRef(class);
+    ///     if local.is_null() {
+    ///         env.DeleteLocalRef(throwable_class);
+    ///         return false;
+    ///     }
+    ///     let result = env.IsAssignableFrom(local, throwable_class);
+    ///     env.DeleteLocalRef(local);
+    ///     env.DeleteLocalRef(throwable_class);
+    ///     result
+    /// }
+    /// ```
+    ///
     pub unsafe fn IsAssignableFrom(&self, class1: jclass, class2: jclass) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -937,6 +959,34 @@ impl JNIEnv {
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
     ///
     /// `throwable` must be a valid non-null handle to an object which is instanceof java.lang.Throwable.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn throw_null_pointer_exception(env: JNIEnv) {
+    ///     let npe_class = env.FindClass_str("java/lang/NullPointerException");
+    ///     if npe_class.is_null() {
+    ///         env.ExceptionDescribe();
+    ///         panic!("java/lang/NullPointerException not found!");
+    ///     }
+    ///     let npe_constructor = env.GetMethodID_str(npe_class, "<init>", "()V");
+    ///     if npe_constructor.is_null() {
+    ///         env.ExceptionDescribe();
+    ///         env.DeleteLocalRef(npe_class);
+    ///         panic!("java/lang/NullPointerException has no zero arg constructor!");
+    ///     }
+    ///
+    ///     let npe_obj = env.NewObject0(npe_class, npe_constructor);
+    ///     env.DeleteLocalRef(npe_class);
+    ///     if npe_obj.is_null() {
+    ///         env.ExceptionDescribe();
+    ///         panic!("java/lang/NullPointerException failed to call zero arg constructor!");
+    ///     }
+    ///     env.Throw(npe_obj);
+    ///     env.DeleteLocalRef(npe_obj);
+    /// }
+    /// ```
     ///
     pub unsafe fn Throw(&self, throwable: jthrowable) -> jint {
         #[cfg(feature = "asserts")]
@@ -1003,6 +1053,31 @@ impl JNIEnv {
     ///
     /// `message` must be a pointer to a 0 terminated utf-8 string or null.
     ///
+    /// # Example
+    /// ```rust
+    /// use std::ffi::CString;
+    /// use std::ptr::null;
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn throw_illegal_argument_exception(env: JNIEnv, message: Option<&str>) {
+    ///     let npe_class = env.FindClass_str("java/lang/IllegalArgumentException");
+    ///     if npe_class.is_null() {
+    ///         env.ExceptionDescribe();
+    ///         panic!("java/lang/IllegalArgumentException not found!");
+    ///     }
+    ///     match message {
+    ///         None => {
+    ///             env.ThrowNew(npe_class, null());
+    ///         }
+    ///         Some(message) => {
+    ///             let message = CString::new(message).expect("message contains 0 byte!");
+    ///             env.ThrowNew(npe_class, message.as_ptr());
+    ///         }
+    ///     }
+    ///     env.DeleteLocalRef(npe_class);
+    /// }
+    /// ```
+    ///
     pub unsafe fn ThrowNew(&self, class: jclass, message: *const c_char) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -1067,6 +1142,23 @@ impl JNIEnv {
     /// * Not abstract
     /// * Is a descendant of java.lang.Throwable (instances can be cast to Throwable)
     ///
+    /// # Example
+    /// ```rust
+    /// use std::ptr::null;
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn throw_illegal_argument_exception(env: JNIEnv, message: &str) {
+    ///     let npe_class = env.FindClass_str("java/lang/IllegalArgumentException");
+    ///     if npe_class.is_null() {
+    ///         env.ExceptionDescribe();
+    ///         panic!("java/lang/IllegalArgumentException not found!");
+    ///     }
+    ///     env.ThrowNew_str(npe_class, message);
+    ///     env.DeleteLocalRef(npe_class);
+    /// }
+    /// ```
+    ///
+    ///
     pub unsafe fn ThrowNew_str(&self, clazz: jclass, message: &str) -> jint {
         let str = CString::new(message).unwrap();
         self.ThrowNew(clazz, str.as_ptr())
@@ -1090,8 +1182,34 @@ impl JNIEnv {
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
     ///
-    /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn protected_call<R, F: FnOnce() -> R>(env: JNIEnv, call: F) -> Result<R, jthrowable> {
+    ///     let result = call();
+    ///     if env.ExceptionCheck() {
+    ///         let exception = env.ExceptionOccurred();
+    ///         env.ExceptionClear();
+    ///         return Err(exception);
+    ///     }
+    ///
+    ///     Ok(result)
+    /// }
+    ///
+    /// unsafe fn try_to_find_my_class(env: JNIEnv) {
+    ///     let my_class : Result<jclass, jthrowable> = protected_call(env, || env.FindClass_str("org/example/DoesntExist"));
+    ///     if my_class.is_err() {
+    ///         let _throwable_object : jthrowable = my_class.unwrap_err();
+    ///         //Handle exception here, this would be the catch(Throw t) block of java
+    ///         unimplemented!()
+    ///     } else {
+    ///         let _my_class : jclass = my_class.unwrap();
+    ///         //Use class
+    ///         unimplemented!()
+    ///     }
+    /// }
+    ///
     ///
     pub unsafe fn ExceptionOccurred(&self) -> jthrowable {
         #[cfg(feature = "asserts")]
@@ -1117,8 +1235,20 @@ impl JNIEnv {
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
     ///
-    /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    ///
+    /// unsafe fn test(env: JNIEnv) {
+    ///     let my_class = env.FindClass_str("org/example/TestClass");
+    ///     if my_class.is_null() {
+    ///         env.ExceptionDescribe();
+    ///         panic!("Class not found check stderr");
+    ///     }
+    ///     unimplemented!()
+    /// }
+    /// ```
     ///
     pub unsafe fn ExceptionDescribe(&self) {
         #[cfg(feature = "asserts")]
@@ -1144,8 +1274,20 @@ impl JNIEnv {
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
     ///
-    /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    ///
+    /// unsafe fn test(env: JNIEnv) {
+    ///     let mut my_class = env.FindClass_str("org/example/TestClass");
+    ///     if my_class.is_null() {
+    ///         env.ExceptionClear();
+    ///         my_class = env.FindClass_str("org/example/FallbackClass");
+    ///     }
+    ///     unimplemented!()
+    /// }
+    /// ```
     ///
     pub unsafe fn ExceptionClear(&self) {
         #[cfg(feature = "asserts")]
@@ -1197,7 +1339,24 @@ impl JNIEnv {
         unreachable!("FatalError");
     }
 
-
+    ///
+    /// Checks if an exception is thrown on the current thread.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionCheck
+    ///
+    /// # Returns
+    /// true if an exception is thrown on the current thread, false otherwise.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
     pub unsafe fn ExceptionCheck(&self) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -1206,6 +1365,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable) -> jboolean>(228)(self.vtable)
     }
 
+    ///
+    /// Creates a new global reference from an existing reference.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewGlobalRef
+    ///
+    /// # Arguments
+    /// * `obj` - a valid reference or null.
+    ///
+    /// # Returns
+    /// the newly created global reference or null.
+    /// null is returned if:
+    /// * the argument `obj` is null
+    /// * the system ran out of memory
+    /// * `obj` is a weak reference that has already been garbage collected.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// `obj` must not refer to a reference that has already been deleted by calling DeleteLocalRef, DeleteGlobalRef, DeleteWeakGlobalRef
+    ///
     pub unsafe fn NewGlobalRef(&self, obj: jobject) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -1215,6 +1401,29 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(21)(self.vtable, obj)
     }
 
+    ///
+    /// Deletes a global reference to an object allowing the garbage collector to free it if no more
+    /// references to it exists.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DeleteGlobalRef
+    ///
+    /// # Arguments
+    /// * `obj` - a valid non-null global reference.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// `obj` must not be null.
+    /// `obj` must be a global reference.
+    /// `obj` must not refer to an already deleted global reference. (Double free)
+    ///
     pub unsafe fn DeleteGlobalRef(&self, obj: jobject) {
         #[cfg(feature = "asserts")]
         {
@@ -1230,6 +1439,29 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(22)(self.vtable, obj)
     }
 
+    ///
+    /// Deletes a local reference to an object allowing the garbage collector to free it if no more
+    /// references to it exists.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DeleteGlobalRef
+    ///
+    /// # Arguments
+    /// * `obj` - a valid non-null local reference.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// `obj` must not be null.
+    /// `obj` must be a local reference.
+    /// `obj` must not refer to an already deleted local reference. (Double free)
+    ///
     pub unsafe fn DeleteLocalRef(&self, obj: jobject) {
         #[cfg(feature = "asserts")]
         {
@@ -1245,6 +1477,44 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(23)(self.vtable, obj)
     }
 
+    ///
+    /// The jvm guarantees that a native method can have at least 16 local references.
+    /// Creating any more than 16 local references without calling this function is effectively UB.
+    /// This function instructs the JVM to ensure that at least
+    /// `capacity` amount of local references are available for allocation.
+    /// This function can be called multiple times to increase the amount of required locals.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#EnsureLocalCapacity
+    ///
+    ///
+    /// # Arguments
+    /// * `capacity` - amount of local references the jvm must provide. Must be larger than 0.
+    ///
+    /// # Returns
+    /// 0 on success, negative value indicating the error.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the vm runs out of memory ensuring capacity. This is never the case when 0 is returned.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// `capacity` must not be 0 or negative.
+    ///
+    /// ## Observed UB when more locals are allocated than ensured
+    /// This behavior depends heavily on the jvm used and the arguments used to start it. This list is incomplete
+    /// * Heap/Stack corruption.
+    /// * JVM calls FatalError and aborts the process.
+    /// * JVM Functions that would return a local reference return null.
+    /// * JVM simply allocates more locals than ensured. (starting the jvm with -verbose:jni will log this)
+    ///
     pub unsafe fn EnsureLocalCapacity(&self, capacity: jint) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -1255,6 +1525,46 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jint) -> jint>(26)(self.vtable, capacity)
     }
 
+    ///
+    /// Creates a new local reference frame, in which at least a given number of local references can be created.
+    /// Note that local references already created in previous local frames are still valid in the current local frame.
+    /// This method should be called by code that is called from unknown code where it is not known if enough
+    /// local capacity is available. This method is superior to just increasing the capacity by calling EnsureLocalCapacity
+    /// because that requires at least a rough knowledge of how many locals the caller itself has used and still needs.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#PushLocalFrame
+    ///
+    ///
+    /// # Arguments
+    /// * `capacity` - amount of local references the jvm must provide. Must be larger than 0.
+    ///
+    /// # Returns
+    /// 0 on success, negative value indicating the error.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the vm runs out of memory ensuring capacity. This is never the case when 0 is returned.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// `capacity` must not be 0 or negative.
+    ///
+    /// returning back to java code without cleaning up all created local reference frames by calling `PopLocalFrame` is UB.
+    ///
+    /// ## Observed UB when more locals are allocated than ensured
+    /// This behavior depends heavily on the jvm used and the arguments used to start it. This list is incomplete
+    /// * Heap/Stack corruption.
+    /// * JVM calls FatalError and aborts the process.
+    /// * JVM Functions that would return a local reference return null.
+    /// * JVM simply allocates more locals than ensured. (starting the jvm with -verbose:jni will log this)
+    ///
     pub unsafe fn PushLocalFrame(&self, capacity: jint) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -1264,6 +1574,27 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jint) -> jint>(19)(self.vtable, capacity)
     }
 
+    ///
+    /// Pops a local reference frame created with PushLocalFrame
+    /// All local references created within this reference frame are freed automatically
+    /// and are no longer valid when this call returns.
+    ///
+    /// # Arguments
+    /// * result - arbitrary local reference jobject that should be moved to the parent reference frame.
+    /// this is similar to a "return" value and may be null if no such result is needed.
+    /// the local reference this function returns is valid within the parent local reference frame.
+    ///
+    /// # Returns
+    /// A valid local reference that points to the same object as the reference `result`. Is Null if `result` is Null.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    ///
     pub unsafe fn PopLocalFrame(&self, result: jobject) -> jobject {
         #[cfg(feature = "asserts")]
         {
