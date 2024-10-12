@@ -1,9 +1,9 @@
 #[cfg(feature = "loadjvm")]
 #[cfg(feature = "asserts")]
 pub mod test {
-    use std::panic;
     use jni_simple::*;
-    use std::ptr::{null, null_mut};
+    use std::panic;
+    use std::ptr::null_mut;
 
     #[test]
     fn test() {
