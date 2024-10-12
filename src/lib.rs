@@ -208,6 +208,42 @@ pub union jtype {
     throwable: jthrowable
 }
 
+///
+/// This macro is usefull for constructing jtype arrays.
+/// This is often needed when making upcalls into the jvm with many arguments using the 'A' type functions:
+/// * CallStatic(TYPE)MethodA
+///     * CallStaticVoidMethodA
+///     * CallStaticIntMethodA
+///     * ...
+/// * Call(TYPE)MethodA
+///     * CallVoidMethodA
+///     * ...
+/// * NewObjectA
+///
+/// # Example
+/// ```rust
+/// use jni_simple::{*};
+///
+/// unsafe fn test(env: JNIEnv, class: jclass) {
+///     //public static void methodWith5Params(int a, int b, long c, long d, boolean e) {}
+///     let meth = env.GetStaticMethodID_str(class, "methodWith5Params", "(IIJJZ)V");
+///     if meth.is_null() {
+///         unimplemented!("handle method not found");
+///     }
+///     // methodWith5Params(16, 32, 12, 13, false);
+///     env.CallStaticVoidMethodA(class, meth, jtypes!(16i32, 64i32, 12i64, 13i64, false).as_ptr());
+/// }
+/// ```
+///
+#[macro_export]
+macro_rules! jtypes {
+    ( $($x:expr),* ) => {
+        {
+            [ $(jtype::from($x)),* ]
+        }
+    };
+}
+
 impl Debug for jtype {
     #[inline(never)]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

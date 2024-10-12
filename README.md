@@ -229,7 +229,7 @@ pub unsafe extern "system" fn Java_some_package_ClassName_method(env: JNIEnv, cl
     //Variant 1: Variadic up-calls:
     //BE CAREFUL, this method is sensitive to difference between i32/i16/i8 etc. 
     //So always specify the type so that it matches the type of the Java Method.
-    //Letting the compiler choose the may or may not work!
+    //Letting the compiler choose the type may or may not work!
     //Passing a different argument than what the Java Method has is UB!
     //A sealed trait ensures that only parameters that the JVM can understand can be passed here
     //So for example accidentally passing a &str to these methods will not compile.
@@ -245,10 +245,14 @@ pub unsafe extern "system" fn Java_some_package_ClassName_method(env: JNIEnv, cl
     //is implemented for all types that can be passed to java as a parameter.
     //You could also use a Vec<jtype> to obtain your pointer to the jtype's!
     env.CallStaticVoidMethodA(class, meth0, null());
-    env.CallStaticVoidMethodA(class, meth1, [1i32.into()].as_ptr());
-    env.CallStaticVoidMethodA(class, meth2, [1i32.into(), 1i32.into()].as_ptr());
-    env.CallStaticVoidMethodA(class, meth3, [1i32.into(), 1i32.into(), 1i32.into()].as_ptr());
-    env.CallStaticVoidMethodA(class, meth4, [1i32.into(), 1i32.into(), 1i32.into(), 1i32.into()].as_ptr());
+    env.CallStaticVoidMethodA(class, meth1, jtypes!(1i32).as_ptr());
+    env.CallStaticVoidMethodA(class, meth2, jtypes!(1i32, 2i32).as_ptr());
+    env.CallStaticVoidMethodA(class, meth3, jtypes!(1i32, 2i32, 3i32).as_ptr());
+    env.CallStaticVoidMethodA(class, meth4, jtypes!(1i32, 2i32, 3i32, 4i32).as_ptr());
     //There is no "practical" limit to how large you could make this array/vec.
+    //For reference the jtypes! macro resolves to this
+    let macro_result : [jtype; 4] = jtypes!(1i32, 2i32, 3i32, 4i32);
+    //And is just short for:
+    let macro_result : [jtype; 4] = [jtype::from(1i32), jtype::from(2i32), jtype::from(3i32), jtype::from(4i32)];
 }
 ```
