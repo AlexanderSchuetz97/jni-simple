@@ -515,9 +515,13 @@ impl JavaVMAttachArgs {
 
 impl JNIEnv {
 
+    ///
+    /// resolves the function pointer given its linkage index of the jni vtable.
+    /// The indices are documented and guaranteed by the Oracle JVM Spec.
+    ///
     #[inline(always)]
     unsafe fn jni<X>(&self, index: usize) -> X {
-        unsafe {mem::transmute_copy(&(**self.vtable)[index])}
+        mem::transmute_copy(&(**self.vtable)[index])
     }
 
     ///
@@ -1186,30 +1190,33 @@ impl JNIEnv {
     /// ```rust
     /// use jni_simple::{*};
     ///
-    /// unsafe fn protected_call<R, F: FnOnce() -> R>(env: JNIEnv, call: F) -> Result<R, jthrowable> {
-    ///     let result = call();
+    ///
+    /// unsafe fn test(env: JNIEnv) {
+    ///     let special_exception = env.FindClass_str("org/example/SuperSpecialException");
+    ///     if special_exception.is_null() {
+    ///         unimplemented!("handle class not found")
+    ///     }
+    ///     let my_class = env.FindClass_str("org/example/TestClass");
+    ///     if my_class.is_null() {
+    ///         unimplemented!("handle class not found")
+    ///     }
+    ///     let my_zero_arg_constructor = env.GetMethodID_str(my_class, "<init>", "()V");
+    ///     if my_zero_arg_constructor.is_null() {
+    ///         unimplemented!("handle no zero arg constructor")
+    ///     }
+    ///     let my_object = env.NewObject0(my_class, my_zero_arg_constructor);
     ///     if env.ExceptionCheck() {
-    ///         let exception = env.ExceptionOccurred();
+    ///         let exception_object = env.ExceptionOccurred();
     ///         env.ExceptionClear();
-    ///         return Err(exception);
+    ///         if env.IsInstanceOf(exception_object, special_exception) {
+    ///             panic!("zero arg constructor threw SuperSpecialException!")
+    ///         }
+    ///
+    ///         unimplemented!("handle other exceptions");
     ///     }
-    ///
-    ///     Ok(result)
+    ///     unimplemented!()
     /// }
-    ///
-    /// unsafe fn try_to_find_my_class(env: JNIEnv) {
-    ///     let my_class : Result<jclass, jthrowable> = protected_call(env, || env.FindClass_str("org/example/DoesntExist"));
-    ///     if my_class.is_err() {
-    ///         let _throwable_object : jthrowable = my_class.unwrap_err();
-    ///         //Handle exception here, this would be the catch(Throw t) block of java
-    ///         unimplemented!()
-    ///     } else {
-    ///         let _my_class : jclass = my_class.unwrap();
-    ///         //Use class
-    ///         unimplemented!()
-    ///     }
-    /// }
-    ///
+    /// ```
     ///
     pub unsafe fn ExceptionOccurred(&self) -> jthrowable {
         #[cfg(feature = "asserts")]
@@ -1354,8 +1361,27 @@ impl JNIEnv {
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
     ///
-    /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    ///
+    /// unsafe fn test(env: JNIEnv) {
+    ///     let my_class = env.FindClass_str("org/example/TestClass");
+    ///     if my_class.is_null() {
+    ///         unimplemented!("handle class not found")
+    ///     }
+    ///     let my_zero_arg_constructor = env.GetMethodID_str(my_class, "<init>", "()V");
+    ///     if my_zero_arg_constructor.is_null() {
+    ///         unimplemented!("handle no zero arg constructor")
+    ///     }
+    ///     let my_object = env.NewObject0(my_class, my_zero_arg_constructor);
+    ///     if env.ExceptionCheck() {
+    ///         panic!("org/example/TestClass zero arg constructor threw an exception!");
+    ///     }
+    ///     unimplemented!()
+    /// }
+    /// ```
     ///
     pub unsafe fn ExceptionCheck(&self) -> jboolean {
         #[cfg(feature = "asserts")]
@@ -1569,7 +1595,6 @@ impl JNIEnv {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("PushLocalFrame");
-            self.check_no_exception("PushLocalFrame");
         }
         self.jni::<extern "system" fn(JNIEnvVTable, jint) -> jint>(19)(self.vtable, capacity)
     }
@@ -1579,13 +1604,15 @@ impl JNIEnv {
     /// All local references created within this reference frame are freed automatically
     /// and are no longer valid when this call returns.
     ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#PopLocalFrame
+    ///
     /// # Arguments
-    /// * result - arbitrary local reference jobject that should be moved to the parent reference frame.
+    /// * result - arbitrary jni reference that should be moved to the parent reference frame.
     /// this is similar to a "return" value and may be null if no such result is needed.
     /// the local reference this function returns is valid within the parent local reference frame.
     ///
     /// # Returns
-    /// A valid local reference that points to the same object as the reference `result`. Is Null if `result` is Null.
+    /// A valid local reference that points to the same object as the reference `result`. Is null if `result` is null.
     ///
     /// # Safety
     ///
@@ -1594,23 +1621,75 @@ impl JNIEnv {
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
     ///
+    /// result must be a valid reference or null
+    ///
     ///
     pub unsafe fn PopLocalFrame(&self, result: jobject) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("PopLocalFrame");
+            self.check_ref_obj_permit_null("PopLocalFrame", result);
         }
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(20)(self.vtable, result)
     }
 
+    ///
+    /// Creates a new local reference from the given jobject.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewLocalRef
+    ///
+    /// # Arguments
+    /// * obj - arbitrary valid jni reference or null
+    ///
+    /// # Returns
+    /// A valid local reference that points to the same object as the reference `obj`. Is null if `obj` is null.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference or null
+    ///
     pub unsafe fn NewLocalRef(&self, obj: jobject) -> jobject {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewLocalRef");
+            self.check_no_exception("NewLocalRef");
+            self.check_ref_obj_permit_null("NewLocalRef", obj);
         }
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(25)(self.vtable, obj)
     }
 
+    ///
+    /// Creates a new weak global reference from the given jobject.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewWeakGlobalRef
+    ///
+    /// # Arguments
+    /// * obj - arbitrary valid jni reference or null
+    ///
+    /// # Returns
+    /// A valid local weak global reference that points to the same object as the reference `obj`. Is null if `obj` is null.
+    ///
+    /// # Throws Java Exception
+    /// If the JVM runs out of memory, an OutOfMemoryError will be thrown.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference or null
+    ///
     pub unsafe fn NewWeakGlobalRef(&self, obj: jobject) -> jweak {
         #[cfg(feature = "asserts")]
         {
@@ -1620,25 +1699,107 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jweak>(226)(self.vtable, obj)
     }
 
+    ///
+    /// Deletes a weak global reference.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DeleteWeakGlobalRef
+    ///
+    /// # Arguments
+    /// * obj - a weak global reference.
+    ///     * must not already be deleted.
+    ///     * must not be null.
+    ///     * If the referred obj has been garbage collected by the JVM already or not is irrelevant.
+    ///
+    /// # Returns
+    /// A valid local weak global reference that points to the same object as the reference `obj`. Is null if `obj` is null.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must not be null and be a valid weak reference that has not yet been deleted.
+    ///
     pub unsafe fn DeleteWeakGlobalRef(&self, obj: jweak) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("DeleteWeakGlobalRef");
             assert!(!obj.is_null(), "DeleteWeakGlobalRef obj is null");
-            match self.GetObjectRefType(obj) {
-                jobjectRefType::JNIInvalidRefType => panic!("DeleteWeakGlobalRef invalid non null reference"),
-                jobjectRefType::JNILocalRefType => panic!("DeleteWeakGlobalRef local reference passed"),
-                jobjectRefType::JNIGlobalRefType => panic!("DeleteWeakGlobalRef strong global reference passed"),
-                _=> {}
+            if !self.ExceptionCheck() {
+                match self.GetObjectRefType(obj) {
+                    jobjectRefType::JNIInvalidRefType => panic!("DeleteWeakGlobalRef invalid non null reference"),
+                    jobjectRefType::JNILocalRefType => panic!("DeleteWeakGlobalRef local reference passed"),
+                    jobjectRefType::JNIGlobalRefType => panic!("DeleteWeakGlobalRef strong global reference passed"),
+                    _=> {}
+                }
             }
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(227)(self.vtable, obj);
     }
 
+    ///
+    /// Allocates a new direct instance of the given class without calling any constructor.
+    ///
+    /// Every field in the instance will be the JVM default value for the type.
+    /// * Every numeric is 0,
+    /// * Every reference/object is null,
+    /// * Every boolean is false,
+    /// * Every array is null
+    ///
+    /// This will also not perform default initialization of types so a field that is initialized like this in java:
+    /// ```java
+    /// private int x = 5;
+    /// ```
+    /// This field would not be 5 but be 0 in the instance returned by AllocObject.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#AllocObject
+    ///
+    /// # Note
+    /// Be aware that the created instance may be initially in a state that is invalid for the given java object.
+    /// Any object constructed using AllocObject should be brought into a valid state by essentially performing duties similar to
+    /// what the constructor of that object would do. Handling errors during the subsequent initialization process can
+    /// be especially tricky concerning object finalization. As part of error handling the object will likely be freed which
+    /// then causes the JVM may run the finalization implementation on the object that is from a java point of view in an invalid state.
+    /// This might cause undefined behavior in the jvm, depending on what the finalization implementation of the object does.
+    /// Future Java releases have commited to removing object finalization. This restriction is known to apply to java 21 and lower.
+    ///
+    /// Calling any java methods on or with the partially initialized object should be avoided,
+    /// as the jvm may for example have made assumptions about not yet initialized final fields.
+    /// How the jvm reacts to this is entirely dependent on which jvm implementation you use and how it was started.
+    ///
+    /// # Arguments
+    /// * `clazz` - reference to a class.
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be already garbage collected
+    ///
+    /// # Returns
+    /// A local reference to the newly created object or null if the object could not be created.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError
+    ///     * if the jvm runs out of memory.
+    /// * InstantiationException
+    ///     * if the class is an interface or an abstract class.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
+    ///
+    ///
     pub unsafe fn AllocObject(&self, clazz: jclass) -> jobject {
         #[cfg(feature = "asserts")]
         {
+            assert!(!clazz.is_null(), "AllocObject clazz is null");
             self.check_not_critical("AllocObject");
             self.check_no_exception("AllocObject");
             self.check_is_class("AllocObject", clazz);
@@ -1646,6 +1807,49 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jobject>(27)(self.vtable, clazz)
     }
 
+    ///
+    /// Allocates an object by calling a constructor.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject
+    ///
+    ///
+    /// # Arguments
+    /// * `clazz` - reference to a class.
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be already garbage collected
+    /// * `constructor` - jmethodID of a constructor
+    ///     * must be a constructor ('<init>' method name)
+    ///     * must be a constructor of `clazz`
+    /// * args - java method parameters
+    ///     * can be null for 0 arg constructors.
+    ///     * must be a valid pointer into a jtype array with at least the same length as the java method has parameters.
+    ///     * the parameters must be valid types.
+    ///
+    /// # Returns
+    /// A local reference to the newly created object or null if the object could not be created.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError
+    ///     * if the jvm runs out of memory.
+    /// * InstantiationException
+    ///     * if the class is an interface or an abstract class.
+    /// * Any exception thrown by the constructor
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
+    ///
+    /// `constructor` must be a valid non-static methodID of `clazz` that is a constructor.
+    ///
+    /// `args` must be valid, have enough length and contain valid parameters for the method.
+    /// * for example calling a java constructor that needs a String as parameter, with an 'int' instead is UB.
+    ///
     pub unsafe fn NewObjectA(&self, clazz: jclass, constructor: jmethodID, args: *const jtype) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -1653,56 +1857,237 @@ impl JNIEnv {
             self.check_no_exception("NewObjectA");
             assert!(!constructor.is_null(), "NewObjectA constructor is null");
             self.check_is_class("NewObjectA", clazz);
+            //TODO check if constructor is actually constructor or just a normal method.
+            //TODO check arguments match constructor
         }
         self.jni::<extern "system" fn(JNIEnvVTable, jclass, jmethodID, *const jtype) -> jobject>(30)(self.vtable, clazz, constructor, args)
     }
 
+    ///
+    /// Creates a new object instance by calling the zero arg constructor.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject
+    ///
+    ///
+    /// # Arguments
+    /// * `clazz` - reference to a class.
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be already garbage collected
+    /// * `constructor` - jmethodID of a constructor
+    ///     * must be a constructor
+    ///     * must be a constructor of `clazz`
+    ///     * must have 0 args
+    ///
+    /// # Returns
+    /// A local reference to the newly created object or null if the object could not be created.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError
+    ///     * if the jvm runs out of memory.
+    /// * InstantiationException
+    ///     * if the class is an interface or an abstract class.
+    /// * Any exception thrown by the constructor
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
+    ///
+    /// `constructor` must be a valid non-static methodID of `clazz` that is a constructor.
+    ///
+    /// `constructor` must have 0 arguments.
+    ///
     pub unsafe fn NewObject0(&self, clazz: jclass, constructor: jmethodID) -> jobject {
         #[cfg(feature = "asserts")]
         {
-            self.check_not_critical("NewObject");
-            self.check_no_exception("NewObject");
-            assert!(!constructor.is_null(), "NewObject constructor is null");
-            self.check_is_class("NewObject", clazz);
+            self.check_not_critical("NewObject0");
+            self.check_no_exception("NewObject0");
+            assert!(!constructor.is_null(), "NewObject0 constructor is null");
+            self.check_is_class("NewObject0", clazz);
+            //TODO check if constructor is actually constructor or just a normal method.
+            //TODO check zero arg.
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID) -> jobject>(28)(self.vtable, clazz, constructor)
     }
 
+    ///
+    /// Creates a new object instance by calling the one arg constructor.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject
+    ///
+    ///
+    /// # Arguments
+    /// * `clazz` - reference to a class.
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be already garbage collected
+    /// * `constructor` - jmethodID of a constructor
+    ///     * must be a constructor
+    ///     * must be a constructor of `clazz`
+    ///     * must have 1 arg
+    /// * `arg1` - the argument
+    ///     * must be of the exact type that the constructor needs to be called with.
+    ///
+    /// # Returns
+    /// A local reference to the newly created object or null if the object could not be created.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError
+    ///     * if the jvm runs out of memory.
+    /// * InstantiationException
+    ///     * if the class is an interface or an abstract class.
+    /// * Any exception thrown by the constructor
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
+    ///
+    /// `constructor` must be a valid non-static methodID of `clazz` that is a constructor.
+    ///
+    /// `constructor` must have 1 argument.
+    ///
+    /// JType of `arg1` must match the argument type of the java method exactly.
+    /// * absolutely no coercion is performed. Not even between trivially coercible types such as for example jint->jlong.
+    ///     * ex: calling a constructor that expects a jlong with a jint is UB.
+    ///
     pub unsafe fn NewObject1<A: JType>(&self, clazz: jclass, constructor: jmethodID, arg1: A) -> jobject {
         #[cfg(feature = "asserts")]
         {
-            self.check_not_critical("NewObject");
-            self.check_no_exception("NewObject");
-            assert!(!constructor.is_null(), "NewObject constructor is null");
-            self.check_is_class("NewObject", clazz);
-            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg1, 0, 1);
+            self.check_not_critical("NewObject1");
+            self.check_no_exception("NewObject1");
+            assert!(!constructor.is_null(), "NewObject1 constructor is null");
+            self.check_is_class("NewObject1", clazz);
+            //TODO check if constructor is actually constructor or just a normal method.
+            self.check_parameter_types_constructor("NewObject1", clazz, constructor, arg1, 0, 1);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1)
     }
 
+    ///
+    /// Creates a new object instance by calling the two arg constructor.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject
+    ///
+    ///
+    /// # Arguments
+    /// * `clazz` - reference to a class.
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be already garbage collected
+    /// * `constructor` - jmethodID of a constructor
+    ///     * must be a constructor
+    ///     * must be a constructor of `clazz`
+    ///     * must have 2 args
+    /// * `arg1` & `arg2` - the arguments
+    ///     * must be of the exact type that the constructor needs to be called with.
+    ///
+    /// # Returns
+    /// A local reference to the newly created object or null if the object could not be created.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError
+    ///     * if the jvm runs out of memory.
+    /// * InstantiationException
+    ///     * if the class is an interface or an abstract class.
+    /// * Any exception thrown by the constructor
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
+    ///
+    /// `constructor` must be a valid non-static methodID of `clazz` that is a constructor.
+    ///
+    /// `constructor` must have 2 arguments.
+    ///
+    /// JType of `arg1` & `arg2` must match the argument type of the java method exactly.
+    /// * absolutely no coercion is performed. Not even between trivially coercible types such as for example jint->jlong.
+    ///     * ex: calling a constructor that expects a jlong with a jint is UB.
+    ///
     pub unsafe fn NewObject2<A: JType, B: JType>(&self, clazz: jclass, constructor: jmethodID, arg1: A, arg2: B) -> jobject {
         #[cfg(feature = "asserts")]
         {
-            self.check_not_critical("NewObject");
-            self.check_no_exception("NewObject");
-            assert!(!constructor.is_null(), "NewObject constructor is null");
-            self.check_is_class("NewObject", clazz);
-            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg1, 0, 2);
-            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg2, 1, 2);
+            self.check_not_critical("NewObject2");
+            self.check_no_exception("NewObject2");
+            assert!(!constructor.is_null(), "NewObject2 constructor is null");
+            self.check_is_class("NewObject2", clazz);
+            //TODO check if constructor is actually constructor or just a normal method.
+            self.check_parameter_types_constructor("NewObject2", clazz, constructor, arg1, 0, 2);
+            self.check_parameter_types_constructor("NewObject2", clazz, constructor, arg2, 1, 2);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1, arg2)
     }
 
+    ///
+    /// Creates a new object instance by calling the three arg constructor.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject
+    ///
+    ///
+    /// # Arguments
+    /// * `clazz` - reference to a class.
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be already garbage collected
+    /// * `constructor` - jmethodID of a constructor
+    ///     * must be a constructor ('<init>' method name)
+    ///     * must be a constructor of `clazz`
+    ///     * must have 3 args
+    /// * `arg1` & `arg2` & `arg3` - the arguments
+    ///     * must be of the exact type that the constructor needs to be called with.
+    ///
+    /// # Returns
+    /// A local reference to the newly created object or null if the object could not be created.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError
+    ///     * if the jvm runs out of memory.
+    /// * InstantiationException
+    ///     * if the class is an interface or an abstract class.
+    /// * Any exception thrown by the constructor
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
+    ///
+    /// `constructor` must be a valid non-static methodID of `clazz` that is a constructor
+    ///
+    /// `constructor` must have 2 arguments.
+    ///
+    /// JType of `arg1` & `arg2` & `arg3` must match the argument type of the java method exactly.
+    /// * absolutely no coercion is performed. Not even between trivially coercible types such as for example jint->jlong.
+    ///     * ex: calling a constructor that expects a jlong with a jint is UB.
+    ///
     pub unsafe fn NewObject3<A: JType, B: JType, C: JType>(&self, clazz: jclass, constructor: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
         #[cfg(feature = "asserts")]
         {
-            self.check_not_critical("NewObject");
-            self.check_no_exception("NewObject");
-            assert!(!constructor.is_null(), "NewObject constructor is null");
-            self.check_is_class("NewObject", clazz);
-            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg1, 0, 3);
-            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg2, 1, 3);
-            self.check_parameter_types_constructor("NewObject", clazz, constructor, arg3, 2, 3);
+            self.check_not_critical("NewObject3");
+            self.check_no_exception("NewObject3");
+            assert!(!constructor.is_null(), "NewObject3 constructor is null");
+            self.check_is_class("NewObject3", clazz);
+            //TODO check if constructor is actually constructor or just a normal method.
+            self.check_parameter_types_constructor("NewObject3", clazz, constructor, arg1, 0, 3);
+            self.check_parameter_types_constructor("NewObject3", clazz, constructor, arg2, 1, 3);
+            self.check_parameter_types_constructor("NewObject3", clazz, constructor, arg3, 2, 3);
         }
         self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1, arg2, arg3)
     }
@@ -6399,6 +6784,12 @@ impl JNIEnv {
         if obj.is_null() {
             return;
         }
+
+        if self.ExceptionCheck() {
+            //We cannot do this check currently...
+            return;
+        }
+
         match self.GetObjectRefType(obj) {
             jobjectRefType::JNIInvalidRefType => panic!("{} ref is invalid", context),
             _=> {}
@@ -6408,6 +6799,12 @@ impl JNIEnv {
     #[cfg(feature = "asserts")]
     unsafe fn check_ref_obj(&self, context: &str, obj: jobject) {
         assert!(!obj.is_null(), "{} ref is null", context);
+
+        if self.ExceptionCheck() {
+            //We cannot do this check currently...
+            return;
+        }
+
         match self.GetObjectRefType(obj) {
             jobjectRefType::JNIInvalidRefType => panic!("{} ref is invalid", context),
             jobjectRefType::JNIWeakGlobalRefType => {
