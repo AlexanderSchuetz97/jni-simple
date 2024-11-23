@@ -85,7 +85,7 @@ pub type jfloatArray = jarray;
 pub type jdoubleArray = jarray;
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Ord, Eq, PartialOrd, PartialEq, Hash, Clone, Copy)]
 pub enum jobjectRefType {
     JNIInvalidRefType = 0,
     JNILocalRefType = 1,
@@ -2128,6 +2128,30 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1, arg2, arg3)
     }
 
+    ///
+    /// Gets the class of an object instance.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectClass
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to a object.
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be already garbage collected
+    ///
+    /// # Returns
+    /// A local reference to the class of the object.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must not be null and be a valid reference that has not yet been deleted or garbage collected.
+    ///
     pub unsafe fn GetObjectClass(&self, obj: jobject) -> jclass {
         #[cfg(feature = "asserts")]
         {
@@ -2138,6 +2162,31 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(31)(self.vtable, obj)
     }
 
+    ///
+    /// Gets the type of reference
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectRefType
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to an object.
+    ///     * must be valid or null
+    ///
+    /// # Returns
+    /// The type of reference
+    /// JNIInvalidRefType is returned for null inputs.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference.
+    ///
+    /// Calling this fn with an obj that has already been manually deleted using `DeleteLocalRef` for example is UB.
+    ///
     pub unsafe fn GetObjectRefType(&self, obj: jobject) -> jobjectRefType {
         #[cfg(feature = "asserts")]
         {
@@ -2147,6 +2196,35 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobjectRefType>(232)(self.vtable, obj)
     }
 
+    ///
+    /// Checks if the obj is instanceof the given class
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#IsInstanceOf
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to an object.
+    ///     * must be valid or null
+    ///     * must not be already garbage collected
+    /// * `clazz` - reference to the class.
+    ///     * must be a valid reference to a class
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    ///
+    /// # Returns
+    /// true if `obj` is instanceof `clazz`, false otherwise
+    /// if `obj` is null then this fn returns false for any `clazz` input
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be null or a valid reference that is not already garbage collected.
+    /// `clazz` must be a valid non-null reference to a class that is not already garbage collected.
+    ///
     pub unsafe fn IsInstanceOf(&self, obj: jobject, clazz: jclass) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -2158,6 +2236,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass) -> jboolean>(32)(self.vtable, obj, clazz)
     }
 
+    ///
+    /// this is the java == operator on 2 java objects.
+    /// The opaque handles of the 2 objects could be different but refer to the same underlying object.
+    /// This fn exists in order to be able to check this.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#IsSameObject
+    ///
+    ///
+    /// # Arguments
+    /// * `obj1` - reference to an object.
+    ///     * must be valid or null
+    ///     * must not be already garbage collected
+    /// * `obj2` - reference to the class.
+    ///     * must be valid or null
+    ///     * must not be already garbage collected
+    ///
+    /// # Returns
+    /// true if `obj1` == `obj2`, false otherwise
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj1` must be null or a valid reference that is not already garbage collected.
+    /// `obj2` must be null or a valid reference that is not already garbage collected.
+    ///
     pub unsafe fn IsSameObject(&self, obj1: jobject, obj2: jobject) -> jboolean {
         #[cfg(feature = "asserts")]
         {
