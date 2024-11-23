@@ -2147,6 +2147,8 @@ impl JNIEnv {
     ///
     /// Current thread must not be detached from JNI.
     ///
+    /// Current thread must not be currently throwing an exception.
+    ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
     ///
@@ -2179,6 +2181,8 @@ impl JNIEnv {
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
@@ -2218,6 +2222,8 @@ impl JNIEnv {
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
@@ -2260,6 +2266,8 @@ impl JNIEnv {
     ///
     /// Current thread must not be detached from JNI.
     ///
+    /// Current thread must not be currently throwing an exception.
+    ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
     ///
@@ -2277,6 +2285,47 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jobject) -> jboolean>(24)(self.vtable, obj1, obj2)
     }
 
+    ///
+    /// Gets the field id of a non-static field
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetFieldID
+    ///
+    ///
+    /// # Arguments
+    /// * `clazz` - reference to the clazz where the field is declared in.
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `name` - name of the field
+    ///     * must not be null
+    ///     * must be zero terminated utf-8
+    /// * `sig` - jni signature of the field
+    ///     * must not be null
+    ///     * must be zero terminated utf-8
+    ///
+    /// # Returns
+    /// A non-null field handle or null on error.
+    /// The field handle can be assumed to be constant for the given class and must not be freed.
+    /// It can also be safely shared with any thread or stored in a constant.
+    ///
+    /// # Throws Java Exception
+    /// * NoSuchFieldError - field with the given name and sig doesnt exist in the class
+    /// * ExceptionInInitializerError - Exception occurs in initializer of the class
+    /// * OutOfMemoryError - if the jvm runs out of memory
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must a valid reference to a class that is not already garbage collected.
+    /// `name` must be non-null and zero terminated utf-8.
+    /// `sig` must be non-null and zero terminated utf-8.
+    ///
     pub unsafe fn GetFieldID(&self, clazz: jclass, name: *const c_char, sig: *const c_char) -> jfieldID {
         #[cfg(feature = "asserts")]
         {
@@ -2289,6 +2338,44 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char, *const c_char) -> jfieldID>(94)(self.vtable, clazz, name, sig)
     }
 
+    ///
+    /// Gets the field id of a non-static field
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetFieldID
+    ///
+    ///
+    /// # Arguments
+    /// * `clazz` - reference to the clazz where the field is declared in.
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `name` - name of the field
+    /// * `sig` - jni signature of the field
+    ///
+    /// # Panics
+    /// if name or sig contain '0' bytes.
+    ///
+    /// # Returns
+    /// A non-null field handle or null on error.
+    /// The field handle can be assumed to be constant for the given class and must not be freed.
+    /// It can also be safely shared with any thread or stored in a constant.
+    ///
+    /// # Throws Java Exception
+    /// * NoSuchFieldError - field with the given name and sig doesnt exist in the class
+    /// * ExceptionInInitializerError - Exception occurs in initializer of the class
+    /// * OutOfMemoryError - if the jvm runs out of memory
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must a valid reference to a class that is not already garbage collected.
+    ///
     pub unsafe fn GetFieldID_str(&self, class: jclass, name: &str, sig: &str) -> jfieldID {
         let nstr = CString::new(name).unwrap();
         let nsig = CString::new(sig).unwrap();
