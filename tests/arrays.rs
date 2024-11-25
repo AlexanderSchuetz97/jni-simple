@@ -20,8 +20,7 @@ pub mod test {
             //let args: Vec<String> = vec!["-Xint".to_string()];
             let args: Vec<String> = vec![];
 
-            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args)
-                .expect("failed to create jvm");
+            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
             return env;
         }
 
@@ -32,8 +31,7 @@ pub mod test {
                 panic!("JVM ERROR {}", c);
             }
 
-            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut())
-                .expect("failed to attach thread")
+            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).expect("failed to attach thread")
         });
 
         env
@@ -379,12 +377,12 @@ pub mod test {
         let _lock = MUTEX.lock().unwrap();
         unsafe {
             let env = get_env();
-            let str_class = env.FindClass_str("java/lang/String");
+            let str_class = env.FindClass("java/lang/String");
             let array = env.NewObjectArray(16, str_class, null_mut());
             for x in 0..16 {
                 let element = env.GetObjectArrayElement(array, x);
                 assert!(element.is_null());
-                let nstr = env.NewStringUTF_str(format!("{}", x).as_str());
+                let nstr = env.NewStringUTF(format!("{}", x).as_str());
                 env.SetObjectArrayElement(array, x, nstr);
                 env.DeleteLocalRef(nstr);
             }

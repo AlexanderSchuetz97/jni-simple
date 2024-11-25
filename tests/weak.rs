@@ -1,7 +1,7 @@
 #[cfg(feature = "loadjvm")]
 pub mod test {
-    use std::ptr::null_mut;
     use jni_simple::*;
+    use std::ptr::null_mut;
 
     #[test]
     fn test() {
@@ -9,7 +9,7 @@ pub mod test {
             load_jvm_from_java_home().expect("failed to load jvm");
             let args: Vec<String> = vec![];
             let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
-            let clz = env.FindClass_str("Ljava/lang/Object;");
+            let clz = env.FindClass("Ljava/lang/Object;");
             let local = env.AllocObject(clz);
             let global = env.NewGlobalRef(local);
             let weak = env.NewWeakGlobalRef(local);

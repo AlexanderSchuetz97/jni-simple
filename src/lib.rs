@@ -11,14 +11,15 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::borrow::Cow;
+use std::ffi::{c_char, c_void, CStr, CString, OsStr, OsString};
 use std::fmt::{Debug, Formatter};
 use std::mem;
 #[cfg(feature = "loadjvm")]
-use std::path::{PathBuf};
-use std::ptr::{null_mut};
+use std::path::PathBuf;
 #[cfg(feature = "asserts")]
 use std::ptr::null;
+use std::ptr::null_mut;
 
 use once_cell::sync::OnceCell;
 use sync_ptr::{FromConstPtr, SyncConstPtr, SyncMutPtr};
@@ -40,10 +41,10 @@ pub const JNI_VERSION_1_2: jint = 0x00010002;
 pub const JNI_VERSION_1_4: jint = 0x00010004;
 pub const JNI_VERSION_1_6: jint = 0x00010006;
 pub const JNI_VERSION_1_8: jint = 0x00010008;
-pub const JNI_VERSION_9: jint =   0x00090000;
-pub const JNI_VERSION_10: jint =  0x000a0000;
-pub const JNI_VERSION_19: jint =  0x00130000;
-pub const JNI_VERSION_20: jint =  0x00140000;
+pub const JNI_VERSION_9: jint = 0x00090000;
+pub const JNI_VERSION_10: jint = 0x000a0000;
+pub const JNI_VERSION_19: jint = 0x00130000;
+pub const JNI_VERSION_20: jint = 0x00140000;
 pub const JNI_VERSION_21: jint = 0x00150000;
 
 pub type jlong = i64;
@@ -90,12 +91,12 @@ pub enum jobjectRefType {
     JNIInvalidRefType = 0,
     JNILocalRefType = 1,
     JNIGlobalRefType = 2,
-    JNIWeakGlobalRefType = 3
+    JNIWeakGlobalRefType = 3,
 }
 
-
 mod private {
-    pub trait Sealed {}
+    pub trait SealedJType {}
+    pub trait SealedUseCString {}
 }
 
 pub type jweak = jobject;
@@ -108,8 +109,7 @@ pub type jfieldID = jobject;
 ///
 /// Marker trait for all types that are valid to use to make variadic JNI Up-calls with.
 ///
-pub trait JType: private::Sealed+Into<jtype>+Clone+Copy {
-
+pub trait JType: private::SealedJType + Into<jtype> + Clone + Copy {
     ///
     /// Returns a single character that equals the type's JNI signature.
     ///
@@ -126,71 +126,69 @@ pub trait JType: private::Sealed+Into<jtype>+Clone+Copy {
     ///
     fn jtype_id() -> char;
 }
-impl private::Sealed for jobject {}
+impl private::SealedJType for jobject {}
 impl JType for jobject {
     #[inline(always)]
     fn jtype_id() -> char {
         'L'
     }
 }
-impl private::Sealed for jboolean {}
+impl private::SealedJType for jboolean {}
 impl JType for jboolean {
-
     #[inline(always)]
     fn jtype_id() -> char {
         'Z'
     }
 }
-impl private::Sealed for jbyte {}
+impl private::SealedJType for jbyte {}
 impl JType for jbyte {
     #[inline(always)]
     fn jtype_id() -> char {
         'B'
     }
 }
-impl private::Sealed for jshort {}
+impl private::SealedJType for jshort {}
 impl JType for jshort {
     #[inline(always)]
     fn jtype_id() -> char {
         'S'
     }
 }
-impl private::Sealed for jchar {}
+impl private::SealedJType for jchar {}
 impl JType for jchar {
     #[inline(always)]
     fn jtype_id() -> char {
         'C'
     }
 }
-impl private::Sealed for jint {}
+impl private::SealedJType for jint {}
 impl JType for jint {
     #[inline(always)]
     fn jtype_id() -> char {
         'I'
     }
 }
-impl private::Sealed for jlong {}
+impl private::SealedJType for jlong {}
 impl JType for jlong {
     #[inline(always)]
     fn jtype_id() -> char {
         'J'
     }
 }
-impl private::Sealed for jfloat {}
+impl private::SealedJType for jfloat {}
 impl JType for jfloat {
     #[inline(always)]
     fn jtype_id() -> char {
         'F'
     }
 }
-impl private::Sealed for jdouble {}
+impl private::SealedJType for jdouble {}
 impl JType for jdouble {
     #[inline(always)]
     fn jtype_id() -> char {
         'D'
     }
 }
-
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -205,7 +203,7 @@ pub union jtype {
     double: jdouble,
     object: jobject,
     class: jclass,
-    throwable: jthrowable
+    throwable: jthrowable,
 }
 
 ///
@@ -226,7 +224,7 @@ pub union jtype {
 ///
 /// unsafe fn test(env: JNIEnv, class: jclass) {
 ///     //public static void methodWith5Params(int a, int b, long c, long d, boolean e) {}
-///     let meth = env.GetStaticMethodID_str(class, "methodWith5Params", "(IIJJZ)V");
+///     let meth = env.GetStaticMethodID(class, "methodWith5Params", "(IIJJZ)V");
 ///     if meth.is_null() {
 ///         unimplemented!("handle method not found");
 ///     }
@@ -255,13 +253,15 @@ impl Debug for jtype {
             let float = std::ptr::read_unaligned(&self.float as *const jfloat);
             let double = std::ptr::read_unaligned(&self.double as *const jdouble);
 
-            f.write_fmt(format_args!("jtype union[long=0x{:x} int=0x{:x} short=0x{:x} byte=0x{:x} float={:e} double={:e}]", long, int, short, byte, float, double))
+            f.write_fmt(format_args!(
+                "jtype union[long=0x{:x} int=0x{:x} short=0x{:x} byte=0x{:x} float={:e} double={:e}]",
+                long, int, short, byte, float, double
+            ))
         }
     }
 }
 
 impl jtype {
-
     ///
     /// Helper function to "create" a jtype with a null jobject.
     ///
@@ -269,7 +269,7 @@ impl jtype {
     pub const fn null() -> jtype {
         #[cfg(target_pointer_width = "32")]
         {
-            let mut jt = jtype {long: 0};
+            let mut jt = jtype { long: 0 };
             jt.object = null_mut();
             jt
         }
@@ -347,7 +347,6 @@ impl From<jlong> for jtype {
 }
 
 impl From<jobject> for jtype {
-
     #[cfg(target_pointer_width = "64")]
     fn from(value: jobject) -> Self {
         jtype { object: value }
@@ -355,14 +354,14 @@ impl From<jobject> for jtype {
 
     #[cfg(target_pointer_width = "32")]
     fn from(value: jobject) -> Self {
-        let mut jt = jtype {long: 0};
+        let mut jt = jtype { long: 0 };
         jt.object = value;
         jt
     }
 }
 impl From<jint> for jtype {
     fn from(value: jint) -> Self {
-        let mut jt = jtype {long: 0};
+        let mut jt = jtype { long: 0 };
         jt.int = value;
         jt
     }
@@ -370,7 +369,7 @@ impl From<jint> for jtype {
 
 impl From<jshort> for jtype {
     fn from(value: jshort) -> Self {
-        let mut jt = jtype {long: 0};
+        let mut jt = jtype { long: 0 };
         jt.short = value;
         jt
     }
@@ -378,7 +377,7 @@ impl From<jshort> for jtype {
 
 impl From<jbyte> for jtype {
     fn from(value: jbyte) -> Self {
-        let mut jt = jtype {long: 0};
+        let mut jt = jtype { long: 0 };
         jt.byte = value;
         jt
     }
@@ -386,7 +385,7 @@ impl From<jbyte> for jtype {
 
 impl From<jchar> for jtype {
     fn from(value: jchar) -> Self {
-        let mut jt = jtype {long: 0};
+        let mut jt = jtype { long: 0 };
         jt.char = value;
         jt
     }
@@ -394,7 +393,7 @@ impl From<jchar> for jtype {
 
 impl From<jfloat> for jtype {
     fn from(value: jfloat) -> Self {
-        let mut jt = jtype {long: 0};
+        let mut jt = jtype { long: 0 };
         jt.float = value;
         jt
     }
@@ -407,7 +406,7 @@ impl From<jdouble> for jtype {
 }
 impl From<jboolean> for jtype {
     fn from(value: jboolean) -> Self {
-        let mut jt = jtype {long: 0};
+        let mut jt = jtype { long: 0 };
         jt.boolean = value;
         jt
     }
@@ -418,7 +417,7 @@ impl From<jboolean> for jtype {
 pub struct JNINativeMethod {
     name: *const c_char,
     signature: *const c_char,
-    fnPtr: *const c_void
+    fnPtr: *const c_void,
 }
 
 type JNIInvPtr = SyncMutPtr<*mut [*mut c_void; 10]>;
@@ -426,7 +425,7 @@ type JNIInvPtr = SyncMutPtr<*mut [*mut c_void; 10]>;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct JavaVM {
-    functions: JNIInvPtr
+    functions: JNIInvPtr,
 }
 
 #[repr(C)]
@@ -434,7 +433,7 @@ pub struct JavaVM {
 pub struct JavaVMAttachArgs {
     version: jint,
     name: *const c_char,
-    group: jobject
+    group: jobject,
 }
 
 #[repr(C)]
@@ -460,7 +459,6 @@ impl JavaVMOption {
         self.extraInfo
     }
 }
-
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -519,23 +517,19 @@ impl JNINativeMethod {
         self.name
     }
 
-
     pub fn signature(&self) -> *const c_char {
         self.signature
     }
-
 
     pub fn fnPtr(&self) -> *const c_void {
         self.fnPtr
     }
 }
 
-
 impl JavaVMAttachArgs {
     pub fn new(version: jint, name: *const c_char, group: jobject) -> Self {
         Self { version, name, group }
     }
-
 
     pub fn version(&self) -> jint {
         self.version
@@ -548,9 +542,174 @@ impl JavaVMAttachArgs {
     }
 }
 
+/// Helper trait that converts rusts various strings into a zero terminated c string for use with a JNI method.
+///
+/// This trait is implemented for:
+/// &str, String, &String,
+/// CString, CStr, *const c_char,
+/// &OsStr, OsString, &OsString,
+/// &[u8], Vec<u8>,
+///
+/// If the String contains the equivalent of a 0 byte then the string stops at the 0 byte ignoring the rest of the string.
+/// Any non Unicode characters in OsString and its derivatives will be replaced with the Unicode replacement character by using to to_str_lossy fn.
+/// Using non utf-8 binary data in the u8 slices/Vec will not be checked for validity before being converted into a *const c_char!
+/// - Doing this on with any call to JNI will result in undefined behavior.
+///
+pub trait UseCString: private::SealedUseCString {
+
+    /// Transform the string into a zero terminated string if necessary and calls the closure with it.
+    /// The pointer passed into the closure only stays valid until the closure returns.
+    /// The string is guaranteed to be 0 terminated!
+    /// The string is not guaranteed to be valid utf-8, but it can generally be assumed to be utf-8!
+    fn use_as_const_c_char<X>(self, param: impl FnOnce(*const c_char) -> X) -> X;
+}
+
+impl private::SealedUseCString for &str {}
+
+impl UseCString for &str {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        self.as_bytes().use_as_const_c_char(func)
+    }
+}
+
+impl private::SealedUseCString for String {}
+
+impl UseCString for String {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        self.into_bytes().use_as_const_c_char(func)
+    }
+}
+
+impl private::SealedUseCString for &String {}
+
+impl UseCString for &String {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        self.as_bytes().use_as_const_c_char(func)
+    }
+}
+
+impl private::SealedUseCString for CString {}
+
+impl UseCString for CString {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        func(self.as_ptr())
+    }
+}
+
+impl private::SealedUseCString for &CString {}
+
+impl UseCString for &CString {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        func(self.as_ptr())
+    }
+}
+
+impl private::SealedUseCString for &CStr {}
+
+impl UseCString for &CStr {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        func(self.as_ptr())
+    }
+}
+
+impl private::SealedUseCString for *const i8 {}
+
+impl UseCString for *const i8 {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        func(self.cast())
+    }
+}
+
+impl private::SealedUseCString for *const u8 {}
+
+impl UseCString for *const u8 {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        func(self.cast())
+    }
+}
+
+impl private::SealedUseCString for Cow<'_, str> {}
+
+impl UseCString for Cow<'_, str> {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        self.as_ref().use_as_const_c_char(func)
+    }
+}
+
+impl private::SealedUseCString for &Cow<'_, str> {}
+
+impl UseCString for &Cow<'_, str> {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        self.as_ref().use_as_const_c_char(func)
+    }
+}
+
+impl private::SealedUseCString for OsString {}
+
+impl UseCString for OsString {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        self.to_string_lossy().use_as_const_c_char(func)
+    }
+}
+
+impl private::SealedUseCString for &OsString {}
+
+impl UseCString for &OsString {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        self.to_string_lossy().use_as_const_c_char(func)
+    }
+}
+
+impl private::SealedUseCString for &OsStr {}
+
+impl UseCString for &OsStr {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        self.to_string_lossy().use_as_const_c_char(func)
+    }
+}
+
+impl private::SealedUseCString for Vec<u8> {}
+
+impl UseCString for Vec<u8> {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        self.as_slice().use_as_const_c_char(func)
+    }
+}
+
+impl private::SealedUseCString for &Vec<u8> {}
+
+impl UseCString for &Vec<u8> {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        self.as_slice().use_as_const_c_char(func)
+    }
+}
+
+
+impl private::SealedUseCString for &[u8] {}
+
+impl UseCString for &[u8] {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        if let Ok(c_str) = CStr::from_bytes_until_nul(self) {
+            return func(c_str.as_ptr())
+        }
+
+        unsafe {
+            // SAFETY: CStr::from_bytes_until_nul can only fail if the slice contains no 0 byte.
+            let c_str = CString::from_vec_unchecked(self.to_vec());
+            func(c_str.as_ptr())
+        }
+    }
+}
+
+impl private::SealedUseCString for () {}
+
+impl UseCString for () {
+    fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
+        func(std::ptr::null())
+    }
+}
 
 impl JNIEnv {
-
     ///
     /// resolves the function pointer given its linkage index of the jni vtable.
     /// The indices are documented and guaranteed by the Oracle JVM Spec.
@@ -598,6 +757,81 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable) -> jint>(4)(self.vtable)
     }
 
+    ///
+    /// Defines a class in the given classloader.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DefineClass
+    ///
+    /// # Arguments
+    /// * `name` - name of the class
+    /// * `classloader` - handle to the classloader java object. This can be null if the current JNI classloader should be used.
+    /// * `data` - the binary content of the compiled java .class file.
+    /// * `len` - the length of the data in bytes.
+    ///
+    /// # Returns
+    /// A local ref handle to the java.lang.Class (jclass) object that was just defined.
+    /// On error null is returned.
+    ///
+    /// # Throws Java Exception:
+    /// * `ClassFormatError` - if the class data does not specify a valid class.
+    /// * `ClassCircularityError` - if a class or interface would be its own superclass or superinterface.
+    /// * `OutOfMemoryError` - if the system runs out of memory.
+    /// * `SecurityException` - if the caller attempts to define a class in the "java" package tree.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// Current thread is not currently throwing a Java exception.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    ///
+    /// The `classloader` handle must be a valid handle if it is not null.
+    /// `name` must be a valid pointer to a 0 terminated utf-8 string. It must not be null.
+    /// `data` must not be null.
+    /// `len` must not be larger than the actual length of the data.
+    /// `len` must not be negative.
+    ///
+    /// # Example
+    /// ```rust
+    /// use std::ffi::CString;
+    /// use std::ptr::null_mut;
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn define_main_class(env: JNIEnv) -> jclass {
+    ///     let class_blob = &[0u8]; // = include_bytes!("../my_java_project/src/main/java/org/example/Main.class");
+    ///     let name = CString::new("org/example/Main").unwrap();
+    ///     let class = env.DefineClass(name.as_ptr(), null_mut(), class_blob.as_ptr().cast(), class_blob.len() as i32);
+    ///     if env.ExceptionCheck() {
+    ///         env.ExceptionDescribe();
+    ///         panic!("Failed to load main class check stderr for an error");
+    ///     }
+    ///     if class.is_null() {
+    ///         panic!("Failed to load main class. JVM did not throw an exception!"); //Unlikely
+    ///     }
+    ///     class
+    /// }
+    /// ```
+    ///
+    pub unsafe fn DefineClass(&self, name: impl UseCString, classloader: jobject, data: *const jbyte, len: i32) -> jclass {
+        name.use_as_const_c_char(|name| {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("DefineClass");
+                self.check_no_exception("DefineClass");
+                assert!(!name.is_null(), "DefineClass name is null");
+                self.check_is_classloader_or_null("DefineClass", classloader);
+                assert!(data.is_null(), "DefineClass data is null");
+                if len < 0 {
+                    panic!("DefineClass len is negative {}", len);
+                }
+            }
+
+            self.jni::<extern "system" fn(JNIEnvVTable, *const c_char, jobject, *const jbyte, i32) -> jclass>(5)(self.vtable, name, classloader, data, len)
+        })
+    }
 
     ///
     /// Defines a class in the given classloader.
@@ -641,7 +875,7 @@ impl JNIEnv {
     /// unsafe fn define_main_class(env: JNIEnv) -> jclass {
     ///     let class_blob = &[0u8]; // = include_bytes!("../my_java_project/src/main/java/org/example/Main.class");
     ///     let name = CString::new("org/example/Main").unwrap();
-    ///     let class = env.DefineClass(name.as_ptr(), null_mut(), class_blob.as_slice());
+    ///     let class = env.DefineClass_from_slice(name.as_ptr(), null_mut(), class_blob);
     ///     if env.ExceptionCheck() {
     ///         env.ExceptionDescribe();
     ///         panic!("Failed to load main class check stderr for an error");
@@ -653,75 +887,11 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn DefineClass(&self, name: *const c_char, classloader: jobject, data: &[u8]) -> jclass {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("DefineClass");
-            self.check_no_exception("DefineClass");
-            //TODO check if classloader is valid or null
-            assert!(!name.is_null(), "DefineClass name is null");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, *const c_char, jobject, *const u8, i32) -> jclass>(5)
-            (self.vtable, name, classloader, data.as_ptr(), data.len() as i32)
+    pub unsafe fn DefineClass_from_slice(&self, name: impl UseCString, classloader: jobject, data: impl AsRef<[u8]>) -> jclass {
+        let slice = data.as_ref();
+        self.DefineClass(name, classloader, slice.as_ptr() as *const jbyte, slice.len() as i32)
     }
 
-    ///
-    /// Defines a class in the given classloader.
-    /// Convenience function that wraps DefineClass but takes a &str as name argument instead of a *const c_char.
-    ///
-    /// # Arguments
-    /// * `name` - name of the class
-    /// * `classloader` - handle to the classloader java object. This can be null if the current JNI classloader should be used.
-    /// * `data` - the binary content of the compiled java .class file.
-    ///
-    /// # Panics
-    /// if name contains a '0' byte
-    ///
-    /// # Returns
-    /// A local ref handle to the java.lang.Class (jclass) object that was just defined.
-    /// On error null is returned.
-    ///
-    /// # Throws Java Exception:
-    /// * `ClassFormatError` - if the class data does not specify a valid class.
-    /// * `ClassCircularityError` - if a class or interface would be its own superclass or superinterface.
-    /// * `OutOfMemoryError` - if the system runs out of memory.
-    /// * `SecurityException` - if the caller attempts to define a class in the "java" package tree.
-    ///
-    /// # Safety
-    ///
-    /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
-    ///
-    /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
-    ///
-    /// The `classloader` handle must be a valid handle if it is not null.
-    ///
-    /// # Example
-    /// ```rust
-    /// use std::ptr::null_mut;
-    /// use jni_simple::{*};
-    ///
-    /// unsafe fn define_main_class(env: JNIEnv) -> jclass {
-    ///     let class_blob = &[0u8]; // = include_bytes!("../my_java_project/src/main/java/org/example/Main.class");
-    ///     let class = env.DefineClass_str("org/example/Main", null_mut(), class_blob.as_slice());
-    ///     if env.ExceptionCheck() {
-    ///         env.ExceptionDescribe();
-    ///         panic!("Failed to load main class check stderr for an error");
-    ///     }
-    ///     if class.is_null() {
-    ///         panic!("Failed to load main class. JVM did not throw an exception!"); //Unlikely
-    ///     }
-    ///     class
-    /// }
-    /// ```
-    ///
-    pub unsafe fn DefineClass_str(&self, name: &str, classloader: jobject, data: &[u8]) -> jclass {
-        let str = CString::new(name).unwrap();
-        self.DefineClass(str.as_ptr(), classloader, data)
-    }
 
     ///
     /// Finds or loads a class.
@@ -775,68 +945,16 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn FindClass(&self, name: *const c_char) -> jclass {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("FindClass");
-            self.check_no_exception("FindClass");
-            assert!(!name.is_null(), "FindClass name is null");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, *const c_char) -> jclass>(6)(self.vtable, name)
-    }
-
-    ///
-    /// Finds or loads a class.
-    /// If the class was previously loaded by the current JNI Classloader or any parent of it then the class is simply returned.
-    /// If the class was not previously loaded then the current JNI Classloader will attempt to find and load it.
-    ///
-    /// # Arguments
-    /// * `name` - name of the class in jni notation (i.e: "java/lang/Object")
-    ///
-    /// # Panics
-    /// if `name` contains a 0 byte.
-    ///
-    /// # Returns
-    /// A local ref handle to the java.lang.Class (jclass) object.
-    /// On error null is returned.
-    ///
-    /// # Throws Java Exception:
-    /// * `ClassFormatError` - if the class data does not specify a valid class.
-    /// * `ClassCircularityError` - if a class or interface would be its own superclass or superinterface.
-    /// * `OutOfMemoryError` - if the system runs out of memory.
-    /// * `NoClassDefFoundError` -  if no definition for a requested class or interface can be found.
-    ///
-    /// # Safety
-    ///
-    /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
-    ///
-    /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
-    ///
-    ///
-    /// # Example
-    /// ```rust
-    /// use jni_simple::{*};
-    ///
-    /// unsafe fn find_main_class(env: JNIEnv) -> jclass {
-    ///     let class = env.FindClass_str("org/example/Main");
-    ///     if env.ExceptionCheck() {
-    ///         env.ExceptionDescribe();
-    ///         panic!("Failed to find main class check stderr for an error");
-    ///     }
-    ///     if class.is_null() {
-    ///         panic!("Failed to find main class. JVM did not throw an exception!"); //Unlikely
-    ///     }
-    ///     class
-    /// }
-    /// ```
-    ///
-    pub unsafe fn FindClass_str(&self, name: &str) -> jclass {
-        let str = CString::new(name).unwrap();
-        self.FindClass(str.as_ptr())
+    pub unsafe fn FindClass(&self, name: impl UseCString) -> jclass {
+        name.use_as_const_c_char(|name| {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("FindClass");
+                self.check_no_exception("FindClass");
+                assert!(!name.is_null(), "FindClass name is null");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, *const c_char) -> jclass>(6)(self.vtable, name)
+        })
     }
 
     ///
@@ -926,7 +1044,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn is_throwable_class(env: JNIEnv, class: jclass) -> bool {
-    ///     let throwable_class = env.FindClass_str("java/lang/Throwable");
+    ///     let throwable_class = env.FindClass("java/lang/Throwable");
     ///     if throwable_class.is_null() {
     ///         env.ExceptionDescribe();
     ///         panic!("java/lang/Throwable not found! See stderr!");
@@ -1005,12 +1123,12 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn throw_null_pointer_exception(env: JNIEnv) {
-    ///     let npe_class = env.FindClass_str("java/lang/NullPointerException");
+    ///     let npe_class = env.FindClass("java/lang/NullPointerException");
     ///     if npe_class.is_null() {
     ///         env.ExceptionDescribe();
     ///         panic!("java/lang/NullPointerException not found!");
     ///     }
-    ///     let npe_constructor = env.GetMethodID_str(npe_class, "<init>", "()V");
+    ///     let npe_constructor = env.GetMethodID(npe_class, "<init>", "()V");
     ///     if npe_constructor.is_null() {
     ///         env.ExceptionDescribe();
     ///         env.DeleteLocalRef(npe_class);
@@ -1100,14 +1218,14 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn throw_illegal_argument_exception(env: JNIEnv, message: Option<&str>) {
-    ///     let npe_class = env.FindClass_str("java/lang/IllegalArgumentException");
+    ///     let npe_class = env.FindClass("java/lang/IllegalArgumentException");
     ///     if npe_class.is_null() {
     ///         env.ExceptionDescribe();
     ///         panic!("java/lang/IllegalArgumentException not found!");
     ///     }
     ///     match message {
     ///         None => {
-    ///             env.ThrowNew(npe_class, null());
+    ///             env.ThrowNew(npe_class, ());
     ///         }
     ///         Some(message) => {
     ///             let message = CString::new(message).expect("message contains 0 byte!");
@@ -1118,90 +1236,17 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn ThrowNew(&self, class: jclass, message: *const c_char) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ThrowNew");
-            self.check_no_exception("ThrowNew");
-            self.check_is_exception_class("ThrowNew", class);
-            self.check_is_not_abstract("ThrowNew", class);
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char) -> jint>(14)(self.vtable, class, message)
-    }
-
-
-    ///
-    /// Throws a new instance `class`. This is roughly equal to `throw new ...` in Java.
-    ///
-    /// # Arguments
-    /// * `class` - handle to a non-abstract class instances of which can be cast to java.lang.Throwable. Must not be null.
-    /// * `message` - the exception message.
-    ///
-    /// # Panics
-    /// If `message` contains any 0 bytes.
-    ///
-    /// # Returns
-    /// JNI_OK on success. a negative value on failure.
-    ///
-    /// ## If JNI_OK was returned
-    /// The JVM will be throwing an exception as a result of this call.
-    ///
-    /// When the current thread is throwing an exception you may only call the following JNI functions:
-    /// * ExceptionOccurred
-    /// * ExceptionDescribe
-    /// * ExceptionClear
-    /// * ExceptionCheck
-    /// * ReleaseStringChars
-    /// * ReleaseStringUTFChars
-    /// * ReleaseStringCritical
-    /// * Release<Type>ArrayElements
-    /// * ReleasePrimitiveArrayCritical
-    /// * DeleteLocalRef
-    /// * DeleteGlobalRef
-    /// * DeleteWeakGlobalRef
-    /// * MonitorExit
-    /// * PushLocalFrame
-    /// * PopLocalFrame
-    ///
-    /// Calling any other JNI function is UB.
-    ///
-    /// # Throws Java Exception:
-    /// * NoSuchMethodError if no single argument String constructor exists in the given class.
-    ///
-    /// # Safety
-    ///
-    /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
-    ///
-    /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
-    ///
-    /// `class` must be a valid non-null handle to a class which is:
-    /// * Not abstract
-    /// * Is a descendant of java.lang.Throwable (instances can be cast to Throwable)
-    ///
-    /// # Example
-    /// ```rust
-    /// use std::ptr::null;
-    /// use jni_simple::{*};
-    ///
-    /// unsafe fn throw_illegal_argument_exception(env: JNIEnv, message: &str) {
-    ///     let npe_class = env.FindClass_str("java/lang/IllegalArgumentException");
-    ///     if npe_class.is_null() {
-    ///         env.ExceptionDescribe();
-    ///         panic!("java/lang/IllegalArgumentException not found!");
-    ///     }
-    ///     env.ThrowNew_str(npe_class, message);
-    ///     env.DeleteLocalRef(npe_class);
-    /// }
-    /// ```
-    ///
-    ///
-    pub unsafe fn ThrowNew_str(&self, clazz: jclass, message: &str) -> jint {
-        let str = CString::new(message).unwrap();
-        self.ThrowNew(clazz, str.as_ptr())
+    pub unsafe fn ThrowNew(&self, class: jclass, message: impl UseCString) -> jint {
+        message.use_as_const_c_char(|message| {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ThrowNew");
+                self.check_no_exception("ThrowNew");
+                self.check_is_exception_class("ThrowNew", class);
+                self.check_is_not_abstract("ThrowNew", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char) -> jint>(14)(self.vtable, class, message)
+        })
     }
 
     ///
@@ -1228,15 +1273,15 @@ impl JNIEnv {
     ///
     ///
     /// unsafe fn test(env: JNIEnv) {
-    ///     let special_exception = env.FindClass_str("org/example/SuperSpecialException");
+    ///     let special_exception = env.FindClass("org/example/SuperSpecialException");
     ///     if special_exception.is_null() {
     ///         unimplemented!("handle class not found")
     ///     }
-    ///     let my_class = env.FindClass_str("org/example/TestClass");
+    ///     let my_class = env.FindClass("org/example/TestClass");
     ///     if my_class.is_null() {
     ///         unimplemented!("handle class not found")
     ///     }
-    ///     let my_zero_arg_constructor = env.GetMethodID_str(my_class, "<init>", "()V");
+    ///     let my_zero_arg_constructor = env.GetMethodID(my_class, "<init>", "()V");
     ///     if my_zero_arg_constructor.is_null() {
     ///         unimplemented!("handle no zero arg constructor")
     ///     }
@@ -1284,7 +1329,7 @@ impl JNIEnv {
     ///
     ///
     /// unsafe fn test(env: JNIEnv) {
-    ///     let my_class = env.FindClass_str("org/example/TestClass");
+    ///     let my_class = env.FindClass("org/example/TestClass");
     ///     if my_class.is_null() {
     ///         env.ExceptionDescribe();
     ///         panic!("Class not found check stderr");
@@ -1323,10 +1368,10 @@ impl JNIEnv {
     ///
     ///
     /// unsafe fn test(env: JNIEnv) {
-    ///     let mut my_class = env.FindClass_str("org/example/TestClass");
+    ///     let mut my_class = env.FindClass("org/example/TestClass");
     ///     if my_class.is_null() {
     ///         env.ExceptionClear();
-    ///         my_class = env.FindClass_str("org/example/FallbackClass");
+    ///         my_class = env.FindClass("org/example/FallbackClass");
     ///     }
     ///     unimplemented!()
     /// }
@@ -1354,32 +1399,15 @@ impl JNIEnv {
     ///
     /// `msg` must be a non-null pointer to a valid 0 terminated utf-8 string.
     ///
-    pub unsafe fn FatalError(&self, msg: *const c_char) {
-        #[cfg(feature = "asserts")]
-        {
-            assert!(!msg.is_null(), "FatalError msg is null");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, *const c_char)>(18)(self.vtable, msg);
-        unreachable!("FatalError");
-    }
-
-    ///
-    /// Raises a fatal error and does not expect the VM to recover. This function does not return.
-    ///
-    /// # Arguments
-    /// * `message` - message that should be present in the jvm error report that will be printed to stdout/stderr.
-    ///
-    /// # Panics
-    /// If `message` contains any 0 bytes.
-    ///
-    /// # Safety
-    ///
-    /// Current thread must not be detached from JNI.
-    ///
-    pub unsafe fn FatalError_str(&self, message: &str) {
-        let str = CString::new(message).unwrap().into_raw();
-        self.FatalError(str);
-        unreachable!("FatalError");
+    pub unsafe fn FatalError(&self, msg: impl UseCString) -> ! {
+        msg.use_as_const_c_char(|msg| {
+            #[cfg(feature = "asserts")]
+            {
+                assert!(!msg.is_null(), "FatalError msg is null");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, *const c_char)>(18)(self.vtable, msg);
+            unreachable!("FatalError");
+        })
     }
 
     ///
@@ -1403,11 +1431,11 @@ impl JNIEnv {
     ///
     ///
     /// unsafe fn test(env: JNIEnv) {
-    ///     let my_class = env.FindClass_str("org/example/TestClass");
+    ///     let my_class = env.FindClass("org/example/TestClass");
     ///     if my_class.is_null() {
     ///         unimplemented!("handle class not found")
     ///     }
-    ///     let my_zero_arg_constructor = env.GetMethodID_str(my_class, "<init>", "()V");
+    ///     let my_zero_arg_constructor = env.GetMethodID(my_class, "<init>", "()V");
     ///     if my_zero_arg_constructor.is_null() {
     ///         unimplemented!("handle no zero arg constructor")
     ///     }
@@ -1495,7 +1523,7 @@ impl JNIEnv {
                 jobjectRefType::JNIInvalidRefType => panic!("DeleteGlobalRef invalid non null reference"),
                 jobjectRefType::JNILocalRefType => panic!("DeleteGlobalRef local reference passed"),
                 jobjectRefType::JNIWeakGlobalRefType => panic!("DeleteGlobalRef weak global reference passed"),
-                _=> {}
+                _ => {}
             }
         }
         self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(22)(self.vtable, obj)
@@ -1768,7 +1796,7 @@ impl JNIEnv {
                     jobjectRefType::JNIInvalidRefType => panic!("DeleteWeakGlobalRef invalid non null reference"),
                     jobjectRefType::JNILocalRefType => panic!("DeleteWeakGlobalRef local reference passed"),
                     jobjectRefType::JNIGlobalRefType => panic!("DeleteWeakGlobalRef strong global reference passed"),
-                    _=> {}
+                    _ => {}
                 }
             }
         }
@@ -2326,22 +2354,770 @@ impl JNIEnv {
     /// `name` must be non-null and zero terminated utf-8.
     /// `sig` must be non-null and zero terminated utf-8.
     ///
-    pub unsafe fn GetFieldID(&self, clazz: jclass, name: *const c_char, sig: *const c_char) -> jfieldID {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetFieldID");
-            self.check_no_exception("GetFieldID");
-            assert!(!name.is_null(), "GetFieldID name is null");
-            assert!(!sig.is_null(), "GetFieldID sig is null");
-            self.check_is_class("GetFieldID", clazz);
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char, *const c_char) -> jfieldID>(94)(self.vtable, clazz, name, sig)
+    pub unsafe fn GetFieldID(&self, clazz: jclass, name: impl UseCString, sig: impl UseCString) -> jfieldID {
+        name.use_as_const_c_char(|name| {
+            sig.use_as_const_c_char(|sig| {
+                #[cfg(feature = "asserts")]
+                {
+                    self.check_not_critical("GetFieldID");
+                    self.check_no_exception("GetFieldID");
+                    assert!(!name.is_null(), "GetFieldID name is null");
+                    assert!(!sig.is_null(), "GetFieldID sig is null");
+                    self.check_is_class("GetFieldID", clazz);
+                }
+                self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char, *const c_char) -> jfieldID>(94)(self.vtable, clazz, name, sig)
+            })
+        })
     }
 
     ///
-    /// Gets the field id of a non-static field
+    /// Returns a local reference from a field in an object.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetFieldID
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a object field
+    ///
+    /// # Returns
+    /// A local reference to the fields value or null if the field is null
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is an object and not a primitve.
+    ///
+    pub unsafe fn GetObjectField(&self, obj: jobject, fieldID: jfieldID) -> jobject {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("GetObjectField");
+            self.check_no_exception("GetObjectField");
+            self.check_field_type_object("GetObjectField", obj, fieldID, "object");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jobject>(95)(self.vtable, obj, fieldID)
+    }
+
+    ///
+    /// Returns a boolean field value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a boolean field
+    ///
+    /// # Returns
+    /// The boolean field value
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a boolean and not something else.
+    ///
+    pub unsafe fn GetBooleanField(&self, obj: jobject, fieldID: jfieldID) -> jboolean {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("GetBooleanField");
+            self.check_no_exception("GetBooleanField");
+            self.check_field_type_object("GetBooleanField", obj, fieldID, "boolean");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jboolean>(96)(self.vtable, obj, fieldID)
+    }
+
+    ///
+    /// Returns a byte field value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a byte field
+    ///
+    /// # Returns
+    /// The byte field value
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a byte and not something else.
+    ///
+    pub unsafe fn GetByteField(&self, obj: jobject, fieldID: jfieldID) -> jbyte {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("GetByteField");
+            self.check_no_exception("GetByteField");
+            self.check_field_type_object("GetByteField", obj, fieldID, "byte");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jbyte>(97)(self.vtable, obj, fieldID)
+    }
+
+    ///
+    /// Returns a char field value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a char field
+    ///
+    /// # Returns
+    /// The char field value
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a char and not something else.
+    ///
+    pub unsafe fn GetCharField(&self, obj: jobject, fieldID: jfieldID) -> jchar {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("GetCharField");
+            self.check_no_exception("GetCharField");
+            self.check_field_type_object("GetCharField", obj, fieldID, "char");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jchar>(98)(self.vtable, obj, fieldID)
+    }
+
+    ///
+    /// Returns a short field value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a short field
+    ///
+    /// # Returns
+    /// The short field value
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a short and not something else.
+    ///
+    pub unsafe fn GetShortField(&self, obj: jobject, fieldID: jfieldID) -> jshort {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("GetShortField");
+            self.check_no_exception("GetShortField");
+            self.check_field_type_object("GetShortField", obj, fieldID, "short");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jshort>(99)(self.vtable, obj, fieldID)
+    }
+
+    ///
+    /// Returns a int field value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a int field
+    ///
+    /// # Returns
+    /// The int field value
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a int and not something else.
+    ///
+    pub unsafe fn GetIntField(&self, obj: jobject, fieldID: jfieldID) -> jint {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("GetIntField");
+            self.check_no_exception("GetIntField");
+            self.check_field_type_object("GetIntField", obj, fieldID, "int");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jint>(100)(self.vtable, obj, fieldID)
+    }
+
+    ///
+    /// Returns a int field value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a long field
+    ///
+    /// # Returns
+    /// The long field value
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a long and not something else.
+    ///
+    pub unsafe fn GetLongField(&self, obj: jobject, fieldID: jfieldID) -> jlong {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("GetLongField");
+            self.check_no_exception("GetLongField");
+            self.check_field_type_object("GetLongField", obj, fieldID, "long");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jlong>(101)(self.vtable, obj, fieldID)
+    }
+
+    ///
+    /// Returns a float field value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a long field
+    ///
+    /// # Returns
+    /// The float field value
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a float and not something else.
+    ///
+    pub unsafe fn GetFloatField(&self, obj: jobject, fieldID: jfieldID) -> jfloat {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("GetFloatField");
+            self.check_no_exception("GetFloatField");
+            self.check_field_type_object("GetFloatField", obj, fieldID, "float");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jfloat>(102)(self.vtable, obj, fieldID)
+    }
+
+    ///
+    /// Returns a double field value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a double field
+    ///
+    /// # Returns
+    /// The double field value
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a double and not something else.
+    ///
+    pub unsafe fn GetDoubleField(&self, obj: jobject, fieldID: jfieldID) -> jdouble {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("GetDoubleField");
+            self.check_no_exception("GetDoubleField");
+            self.check_field_type_object("GetDoubleField", obj, fieldID, "double");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jdouble>(103)(self.vtable, obj, fieldID)
+    }
+
+    ///
+    /// Sets a object field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value`
+    ///     * must be null or valid
+    ///     * must not be already garbage collected (if non-null)
+    ///     * must be assignable to the field type (if non-null)
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is an object and not a primitve.
+    /// `value` must be a valid reference to the object that is not already garbage collected or it must be null.
+    /// `value` must be assignable to the field type (i.e. if it's a String field setting to an ArrayList for example is UB)
+    ///
+    pub unsafe fn SetObjectField(&self, obj: jobject, fieldID: jfieldID, value: jobject) {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("SetObjectField");
+            self.check_no_exception("SetObjectField");
+            self.check_field_type_object("SetObjectField", obj, fieldID, "object");
+            self.check_ref_obj_permit_null("SetObjectField", value);
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jobject)>(104)(self.vtable, obj, fieldID, value)
+    }
+
+    ///
+    /// Sets a boolean field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - the value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a boolean.
+    ///
+    pub unsafe fn SetBooleanField(&self, obj: jobject, fieldID: jfieldID, value: jboolean) {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("SetBooleanField");
+            self.check_no_exception("SetBooleanField");
+            self.check_field_type_object("SetBooleanField", obj, fieldID, "boolean");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(105)(self.vtable, obj, fieldID, value)
+    }
+
+    ///
+    /// Sets a byte field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - the value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a byte.
+    ///
+    pub unsafe fn SetByteField(&self, obj: jobject, fieldID: jfieldID, value: jbyte) {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("SetByteField");
+            self.check_no_exception("SetByteField");
+            self.check_field_type_object("SetByteField", obj, fieldID, "byte");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jbyte)>(106)(self.vtable, obj, fieldID, value)
+    }
+
+    ///
+    /// Sets a char field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - the value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a char.
+    ///
+    pub unsafe fn SetCharField(&self, obj: jobject, fieldID: jfieldID, value: jchar) {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("SetCharField");
+            self.check_no_exception("SetCharField");
+            self.check_field_type_object("SetCharField", obj, fieldID, "char");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jchar)>(107)(self.vtable, obj, fieldID, value)
+    }
+
+    ///
+    /// Sets a short field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - the value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a short.
+    ///
+    pub unsafe fn SetShortField(&self, obj: jobject, fieldID: jfieldID, value: jshort) {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("SetShortField");
+            self.check_no_exception("SetShortField");
+            self.check_field_type_object("SetShortField", obj, fieldID, "short");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jshort)>(108)(self.vtable, obj, fieldID, value)
+    }
+
+    ///
+    /// Sets a int field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - the value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a int.
+    ///
+    pub unsafe fn SetIntField(&self, obj: jobject, fieldID: jfieldID, value: jint) {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("SetIntField");
+            self.check_no_exception("SetIntField");
+            self.check_field_type_object("SetIntField", obj, fieldID, "int");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jint)>(109)(self.vtable, obj, fieldID, value)
+    }
+
+    ///
+    /// Sets a long field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - the value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a long.
+    ///
+    pub unsafe fn SetLongField(&self, obj: jobject, fieldID: jfieldID, value: jlong) {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("SetLongField");
+            self.check_no_exception("SetLongField");
+            self.check_field_type_object("SetLongField", obj, fieldID, "long");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jlong)>(110)(self.vtable, obj, fieldID, value)
+    }
+
+    ///
+    /// Sets a float field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - the value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a float.
+    ///
+    pub unsafe fn SetFloatField(&self, obj: jobject, fieldID: jfieldID, value: jfloat) {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("SetFloatField");
+            self.check_no_exception("SetFloatField");
+            self.check_field_type_object("SetFloatField", obj, fieldID, "float");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jfloat)>(111)(self.vtable, obj, fieldID, value)
+    }
+
+    ///
+    /// Sets a double field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - the value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the object that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must not be from a static field
+    /// `fieldID` must refer to a field that is a double.
+    ///
+    pub unsafe fn SetDoubleField(&self, obj: jobject, fieldID: jfieldID, value: jdouble) {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("SetDoubleField");
+            self.check_no_exception("SetDoubleField");
+            self.check_field_type_object("SetDoubleField", obj, fieldID, "double");
+        }
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(112)(self.vtable, obj, fieldID, value)
+    }
+
+    ///
+    /// Gets the method id of a non-static method
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetMethodID
     ///
     ///
     /// # Arguments
@@ -2349,11 +3125,12 @@ impl JNIEnv {
     ///     * must be valid
     ///     * must not be null
     ///     * must not be already garbage collected
-    /// * `name` - name of the field
-    /// * `sig` - jni signature of the field
-    ///
-    /// # Panics
-    /// if name or sig contain '0' bytes.
+    /// * `name` - name of the method
+    ///     * must not be null
+    ///     * must be zero terminated utf-8
+    /// * `sig` - jni signature of the method
+    ///     * must not be null
+    ///     * must be zero terminated utf-8
     ///
     /// # Returns
     /// A non-null field handle or null on error.
@@ -2361,7 +3138,7 @@ impl JNIEnv {
     /// It can also be safely shared with any thread or stored in a constant.
     ///
     /// # Throws Java Exception
-    /// * NoSuchFieldError - field with the given name and sig doesnt exist in the class
+    /// * NoSuchMethodError - method with the given name and sig doesn't exist in the class
     /// * ExceptionInInitializerError - Exception occurs in initializer of the class
     /// * OutOfMemoryError - if the jvm runs out of memory
     ///
@@ -2375,213 +3152,63 @@ impl JNIEnv {
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
     ///
     /// `clazz` must a valid reference to a class that is not already garbage collected.
+    /// `name` must be non-null and zero terminated utf-8.
+    /// `sig` must be non-null and zero terminated utf-8.
     ///
-    pub unsafe fn GetFieldID_str(&self, class: jclass, name: &str, sig: &str) -> jfieldID {
-        let nstr = CString::new(name).unwrap();
-        let nsig = CString::new(sig).unwrap();
-        self.GetFieldID(class, nstr.as_ptr(), nsig.as_ptr())
+    pub unsafe fn GetMethodID(&self, class: jclass, name: impl UseCString, sig: impl UseCString) -> jmethodID {
+        name.use_as_const_c_char(|name| {
+            sig.use_as_const_c_char(|sig| {
+                #[cfg(feature = "asserts")]
+                {
+                    self.check_not_critical("GetMethodID");
+                    self.check_no_exception("GetMethodID");
+                    assert!(!name.is_null(), "GetMethodID name is null");
+                    assert!(!sig.is_null(), "GetMethodID sig is null");
+                    self.check_is_class("GetMethodID", class);
+                }
+                self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(33)(self.vtable, class, name, sig)
+            })
+        })
     }
 
-    pub unsafe fn GetObjectField(&self, obj: jobject, fieldID: jfieldID) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetObjectField");
-            self.check_no_exception("GetObjectField");
-            self.check_field_type_object("GetObjectField", obj, fieldID, "object");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jobject>(95)(self.vtable, obj, fieldID)
-    }
-
-    pub unsafe fn GetBooleanField(&self, obj: jobject, fieldID: jfieldID) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetBooleanField");
-            self.check_no_exception("GetBooleanField");
-            self.check_field_type_object("GetBooleanField", obj, fieldID, "boolean");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jboolean>(96)(self.vtable, obj, fieldID)
-    }
-
-    pub unsafe fn GetByteField(&self, obj: jobject, fieldID: jfieldID) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetByteField");
-            self.check_no_exception("GetByteField");
-            self.check_field_type_object("GetByteField", obj, fieldID, "byte");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jbyte>(97)(self.vtable, obj, fieldID)
-    }
-
-    pub unsafe fn GetCharField(&self, obj: jobject, fieldID: jfieldID) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetCharField");
-            self.check_no_exception("GetCharField");
-            self.check_field_type_object("GetCharField", obj, fieldID, "char");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jchar>(98)(self.vtable, obj, fieldID)
-    }
-
-    pub unsafe fn GetShortField(&self, obj: jobject, fieldID: jfieldID) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetShortField");
-            self.check_no_exception("GetShortField");
-            self.check_field_type_object("GetShortField", obj, fieldID, "short");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jshort>(99)(self.vtable, obj, fieldID)
-    }
-
-    pub unsafe fn GetIntField(&self, obj: jobject, fieldID: jfieldID) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetIntField");
-            self.check_no_exception("GetIntField");
-            self.check_field_type_object("GetIntField", obj, fieldID, "int");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jint>(100)(self.vtable, obj, fieldID)
-    }
-
-    pub unsafe fn GetLongField(&self, obj: jobject, fieldID: jfieldID) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetLongField");
-            self.check_no_exception("GetLongField");
-            self.check_field_type_object("GetLongField", obj, fieldID, "long");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jlong>(101)(self.vtable, obj, fieldID)
-    }
-
-    pub unsafe fn GetFloatField(&self, obj: jobject, fieldID: jfieldID) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetFloatField");
-            self.check_no_exception("GetFloatField");
-            self.check_field_type_object("GetFloatField", obj, fieldID, "float");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jfloat>(102)(self.vtable, obj, fieldID)
-    }
-
-    pub unsafe fn GetDoubleField(&self, obj: jobject, fieldID: jfieldID) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetDoubleField");
-            self.check_no_exception("GetDoubleField");
-            self.check_field_type_object("GetDoubleField", obj, fieldID, "double");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jdouble>(103)(self.vtable, obj, fieldID)
-    }
-
-    pub unsafe fn SetObjectField(&self, obj: jobject, fieldID: jfieldID, value: jobject) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetObjectField");
-            self.check_no_exception("SetObjectField");
-            self.check_field_type_object("SetObjectField", obj, fieldID, "object");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jobject)>(104)(self.vtable, obj, fieldID, value)
-    }
-
-    pub unsafe fn SetBooleanField(&self, obj: jobject, fieldID: jfieldID, value: jboolean) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetBooleanField");
-            self.check_no_exception("SetBooleanField");
-            self.check_field_type_object("SetBooleanField", obj, fieldID, "boolean");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(105)(self.vtable, obj, fieldID, value)
-    }
-
-    pub unsafe fn SetByteField(&self, obj: jobject, fieldID: jfieldID, value: jbyte) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetByteField");
-            self.check_no_exception("SetByteField");
-            self.check_field_type_object("SetByteField", obj, fieldID, "byte");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jbyte)>(106)(self.vtable, obj, fieldID, value)
-    }
-
-    pub unsafe fn SetCharField(&self, obj: jobject, fieldID: jfieldID, value: jchar) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetCharField");
-            self.check_no_exception("SetCharField");
-            self.check_field_type_object("SetCharField", obj, fieldID, "char");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jchar)>(107)(self.vtable, obj, fieldID, value)
-    }
-
-    pub unsafe fn SetShortField(&self, obj: jobject, fieldID: jfieldID, value: jshort) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetShortField");
-            self.check_no_exception("SetShortField");
-            self.check_field_type_object("SetShortField", obj, fieldID, "short");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jshort)>(108)(self.vtable, obj, fieldID, value)
-    }
-
-    pub unsafe fn SetIntField(&self, obj: jobject, fieldID: jfieldID, value: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetIntField");
-            self.check_no_exception("SetIntField");
-            self.check_field_type_object("SetIntField", obj, fieldID, "int");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jint)>(109)(self.vtable, obj, fieldID, value)
-    }
-
-    pub unsafe fn SetLongField(&self, obj: jobject, fieldID: jfieldID, value: jlong) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetLongField");
-            self.check_no_exception("SetLongField");
-            self.check_field_type_object("SetLongField", obj, fieldID, "long");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jlong)>(110)(self.vtable, obj, fieldID, value)
-    }
-
-    pub unsafe fn SetFloatField(&self, obj: jobject, fieldID: jfieldID, value: jfloat) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetFloatField");
-            self.check_no_exception("SetFloatField");
-            self.check_field_type_object("SetFloatField", obj, fieldID, "float");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jfloat)>(111)(self.vtable, obj, fieldID, value)
-    }
-
-    pub unsafe fn SetDoubleField(&self, obj: jobject, fieldID: jfieldID, value: jdouble) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetDoubleField");
-            self.check_no_exception("SetDoubleField");
-            self.check_field_type_object("SetDoubleField", obj, fieldID, "double");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(112)(self.vtable, obj, fieldID, value)
-    }
-
-
-
-    pub unsafe fn GetMethodID(&self, class: jclass, name: *const c_char, sig: *const c_char) -> jmethodID {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetMethodID");
-            self.check_no_exception("GetMethodID");
-            assert!(!name.is_null(), "GetMethodID name is null");
-            assert!(!sig.is_null(), "GetMethodID sig is null");
-            self.check_is_class("GetMethodID", class);
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(33)(self.vtable, class, name, sig)
-    }
-
-    pub unsafe fn GetMethodID_str(&self, class: jclass, name: &str, sig: &str) -> jmethodID {
-        let nstr = CString::new(name).unwrap();
-        let nsig = CString::new(sig).unwrap();
-        self.GetMethodID(class, nstr.as_ptr(), nsig.as_ptr())
-    }
-
+    ///
+    /// Calls a non-static java method that returns void
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return void
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallVoidMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) {
         #[cfg(feature = "asserts")]
         {
@@ -2592,6 +3219,39 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype)>(63)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method that has 0 arguments and returns void
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have no parameters
+    ///
     pub unsafe fn CallVoidMethod0(&self, obj: jobject, methodID: jmethodID) {
         #[cfg(feature = "asserts")]
         {
@@ -2602,7 +3262,39 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(61)(self.vtable, obj, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 1 arguments and returns void
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 1 arguments
+    ///
     pub unsafe fn CallVoidMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) {
         #[cfg(feature = "asserts")]
         {
@@ -2614,7 +3306,39 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 2 arguments and returns void
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 2 arguments
+    ///
     pub unsafe fn CallVoidMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) {
         #[cfg(feature = "asserts")]
         {
@@ -2627,7 +3351,39 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 3 arguments and returns void
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 3 arguments
+    ///
     pub unsafe fn CallVoidMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
         #[cfg(feature = "asserts")]
         {
@@ -2641,6 +3397,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns an object
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return an object
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallObjectMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -2651,6 +3448,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method that has 0 arguments and returns an object
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have no parameters
+    ///
     pub unsafe fn CallObjectMethod0(&self, obj: jobject, methodID: jmethodID) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -2661,7 +3494,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jobject>(34)(self.vtable, obj, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 1 arguments and returns an object
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 1 arguments
+    ///
     pub unsafe fn CallObjectMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -2673,7 +3541,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 2 arguments and returns an object
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 2 arguments
+    ///
     pub unsafe fn CallObjectMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -2686,7 +3589,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 3 arguments and returns an object
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 3 arguments
+    ///
     pub unsafe fn CallObjectMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -2700,6 +3638,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns a boolean
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a boolean
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallBooleanMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -2710,6 +3689,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method that has 0 arguments and returns boolean
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have no parameters
+    ///
     pub unsafe fn CallBooleanMethod0(&self, obj: jobject, methodID: jmethodID) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -2720,7 +3735,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jboolean>(37)(self.vtable, obj, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 1 arguments and returns boolean
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 1 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallBooleanMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -2732,7 +3783,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 2 arguments and returns boolean
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 2 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -2745,7 +3832,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 3 arguments and returns boolean
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 3 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -2759,6 +3882,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns a byte
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a byte
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallByteMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -2769,6 +3933,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jbyte>(42)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method that has 0 arguments and returns byte
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have no parameters
+    ///
     pub unsafe fn CallByteMethod0(&self, obj: jobject, methodID: jmethodID) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -2779,7 +3979,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jbyte>(40)(self.vtable, obj, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 1 arguments and returns byte
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 1 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallByteMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -2791,7 +4027,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 2 arguments and returns byte
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 2 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallByteMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -2804,7 +4076,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 3 arguments and returns byte
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 3 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallByteMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -2818,6 +4126,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns a char
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a char
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallCharMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -2828,6 +4177,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jchar>(45)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method that has 0 arguments and returns char
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have no parameters
+    ///
     pub unsafe fn CallCharMethod0(&self, obj: jobject, methodID: jmethodID) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -2838,7 +4223,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jchar>(43)(self.vtable, obj, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 1 arguments and returns char
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 1 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallCharMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -2850,7 +4271,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 2 arguments and returns char
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 2 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallCharMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -2863,7 +4320,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 3 arguments and returns char
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 3 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallCharMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -2877,6 +4370,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns a short
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a short
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallShortMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -2887,6 +4421,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jshort>(48)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method that has 0 arguments and returns short
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have no parameters
+    ///
     pub unsafe fn CallShortMethod0(&self, obj: jobject, methodID: jmethodID) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -2897,7 +4467,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jshort>(46)(self.vtable, obj, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 1 arguments and returns short
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 1 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallShortMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -2909,7 +4515,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 2 arguments and returns short
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 2 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallShortMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -2922,7 +4564,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 3 arguments and returns short
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 3 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallShortMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -2936,6 +4614,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns a int
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a int
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallIntMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -2946,6 +4665,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jint>(51)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method that has 0 arguments and returns int
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have no parameters
+    ///
     pub unsafe fn CallIntMethod0(&self, obj: jobject, methodID: jmethodID) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -2956,7 +4711,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jint>(49)(self.vtable, obj, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 1 arguments and returns int
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 1 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallIntMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -2968,7 +4759,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 2 arguments and returns int
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 2 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallIntMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -2981,7 +4808,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 3 arguments and returns int
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 3 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallIntMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -2995,6 +4858,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns a long
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a long
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallLongMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -3005,6 +4909,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jlong>(54)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method that has 0 arguments and returns long
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have no parameters
+    ///
     pub unsafe fn CallLongMethod0(&self, obj: jobject, methodID: jmethodID) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -3015,7 +4955,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jlong>(52)(self.vtable, obj, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 1 arguments and returns long
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 1 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallLongMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -3027,7 +5003,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 2 arguments and returns long
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 2 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallLongMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -3040,7 +5052,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 3 arguments and returns long
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 3 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallLongMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -3054,6 +5102,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns a float
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a float
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallFloatMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -3064,6 +5153,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jfloat>(57)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method that has 0 arguments and returns float
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have no parameters
+    ///
     pub unsafe fn CallFloatMethod0(&self, obj: jobject, methodID: jmethodID) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -3074,7 +5199,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jfloat>(55)(self.vtable, obj, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 1 arguments and returns float
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 1 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallFloatMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -3086,7 +5247,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 2 arguments and returns float
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 2 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallFloatMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -3099,7 +5296,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 3 arguments and returns float
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 3 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallFloatMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -3113,6 +5346,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns a double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a double
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallDoubleMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -3123,6 +5397,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jdouble>(60)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method that has 0 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have no parameters
+    ///
     pub unsafe fn CallDoubleMethod0(&self, obj: jobject, methodID: jmethodID) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -3133,7 +5443,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jdouble>(58)(self.vtable, obj, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 1 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 1 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallDoubleMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -3145,7 +5491,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 2 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 2 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallDoubleMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -3158,7 +5540,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method that has 3 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 3 parameter
+    /// The parameter types must exactly match the java method parameters.
+    ///
     pub unsafe fn CallDoubleMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -3172,7 +5590,48 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
-
+    ///
+    /// Calls a non-static java method that returns void without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potencially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return void
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallNonvirtualVoidMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) {
         #[cfg(feature = "asserts")]
         {
@@ -3184,6 +5643,43 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype)>(93)(self.vtable, obj, class, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method with 0 arguments that returns void without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have no parameters
+    ///
     pub unsafe fn CallNonvirtualVoidMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) {
         #[cfg(feature = "asserts")]
         {
@@ -3195,7 +5691,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID)>(91)(self.vtable, obj, class, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 1 arguments that returns void without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 1 argument
+    ///
     pub unsafe fn CallNonvirtualVoidMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) {
         #[cfg(feature = "asserts")]
         {
@@ -3208,7 +5740,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 2 arguments that returns void without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 2 arguments
+    ///
     pub unsafe fn CallNonvirtualVoidMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) {
         #[cfg(feature = "asserts")]
         {
@@ -3222,7 +5790,43 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 3 arguments that returns void without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 3 arguments
+    ///
     pub unsafe fn CallNonvirtualVoidMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
         #[cfg(feature = "asserts")]
         {
@@ -3237,6 +5841,51 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns object without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return an object
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallNonvirtualObjectMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -3248,6 +5897,46 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jobject>(66)(self.vtable, obj, class, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method with 0 arguments that returns object without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have no parameters
+    ///
     pub unsafe fn CallNonvirtualObjectMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -3259,7 +5948,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jobject>(64)(self.vtable, obj, class, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 1 arguments that returns object without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 1 arguments
+    ///
     pub unsafe fn CallNonvirtualObjectMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -3272,7 +6000,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 2 arguments that returns object without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 2 arguments
+    ///
     pub unsafe fn CallNonvirtualObjectMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -3286,7 +6053,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 3 arguments that returns object without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 3 arguments
+    ///
     pub unsafe fn CallNonvirtualObjectMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -3301,6 +6107,51 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns boolean without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a boolean
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallNonvirtualBooleanMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -3312,6 +6163,46 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jboolean>(69)(self.vtable, obj, class, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method with 0 arguments that returns boolean without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have no parameters
+    ///
     pub unsafe fn CallNonvirtualBooleanMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -3323,7 +6214,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jboolean>(67)(self.vtable, obj, class, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 1 arguments that returns boolean without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 1 arguments
+    ///
     pub unsafe fn CallNonvirtualBooleanMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -3336,7 +6266,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 2 arguments that returns boolean without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 2 arguments
+    ///
     pub unsafe fn CallNonvirtualBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -3350,7 +6319,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 3 arguments that returns boolean without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 3 arguments
+    ///
     pub unsafe fn CallNonvirtualBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -3365,6 +6373,51 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method that returns byte without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a byte
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallNonvirtualByteMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -3376,6 +6429,46 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jbyte>(72)(self.vtable, obj, class, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method with 0 arguments that returns byte without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 0 arguments
+    ///
     pub unsafe fn CallNonvirtualByteMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -3387,7 +6480,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jbyte>(70)(self.vtable, obj, class, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 1 arguments that returns byte without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 1 arguments
+    ///
     pub unsafe fn CallNonvirtualByteMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -3400,7 +6532,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 2 arguments that returns byte without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 2 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 2 arguments
+    ///
     pub unsafe fn CallNonvirtualByteMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -3414,7 +6585,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 3 arguments that returns byte without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 3 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 3 arguments
+    ///
     pub unsafe fn CallNonvirtualByteMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -3440,6 +6650,46 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jchar>(75)(self.vtable, obj, class, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method with 0 arguments that returns char without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 0 arguments
+    ///
     pub unsafe fn CallNonvirtualCharMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -3451,7 +6701,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jchar>(73)(self.vtable, obj, class, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 1 arguments that returns char without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 1 arguments
+    ///
     pub unsafe fn CallNonvirtualCharMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -3464,7 +6753,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 2 arguments that returns char without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 2 arguments
+    ///
     pub unsafe fn CallNonvirtualCharMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -3478,7 +6806,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 3 arguments that returns char without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 3 arguments
+    ///
     pub unsafe fn CallNonvirtualCharMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -3493,7 +6860,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
-    
     pub unsafe fn CallNonvirtualShortMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -3505,7 +6871,46 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jshort>(78)(self.vtable, obj, class, methodID, args)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 0 arguments that returns short without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 0 arguments
+    ///
     pub unsafe fn CallNonvirtualShortMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -3517,7 +6922,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jshort>(76)(self.vtable, obj, class, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 1 arguments that returns short without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 1 arguments
+    ///
     pub unsafe fn CallNonvirtualShortMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -3530,7 +6974,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 2 arguments that returns short without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 2 arguments
+    ///
     pub unsafe fn CallNonvirtualShortMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -3544,7 +7027,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 3 arguments that returns short without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 3 arguments
+    ///
     pub unsafe fn CallNonvirtualShortMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -3570,6 +7092,46 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jint>(81)(self.vtable, obj, class, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method with 0 arguments that returns short without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 0 arguments
+    ///
     pub unsafe fn CallNonvirtualIntMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -3581,7 +7143,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jint>(79)(self.vtable, obj, class, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 1 arguments that returns int without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 1 arguments
+    ///
     pub unsafe fn CallNonvirtualIntMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -3594,7 +7195,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 2 arguments that returns int without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 2 arguments
+    ///
     pub unsafe fn CallNonvirtualIntMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -3608,7 +7248,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 3 arguments that returns int without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 3 arguments
+    ///
     pub unsafe fn CallNonvirtualIntMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -3634,6 +7313,46 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jlong>(84)(self.vtable, obj, class, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method with 0 arguments that returns long without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 0 arguments
+    ///
     pub unsafe fn CallNonvirtualLongMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -3645,7 +7364,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jlong>(82)(self.vtable, obj, class, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 1 arguments that returns long without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 1 arguments
+    ///
     pub unsafe fn CallNonvirtualLongMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -3658,7 +7416,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 2 arguments that returns long without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 2 arguments
+    ///
     pub unsafe fn CallNonvirtualLongMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -3672,7 +7469,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 3 arguments that returns long without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 3 arguments
+    ///
     pub unsafe fn CallNonvirtualLongMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -3698,6 +7534,46 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jfloat>(87)(self.vtable, obj, class, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method with 0 arguments that returns float without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 0 arguments
+    ///
     pub unsafe fn CallNonvirtualFloatMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -3709,7 +7585,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jfloat>(85)(self.vtable, obj, class, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 1 arguments that returns float without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 1 arguments
+    ///
     pub unsafe fn CallNonvirtualFloatMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -3722,7 +7637,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 2 arguments that returns float without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 2 arguments
+    ///
     pub unsafe fn CallNonvirtualFloatMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -3736,7 +7690,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 3 arguments that returns float without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 3 arguments
+    ///
     pub unsafe fn CallNonvirtualFloatMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -3762,6 +7755,46 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jdouble>(90)(self.vtable, obj, class, methodID, args)
     }
 
+    ///
+    /// Calls a non-static java method with 0 arguments that returns double without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 0 arguments
+    ///
     pub unsafe fn CallNonvirtualDoubleMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -3773,7 +7806,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jdouble>(88)(self.vtable, obj, class, methodID)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 1 arguments that returns double without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 1 arguments
+    ///
     pub unsafe fn CallNonvirtualDoubleMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -3786,7 +7858,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 2 arguments that returns double without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 2 arguments
+    ///
     pub unsafe fn CallNonvirtualDoubleMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -3800,7 +7911,46 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
-    
+    ///
+    /// Calls a non-static java method with 3 arguments that returns double without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 3 arguments
+    ///
     pub unsafe fn CallNonvirtualDoubleMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -3815,24 +7965,20 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
-
-    pub unsafe fn GetStaticFieldID(&self, clazz: jclass, name: *const c_char, sig: *const c_char) -> jfieldID {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStaticFieldID");
-            self.check_no_exception("GetStaticFieldID");
-            assert!(!name.is_null(), "GetStaticFieldID name is null");
-            assert!(!sig.is_null(), "GetStaticFieldID sig is null");
-            self.check_is_class("GetStaticFieldID", clazz);
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char, *const c_char) -> jfieldID>(144)(self.vtable, clazz, name, sig)
-    }
-
-    pub unsafe fn GetStaticFieldID_str(&self, class: jclass, name: &str, sig: &str) -> jfieldID {
-        let nstr = CString::new(name).unwrap();
-        let nsig = CString::new(sig).unwrap();
-        self.GetStaticFieldID(class, nstr.as_ptr(), nsig.as_ptr())
-
+    pub unsafe fn GetStaticFieldID(&self, clazz: jclass, name: impl UseCString, sig: impl UseCString) -> jfieldID {
+        name.use_as_const_c_char(|name| {
+            sig.use_as_const_c_char(|sig| {
+                #[cfg(feature = "asserts")]
+                {
+                    self.check_not_critical("GetStaticFieldID");
+                    self.check_no_exception("GetStaticFieldID");
+                    assert!(!name.is_null(), "GetStaticFieldID name is null");
+                    assert!(!sig.is_null(), "GetStaticFieldID sig is null");
+                    self.check_is_class("GetStaticFieldID", clazz);
+                }
+                self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char, *const c_char) -> jfieldID>(144)(self.vtable, clazz, name, sig)
+            })
+        })
     }
 
     pub unsafe fn GetStaticObjectField(&self, obj: jclass, fieldID: jfieldID) -> jobject {
@@ -4015,29 +8161,22 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(162)(self.vtable, obj, fieldID, value)
     }
 
+    pub unsafe fn GetStaticMethodID(&self, class: jclass, name: impl UseCString, sig: impl UseCString) -> jmethodID {
+        name.use_as_const_c_char(|name| {
+            sig.use_as_const_c_char(|sig| {
+                #[cfg(feature = "asserts")]
+                {
+                    self.check_not_critical("GetStaticMethodID");
+                    self.check_no_exception("GetStaticMethodID");
+                    self.check_is_class("GetStaticMethodID", class);
+                    assert!(!name.is_null(), "GetStaticMethodID name is null");
+                    assert!(!sig.is_null(), "GetStaticMethodID sig is null");
+                }
 
-
-
-    pub unsafe fn GetStaticMethodID(&self, class: jclass, name: *const c_char, sig: *const c_char) -> jmethodID {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStaticMethodID");
-            self.check_no_exception("GetStaticMethodID");
-            self.check_is_class("GetStaticMethodID", class);
-            assert!(!name.is_null(), "GetStaticMethodID name is null");
-            assert!(!sig.is_null(), "GetStaticMethodID sig is null");
-        }
-
-
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(113)(self.vtable, class, name, sig)
+                self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(113)(self.vtable, class, name, sig)
+            })
+        })
     }
-
-    pub unsafe fn GetStaticMethodID_str(&self, class: jclass, name: &str, sig: &str) -> jmethodID {
-        let nstr = CString::new(name).unwrap();
-        let nsig = CString::new(sig).unwrap();
-        self.GetStaticMethodID(class, nstr.as_ptr(), nsig.as_ptr())
-    }
-
 
     pub unsafe fn CallStaticVoidMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) {
         #[cfg(feature = "asserts")]
@@ -4059,7 +8198,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, obj, methodID)
     }
 
-    
     pub unsafe fn CallStaticVoidMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) {
         #[cfg(feature = "asserts")]
         {
@@ -4071,7 +8209,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1)
     }
 
-    
     pub unsafe fn CallStaticVoidMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) {
         #[cfg(feature = "asserts")]
         {
@@ -4084,7 +8221,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
     pub unsafe fn CallStaticVoidMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
         #[cfg(feature = "asserts")]
         {
@@ -4118,7 +8254,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jobject>(114)(self.vtable, obj, methodID)
     }
 
-    
     pub unsafe fn CallStaticObjectMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -4130,7 +8265,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1)
     }
 
-    
     pub unsafe fn CallStaticObjectMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -4143,7 +8277,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
     pub unsafe fn CallStaticObjectMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -4177,7 +8310,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jboolean>(117)(self.vtable, obj, methodID)
     }
 
-    
     pub unsafe fn CallStaticBooleanMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -4189,7 +8321,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1)
     }
 
-    
     pub unsafe fn CallStaticBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -4202,7 +8333,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
     pub unsafe fn CallStaticBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -4292,7 +8422,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jchar>(123)(self.vtable, obj, methodID)
     }
 
-    
     pub unsafe fn CallStaticCharMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -4304,7 +8433,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1)
     }
 
-    
     pub unsafe fn CallStaticCharMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -4317,7 +8445,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
     pub unsafe fn CallStaticCharMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -4351,7 +8478,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jshort>(126)(self.vtable, obj, methodID)
     }
 
-    
     pub unsafe fn CallStaticShortMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -4363,7 +8489,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1)
     }
 
-    
     pub unsafe fn CallStaticShortMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -4376,7 +8501,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
     pub unsafe fn CallStaticShortMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -4410,7 +8534,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jint>(129)(self.vtable, obj, methodID)
     }
 
-    
     pub unsafe fn CallStaticIntMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -4422,7 +8545,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1)
     }
 
-    
     pub unsafe fn CallStaticIntMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -4435,7 +8557,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
     pub unsafe fn CallStaticIntMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -4469,7 +8590,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jlong>(132)(self.vtable, obj, methodID)
     }
 
-    
     pub unsafe fn CallStaticLongMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -4481,7 +8601,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1)
     }
 
-    
     pub unsafe fn CallStaticLongMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -4494,7 +8613,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
     pub unsafe fn CallStaticLongMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -4528,7 +8646,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jfloat>(135)(self.vtable, obj, methodID)
     }
 
-    
     pub unsafe fn CallStaticFloatMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -4540,7 +8657,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1)
     }
 
-    
     pub unsafe fn CallStaticFloatMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -4553,7 +8669,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
     pub unsafe fn CallStaticFloatMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -4587,7 +8702,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jdouble>(138)(self.vtable, obj, methodID)
     }
 
-    
     pub unsafe fn CallStaticDoubleMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -4599,7 +8713,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1)
     }
 
-    
     pub unsafe fn CallStaticDoubleMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -4612,7 +8725,6 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1, arg2)
     }
 
-    
     pub unsafe fn CallStaticDoubleMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -4626,6 +8738,35 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Create a new String form a jchar array.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewString
+    ///
+    ///
+    /// # Arguments
+    /// * `unicodeChars` - pointer to the jchar array
+    ///     * must not be null
+    /// * `len` - amount of elements in the jchar array
+    ///
+    /// # Returns
+    /// A local reference to the newly created String or null on error
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm ran out of memory allocating the String
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `unicodeChars` must not be 0.
+    /// `unicodeChars` must be equal or larger than `len` suggests.
+    ///
     pub unsafe fn NewString(&self, unicodeChars: *const jchar, len: jsize) -> jstring {
         #[cfg(feature = "asserts")]
         {
@@ -4637,6 +8778,32 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, *const jchar, jsize) -> jstring>(163)(self.vtable, unicodeChars, len)
     }
 
+    ///
+    /// Returns the string length in jchar's. This is neither the amount of bytes in utf-8 encoding nor the amount of characters.
+    /// 3 and 4 byte utf-8 characters take 2 jchars to encode. This is equivalent to calling String.length() in java.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringLength
+    ///
+    /// # Arguments
+    /// * `string`
+    ///     * must not be null
+    ///     * must refer to a string
+    ///     * must not be already garbage collected
+    ///
+    /// # Returns
+    /// the amount of jchar's in the String
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `string` must be a valid reference that is not yet garbage collected and refer to a String.
+    ///
     pub unsafe fn GetStringLength(&self, string: jstring) -> jsize {
         #[cfg(feature = "asserts")]
         {
@@ -4648,6 +8815,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jstring) -> jsize>(164)(self.vtable, string)
     }
 
+    ///
+    /// Returns the string's jchar arrays representation.
+    ///
+    /// Note: This fn will almost always to return a copy of the data for newer JVM's.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringChars
+    ///
+    /// # Arguments
+    /// * `string`
+    ///     * must not be null
+    ///     * must refer to a string
+    ///     * must not be already garbage collected
+    /// * `isCopy` - optional pointer to a boolean flag for the vm to indicate if it copied the data or not.
+    ///     * may be null
+    ///
+    /// # Returns
+    /// a pointer to index 0 of a jchar array.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `string` must be a valid reference that is not yet garbage collected and refer to a String.
+    /// `isCopy` must be null or valid.
+    ///
     pub unsafe fn GetStringChars(&self, string: jstring, isCopy: *mut jboolean) -> *const jchar {
         #[cfg(feature = "asserts")]
         {
@@ -4659,6 +8856,32 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const jchar>(165)(self.vtable, string, isCopy)
     }
 
+    ///
+    /// Frees a char array returned by GetStringChars.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseStringChars
+    ///
+    /// # Arguments
+    /// * `string`
+    ///     * must not be null
+    ///     * must refer to a string
+    ///     * must not be already garbage collected
+    /// * `chars` - the pointer returned by GetStringChars
+    ///     * must not be null
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `string` must be a valid reference that is not yet garbage collected and refer to a String.
+    /// `chars` must not be null.
+    /// `chars` must be the result of a call to GetStringChars of the String `string`
+    ///
     pub unsafe fn ReleaseStringChars(&self, string: jstring, chars: *const jchar) {
         #[cfg(feature = "asserts")]
         {
@@ -4670,22 +8893,78 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(166)(self.vtable, string, chars)
     }
 
-    pub unsafe fn NewStringUTF(&self, bytes: *const c_char) -> jstring {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewStringUTF");
-            self.check_no_exception("NewStringUTF");
-            assert!(!bytes.is_null(), "NewStringUTF string must not be null");
-        }
-        self.jni::<extern "system" fn(JNIEnvVTable, *const c_char) -> jstring>(167)(self.vtable, bytes)
+    ///
+    /// Create a new String form a utf-8 zero terminated c string.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewString
+    ///
+    ///
+    /// # Arguments
+    /// * `bytes` - pointer to the c like zero terminated utf-8 string
+    ///     * must not be null
+    ///
+    /// # Returns
+    /// A local reference to the newly created String or null on error
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm ran out of memory allocating the String
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `bytes` must not be null.
+    /// `bytes` must be zero terminated.
+    ///
+    pub unsafe fn NewStringUTF(&self, bytes: impl UseCString) -> jstring {
+        bytes.use_as_const_c_char(|bytes| {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewStringUTF");
+                self.check_no_exception("NewStringUTF");
+                assert!(!bytes.is_null(), "NewStringUTF string must not be null");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, *const c_char) -> jstring>(167)(self.vtable, bytes)
+        })
     }
 
-    pub unsafe fn NewStringUTF_str(&self, str: &str) -> jstring {
-        let raw = CString::new(str).unwrap();
-        let x =  self.NewStringUTF(raw.as_ptr());
-        x
-    }
-
+    ///
+    /// Returns the length of a String in bytes if it were to be used with GetStringUTFChars.
+    ///
+    /// Note: Usage of this function should be carefully evaluated. For most jvms (especially for JVMS older than Java 17)
+    /// it is faster to just call GetStringUTFChars and use a function equivalent to the c function strlen() on its return value.
+    /// Some newer jvm's may, depending on how the vm was started, know this value for most strings,
+    /// and therefore it is faster to call this fn than to do
+    /// the approach above if you do not also need the UTFChars themselves.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFLength
+    ///
+    ///
+    /// # Arguments
+    /// * `string`
+    ///     * must not be null
+    ///     * must refer to a string
+    ///     * must not be already garbage collected
+    ///
+    /// # Returns
+    /// The amount of bytes the array returned by GetStringUTFChars would have for this string.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `string` must not be null, must refer to a string and not already be garbage collected.
+    ///
     pub unsafe fn GetStringUTFLength(&self, string: jstring) -> jsize {
         #[cfg(feature = "asserts")]
         {
@@ -4713,6 +8992,8 @@ impl JNIEnv {
     /// Convenience method that calls GetStringUTFChars, copies the result
     /// into a rust String and then calls ReleaseStringUTFChars.
     ///
+    /// This function calls ReleaseStringUTFChars in all error cases where it has to be called!
+    ///
     /// If GetStringUTFChars fails then None is returned and ExceptionCheck should be performed.
     /// If parsing the String as utf-8 fails (it shouldn't) then None is returned.
     ///
@@ -4731,14 +9012,14 @@ impl JNIEnv {
         }
 
         let parsed = CStr::from_ptr(str).to_str();
-        if parsed.is_err() {
+        if let Ok(parsed) = parsed {
+            let copy = parsed.to_string();
             self.ReleaseStringUTFChars(string, str);
-            return None;
+            return Some(copy);
         }
 
-        let copy = parsed.map_err(|_| {}).unwrap().to_string();
         self.ReleaseStringUTFChars(string, str);
-        Some(copy)
+        None
     }
 
     pub unsafe fn ReleaseStringUTFChars(&self, string: jstring, utf: *const c_char) {
@@ -4843,7 +9124,7 @@ impl JNIEnv {
             if !crit.is_null() {
                 Self::CRITICAL_STRINGS.with(|set| {
                     let mut rm = set.borrow_mut();
-                    let n = rm.remove(&crit).unwrap_or(0)+1;
+                    let n = rm.remove(&crit).unwrap_or(0) + 1;
                     rm.insert(crit, n);
                 });
             }
@@ -4851,8 +9132,6 @@ impl JNIEnv {
 
         crit
     }
-
-
 
     pub unsafe fn ReleaseStringCritical(&self, string: jstring, cstring: *const jchar) {
         #[cfg(feature = "asserts")]
@@ -4876,7 +9155,6 @@ impl JNIEnv {
 
         self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(225)(self.vtable, string, cstring)
     }
-
 
     pub unsafe fn GetArrayLength(&self, array: jarray) -> jsize {
         #[cfg(feature = "asserts")]
@@ -5106,7 +9384,11 @@ impl JNIEnv {
             self.check_not_critical("ReleaseBooleanArrayElements");
             assert!(!array.is_null(), "ReleaseBooleanArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseBooleanArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseBooleanArrayElements mode is invalid {}", mode);
+            assert!(
+                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                "ReleaseBooleanArrayElements mode is invalid {}",
+                mode
+            );
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, *mut jboolean, jint)>(191)(self.vtable, array, elems, mode);
@@ -5118,7 +9400,11 @@ impl JNIEnv {
             self.check_not_critical("ReleaseByteArrayElements");
             assert!(!array.is_null(), "ReleaseByteArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseByteArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseByteArrayElements mode is invalid {}", mode);
+            assert!(
+                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                "ReleaseByteArrayElements mode is invalid {}",
+                mode
+            );
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, *mut jbyte, jint)>(192)(self.vtable, array, elems, mode);
@@ -5130,7 +9416,11 @@ impl JNIEnv {
             self.check_not_critical("ReleaseCharArrayElements");
             assert!(!array.is_null(), "ReleaseCharArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseCharArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseCharArrayElements mode is invalid {}", mode);
+            assert!(
+                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                "ReleaseCharArrayElements mode is invalid {}",
+                mode
+            );
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, *mut jchar, jint)>(193)(self.vtable, array, elems, mode);
@@ -5142,7 +9432,11 @@ impl JNIEnv {
             self.check_not_critical("ReleaseShortArrayElements");
             assert!(!array.is_null(), "ReleaseShortArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseShortArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseShortArrayElements mode is invalid {}", mode);
+            assert!(
+                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                "ReleaseShortArrayElements mode is invalid {}",
+                mode
+            );
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, *mut jshort, jint)>(194)(self.vtable, array, elems, mode);
@@ -5154,7 +9448,11 @@ impl JNIEnv {
             self.check_not_critical("ReleaseIntArrayElements");
             assert!(!array.is_null(), "ReleaseIntArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseIntArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseIntArrayElements mode is invalid {}", mode);
+            assert!(
+                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                "ReleaseIntArrayElements mode is invalid {}",
+                mode
+            );
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jintArray, *mut jint, jint)>(195)(self.vtable, array, elems, mode);
@@ -5166,7 +9464,11 @@ impl JNIEnv {
             self.check_not_critical("ReleaseLongArrayElements");
             assert!(!array.is_null(), "ReleaseLongArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseLongArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseLongArrayElements mode is invalid {}", mode);
+            assert!(
+                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                "ReleaseLongArrayElements mode is invalid {}",
+                mode
+            );
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, *mut jlong, jint)>(196)(self.vtable, array, elems, mode);
@@ -5178,7 +9480,11 @@ impl JNIEnv {
             self.check_not_critical("ReleaseFloatArrayElements");
             assert!(!array.is_null(), "ReleaseFloatArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseFloatArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseFloatArrayElements mode is invalid {}", mode);
+            assert!(
+                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                "ReleaseFloatArrayElements mode is invalid {}",
+                mode
+            );
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, *mut jfloat, jint)>(197)(self.vtable, array, elems, mode);
@@ -5190,7 +9496,11 @@ impl JNIEnv {
             self.check_not_critical("ReleaseDoubleArrayElements");
             assert!(!array.is_null(), "ReleaseDoubleArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseDoubleArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseDoubleArrayElements mode is invalid {}", mode);
+            assert!(
+                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                "ReleaseDoubleArrayElements mode is invalid {}",
+                mode
+            );
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, *mut jdouble, jint)>(198)(self.vtable, array, elems, mode);
@@ -5430,9 +9740,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetByteArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<i8> {
-        let len = len.unwrap_or_else(||self.GetArrayLength(array)-start);
+        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
-           return Vec::new();
+            return Vec::new();
         }
         let mut data = vec![0i8; len as usize];
         self.GetByteArrayRegion_into_slice(array, start, data.as_mut_slice());
@@ -5621,7 +9931,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetCharArrayRegion_as_vec(&self, array: jcharArray, start: jsize, len: Option<jsize>) -> Vec<u16> {
-        let len = len.unwrap_or_else(||self.GetArrayLength(array)-start);
+        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
         }
@@ -5812,7 +10122,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetShortArrayRegion_as_vec(&self, array: jshortArray, start: jsize, len: Option<jsize>) -> Vec<i16> {
-        let len = len.unwrap_or_else(||self.GetArrayLength(array)-start);
+        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
         }
@@ -6003,7 +10313,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetIntArrayRegion_as_vec(&self, array: jintArray, start: jsize, len: Option<jsize>) -> Vec<i32> {
-        let len = len.unwrap_or_else(||self.GetArrayLength(array)-start);
+        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
         }
@@ -6194,7 +10504,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetLongArrayRegion_as_vec(&self, array: jlongArray, start: jsize, len: Option<jsize>) -> Vec<i64> {
-        let len = len.unwrap_or_else(||self.GetArrayLength(array)-start);
+        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
         }
@@ -6385,7 +10695,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetFloatArrayRegion_as_vec(&self, array: jfloatArray, start: jsize, len: Option<jsize>) -> Vec<f32> {
-        let len = len.unwrap_or_else(||self.GetArrayLength(array)-start);
+        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
         }
@@ -6576,7 +10886,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetDoubleArrayRegion_as_vec(&self, array: jdoubleArray, start: jsize, len: Option<jsize>) -> Vec<f64> {
-        let len = len.unwrap_or_else(||self.GetArrayLength(array)-start);
+        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
         }
@@ -6658,7 +10968,6 @@ impl JNIEnv {
             assert_eq!(0, buf.align_offset(align_of::<jlong>()), "SetLongArrayRegion buf pointer is not aligned");
         }
 
-
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jlong)>(212)(self.vtable, array, start, len, buf);
     }
 
@@ -6688,15 +10997,12 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jdouble)>(214)(self.vtable, array, start, len, buf);
     }
 
-
     #[cfg(feature = "asserts")]
     thread_local! {
         //The "Critical Section" created by GetPrimitiveArrayCritical has a lot of restrictions placed upon it.
         //This attempts to track "some" of them on a best effort basis.
         static CRITICAL_POINTERS: std::cell::RefCell<std::collections::HashMap<*mut c_void, usize>> = std::cell::RefCell::new(std::collections::HashMap::new());
     }
-
-
 
     ///
     /// Obtains a critical pointer into a primitive java array.
@@ -6752,7 +11058,7 @@ impl JNIEnv {
             if !crit.is_null() {
                 Self::CRITICAL_POINTERS.with(|set| {
                     let mut rm = set.borrow_mut();
-                    let n = rm.remove(&crit).unwrap_or(0)+1;
+                    let n = rm.remove(&crit).unwrap_or(0) + 1;
                     rm.insert(crit, n);
                 });
             }
@@ -6766,7 +11072,11 @@ impl JNIEnv {
         {
             assert!(!array.is_null(), "ReleasePrimitiveArrayCritical jarray must not be null");
             assert!(!carray.is_null(), "ReleasePrimitiveArrayCritical carray must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleasePrimitiveArrayCritical mode is invalid {}", mode);
+            assert!(
+                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                "ReleasePrimitiveArrayCritical mode is invalid {}",
+                mode
+            );
             Self::CRITICAL_POINTERS.with(|set| {
                 let mut rm = set.borrow_mut();
                 let mut n = rm.remove(&carray).expect("ReleasePrimitiveArrayCritical carray is not valid");
@@ -6788,17 +11098,17 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut c_void, jint)>(223)(self.vtable, array, carray, mode);
     }
 
-    pub unsafe fn RegisterNatives_slice(&self, clazz: jclass, methods : &[JNINativeMethod]) -> jint {
+    pub unsafe fn RegisterNatives_slice(&self, clazz: jclass, methods: &[JNINativeMethod]) -> jint {
         self.RegisterNatives(clazz, methods.as_ptr(), methods.len() as jint)
     }
 
-    pub unsafe fn RegisterNatives(&self, clazz: jclass, methods : *const JNINativeMethod, size: jint) -> jint {
+    pub unsafe fn RegisterNatives(&self, clazz: jclass, methods: *const JNINativeMethod, size: jint) -> jint {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("RegisterNatives");
             self.check_no_exception("RegisterNatives");
             assert!(!clazz.is_null(), "RegisterNatives class must not be null");
-            assert!(size>0, "RegisterNatives size must be greater than 0");
+            assert!(size > 0, "RegisterNatives size must be greater than 0");
             let sl = std::slice::from_raw_parts(methods, size as usize);
             for s in 0..sl.len() {
                 let cur = &sl[s];
@@ -6850,7 +11160,11 @@ impl JNIEnv {
             self.check_no_exception("NewDirectByteBuffer");
             assert!(!address.is_null(), "NewDirectByteBuffer address must not be null");
             assert!(capacity >= 0, "NewDirectByteBuffer capacity must not be negative {}", capacity);
-            assert!(capacity <= jint::MAX as jlong, "NewDirectByteBuffer capacity is too big, its larger than Integer.MAX_VALUE {}", capacity);
+            assert!(
+                capacity <= jint::MAX as jlong,
+                "NewDirectByteBuffer capacity is too big, its larger than Integer.MAX_VALUE {}",
+                capacity
+            );
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, *mut c_void, jlong) -> jobject>(229)(self.vtable, address, capacity)
@@ -6924,7 +11238,7 @@ impl JNIEnv {
             self.check_not_critical("GetJavaVM");
             self.check_no_exception("GetJavaVM");
         }
-        let mut r : JNIInvPtr = SyncMutPtr::null();
+        let mut r: JNIInvPtr = SyncMutPtr::null();
         let res = self.jni::<extern "system" fn(JNIEnvVTable, *mut JNIInvPtr) -> jint>(219)(self.vtable, &mut r);
         if res != 0 {
             return Err(res);
@@ -6932,7 +11246,7 @@ impl JNIEnv {
         if r.is_null() {
             panic!("GetJavaVM returned 0 but did not set JVM pointer");
         }
-        Ok(JavaVM { functions: r})
+        Ok(JavaVM { functions: r })
     }
 
     pub unsafe fn GetModule(&self, cls: jclass) -> jobject {
@@ -6960,13 +11274,19 @@ impl JNIEnv {
         Self::CRITICAL_POINTERS.with(|set| {
             let sz = set.borrow_mut().len();
             if sz != 0 {
-                panic!("{} cannot be called now, because there are {} critical pointers into primitive arrays that have not been released by the current thread.", context, sz);
+                panic!(
+                    "{} cannot be called now, because there are {} critical pointers into primitive arrays that have not been released by the current thread.",
+                    context, sz
+                );
             }
         });
         Self::CRITICAL_STRINGS.with(|set| {
             let sz = set.borrow_mut().len();
             if sz != 0 {
-                panic!("{} cannot be called now, because there are {} critical pointers into strings that have not been released by the current thread.", context, sz);
+                panic!(
+                    "{} cannot be called now, because there are {} critical pointers into strings that have not been released by the current thread.",
+                    context, sz
+                );
             }
         });
     }
@@ -6985,7 +11305,7 @@ impl JNIEnv {
             panic!("{} Class#getClass() is null?", context);
         }
 
-        let is_array = self.GetMethodID_str(clazz, "isArray", "()Z");
+        let is_array = self.GetMethodID(clazz, "isArray", "()Z");
         let r = self.CallBooleanMethod0(cl, is_array);
         if self.ExceptionCheck() {
             self.ExceptionDescribe();
@@ -7023,7 +11343,7 @@ impl JNIEnv {
 
         match self.GetObjectRefType(obj) {
             jobjectRefType::JNIInvalidRefType => panic!("{} ref is invalid", context),
-            _=> {}
+            _ => {}
         }
     }
 
@@ -7036,6 +11356,16 @@ impl JNIEnv {
             return;
         }
 
+        let cl = self.FindClass("java/lang/System");
+        assert!(!cl.is_null(), "java/lang/System not found?");
+
+        let cname = CString::new("gc").unwrap();
+        let csig = CString::new("()V").unwrap();
+        //GetStaticMethodID
+        let gc_method = self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(113)(self.vtable, cl, cname.as_ptr(), csig.as_ptr());
+
+        assert!(!gc_method.is_null(), "java/lang/System#gc() not found?");
+
         match self.GetObjectRefType(obj) {
             jobjectRefType::JNIInvalidRefType => panic!("{} ref is invalid", context),
             jobjectRefType::JNIWeakGlobalRefType => {
@@ -7043,18 +11373,20 @@ impl JNIEnv {
                 //I.e. caller holds a strong reference and "knows" the weak ref cannot be GC'ed during the call.
                 //Good practice would be to use the strong ref to make the call but sadly JVM doesn't enforce this.
                 //This is just best effort really since we have absolutely NO clue when the GC will run.
-                //TODO call System.gc() here?
+                //CallStaticVoidMethod
+                self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, obj, gc_method);
                 assert!(!self.IsSameObject(obj, null_mut()), "{} weak reference that has already been garbage collected", context);
-            },
-            _=> {}
+            }
+            _ => {}
         }
-    }
 
+        self.DeleteLocalRef(cl);
+    }
 
     #[cfg(feature = "asserts")]
     unsafe fn check_is_exception_class(&self, context: &str, obj: jclass) {
         self.check_is_class(context, obj);
-        let throwable_cl = self.FindClass_str("java/lang/Throwable");
+        let throwable_cl = self.FindClass("java/lang/Throwable");
         assert!(!throwable_cl.is_null(), "{} java/lang/Throwable not found???", context);
         assert!(self.IsAssignableFrom(obj, throwable_cl), "{} class is not throwable", context);
         self.DeleteLocalRef(throwable_cl);
@@ -7063,9 +11395,9 @@ impl JNIEnv {
     #[cfg(feature = "asserts")]
     unsafe fn check_is_not_abstract(&self, context: &str, obj: jclass) {
         self.check_is_class(context, obj);
-        let class_cl = self.FindClass_str("java/lang/Class");
+        let class_cl = self.FindClass("java/lang/Class");
         assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
-        let meth = self.GetMethodID_str(class_cl, "getModifiers", "()I");
+        let meth = self.GetMethodID(class_cl, "getModifiers", "()I");
         assert!(!meth.is_null(), "{} java/lang/Class#getModifiers not found???", context);
         let mods = self.CallIntMethod0(obj, meth);
         self.DeleteLocalRef(class_cl);
@@ -7074,9 +11406,9 @@ impl JNIEnv {
             panic!("{} java/lang/Class#getModifiers throws?", context);
         }
 
-        let mod_cl = self.FindClass_str("java/lang/reflect/Modifier");
+        let mod_cl = self.FindClass("java/lang/reflect/Modifier");
         assert!(!mod_cl.is_null(), "{} java/lang/reflect/Modifier not found???", context);
-        let mod_fl = self.GetStaticFieldID_str(mod_cl, "ABSTRACT", "I");
+        let mod_fl = self.GetStaticFieldID(mod_cl, "ABSTRACT", "I");
         assert!(!mod_fl.is_null(), "{} java/lang/reflect/Modifier.ABSTRACT not found???", context);
         let amod = self.GetStaticIntField(mod_cl, mod_fl);
         self.DeleteLocalRef(mod_cl);
@@ -7086,20 +11418,31 @@ impl JNIEnv {
         }
     }
 
-
-
     #[cfg(feature = "asserts")]
     unsafe fn check_is_class(&self, context: &str, obj: jclass) {
         assert!(!obj.is_null(), "{} class is null", context);
         self.check_ref_obj(context, obj);
 
-        let class_cl = self.FindClass_str("java/lang/Class");
+        let class_cl = self.FindClass("java/lang/Class");
         assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
         //GET OBJECT CLASS
         let tcl = self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(31)(self.vtable, obj);
         assert!(self.IsSameObject(tcl, class_cl), "{} not a class!", context);
         self.DeleteLocalRef(tcl);
         self.DeleteLocalRef(class_cl);
+    }
+
+    #[cfg(feature = "asserts")]
+    unsafe fn check_is_classloader_or_null(&self, context: &str, obj: jobject) {
+        if obj.is_null() {
+            return;
+        }
+        self.check_ref_obj(context, obj);
+        let classloader_cl = self.FindClass("java/lang/ClassLoader");
+        assert!(!classloader_cl.is_null(), "{} java/lang/ClassLoader not found", context);
+        assert!(self.IsInstanceOf(obj, classloader_cl), "{} argument is not a valid instanceof ClassLoader", context);
+
+        self.DeleteLocalRef(classloader_cl);
     }
 
     #[cfg(feature = "asserts")]
@@ -7110,13 +11453,12 @@ impl JNIEnv {
 
         let clazz = self.GetObjectClass(jobject);
         assert!(!clazz.is_null(), "{} string.class is null?", src);
-        let str_class = self.FindClass_str("java/lang/String");
+        let str_class = self.FindClass("java/lang/String");
         assert!(!str_class.is_null(), "{} java/lang/String not found?", src);
         assert!(self.IsSameObject(clazz, str_class), "{} Non string passed to GetStringCritical", src);
         self.DeleteLocalRef(clazz);
         self.DeleteLocalRef(str_class);
     }
-
 
     #[cfg(feature = "asserts")]
     unsafe fn check_field_type_static(&self, context: &str, obj: jclass, fieldID: jfieldID, ty: &str) {
@@ -7124,24 +11466,26 @@ impl JNIEnv {
         assert!(!fieldID.is_null(), "{} fieldID is null", context);
         let f = self.ToReflectedField(obj, fieldID, true);
         assert!(!f.is_null(), "{} -> ToReflectedField returned null", context);
-        let field_cl = self.FindClass_str("java/lang/reflect/Field");
+        let field_cl = self.FindClass("java/lang/reflect/Field");
         assert!(!f.is_null(), "{} java/lang/reflect/Method not found???", context);
-        let field_rtyp = self.GetMethodID_str(field_cl, "getType", "()Ljava/lang/Class;");
+        let field_rtyp = self.GetMethodID(field_cl, "getType", "()Ljava/lang/Class;");
         assert!(!field_rtyp.is_null(), "{} java/lang/reflect/Field#getType not found???", context);
         //CallObjectMethodA
         let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, f, field_rtyp, null());
         assert!(!rtc.is_null(), "{} java/lang/reflect/Field#getType returned null???", context);
         self.DeleteLocalRef(field_cl);
         self.DeleteLocalRef(f);
-        let class_cl = self.FindClass_str("java/lang/Class");
+        let class_cl = self.FindClass("java/lang/Class");
         assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
-        let class_name = self.GetMethodID_str(class_cl, "getName", "()Ljava/lang/String;");
+        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
         assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
         assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
         self.DeleteLocalRef(rtc);
-        let the_name = self.GetStringUTFChars_as_string(name_str).expect(format!("{} failed to get/parse classname???", context).as_str());
+        let the_name = self
+            .GetStringUTFChars_as_string(name_str)
+            .expect(format!("{} failed to get/parse classname???", context).as_str());
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
         if the_name.as_str().eq(ty) {
@@ -7153,7 +11497,7 @@ impl JNIEnv {
                 "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
                     panic!("{} type of field is {} but expected object", context, the_name);
                 }
-                _=> {
+                _ => {
                     return;
                 }
             }
@@ -7168,30 +11512,32 @@ impl JNIEnv {
         assert!(!methodID.is_null(), "{} methodID is null", context);
         let m = self.ToReflectedMethod(obj, methodID, true);
         assert!(!m.is_null(), "{} -> ToReflectedMethod returned null", context);
-        let meth_cl = self.FindClass_str("java/lang/reflect/Method");
+        let meth_cl = self.FindClass("java/lang/reflect/Method");
         assert!(!m.is_null(), "{} java/lang/reflect/Method not found???", context);
-        let meth_rtyp = self.GetMethodID_str(meth_cl, "getReturnType", "()Ljava/lang/Class;");
+        let meth_rtyp = self.GetMethodID(meth_cl, "getReturnType", "()Ljava/lang/Class;");
         assert!(!meth_rtyp.is_null(), "{} java/lang/reflect/Method#getReturnType not found???", context);
         //CallObjectMethodA
         let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, m, meth_rtyp, null());
         self.DeleteLocalRef(meth_cl);
         self.DeleteLocalRef(m);
-        if rtc.is_null(){
+        if rtc.is_null() {
             if ty.eq("void") {
                 return;
             }
 
             panic!("{} return type of method is void but expected {}", context, ty);
         }
-        let class_cl = self.FindClass_str("java/lang/Class");
+        let class_cl = self.FindClass("java/lang/Class");
         assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
-        let class_name = self.GetMethodID_str(class_cl, "getName", "()Ljava/lang/String;");
+        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
         assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
         assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
         self.DeleteLocalRef(rtc);
-        let the_name = self.GetStringUTFChars_as_string(name_str).expect(format!("{} failed to get/parse classname???", context).as_str());
+        let the_name = self
+            .GetStringUTFChars_as_string(name_str)
+            .expect(format!("{} failed to get/parse classname???", context).as_str());
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
         if the_name.as_str().eq(ty) {
@@ -7203,7 +11549,7 @@ impl JNIEnv {
                 "void" | "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
                     panic!("{} return type of method is {} but expected object", context, the_name);
                 }
-                _=> {
+                _ => {
                     return;
                 }
             }
@@ -7218,9 +11564,9 @@ impl JNIEnv {
         assert!(!methodID.is_null(), "{} methodID is null", context);
         let java_method = self.ToReflectedMethod(clazz, methodID, true);
         assert!(!java_method.is_null(), "{} -> ToReflectedMethod returned null", context);
-        let meth_cl = self.FindClass_str("java/lang/reflect/Method");
+        let meth_cl = self.FindClass("java/lang/reflect/Method");
         assert!(!java_method.is_null(), "{} java/lang/reflect/Method not found???", context);
-        let meth_params = self.GetMethodID_str(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
+        let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
         assert!(!meth_params.is_null(), "{} java/lang/reflect/Method#getParameterTypes not found???", context);
 
         //CallObjectMethodA
@@ -7234,20 +11580,23 @@ impl JNIEnv {
         assert!(!param1_class.is_null(), "{} java/lang/reflect/Method#getParameterTypes[{}] is null???", context, idx);
         self.DeleteLocalRef(parameter_array);
 
-        let class_cl = self.FindClass_str("java/lang/Class");
+        let class_cl = self.FindClass("java/lang/Class");
         assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
-        let class_name = self.GetMethodID_str(class_cl, "getName", "()Ljava/lang/String;");
+        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
         assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
-        let class_is_primitive = self.GetMethodID_str(class_cl, "isPrimitive", "()Z");
+        let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
         assert!(!class_is_primitive.is_null(), "{} java/lang/Class#isPrimitive not found???", context);
 
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
         assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
         //CallBooleanMethodA
-        let param1_is_primitive = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
+        let param1_is_primitive =
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
 
-        let the_name = self.GetStringUTFChars_as_string(name_str).expect(format!("{} failed to get/parse classname???", context).as_str());
+        let the_name = self
+            .GetStringUTFChars_as_string(name_str)
+            .expect(format!("{} failed to get/parse classname???", context).as_str());
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
 
@@ -7261,14 +11610,24 @@ impl JNIEnv {
             'F' => assert_eq!("float", the_name, "{} param{} wrong type. Method has {} but passed float", context, idx, the_name),
             'D' => assert_eq!("double", the_name, "{} param{} wrong type. Method has {} but passed double", context, idx, the_name),
             'L' => {
-                assert!(!param1_is_primitive, "{} param{} wrong type. Method has {} but passed an object or null", context, idx, the_name);
-                let jt : jtype = param1.into();
+                assert!(
+                    !param1_is_primitive,
+                    "{} param{} wrong type. Method has {} but passed an object or null",
+                    context, idx, the_name
+                );
+                let jt: jtype = param1.into();
                 let obj = jt.object;
                 if !obj.is_null() {
-                    assert!(self.IsInstanceOf(obj, param1_class), "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof", context, idx, the_name);
+                    assert!(
+                        self.IsInstanceOf(obj, param1_class),
+                        "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof",
+                        context,
+                        idx,
+                        the_name
+                    );
                 }
             }
-            _=> unreachable!("{}", T::jtype_id())
+            _ => unreachable!("{}", T::jtype_id()),
         }
 
         self.DeleteLocalRef(param1_class);
@@ -7281,9 +11640,9 @@ impl JNIEnv {
         assert!(!methodID.is_null(), "{} methodID is null", context);
         let java_method = self.ToReflectedMethod(clazz, methodID, false);
         assert!(!java_method.is_null(), "{} -> ToReflectedMethod returned null", context);
-        let meth_cl = self.FindClass_str("java/lang/reflect/Method");
+        let meth_cl = self.FindClass("java/lang/reflect/Method");
         assert!(!java_method.is_null(), "{} java/lang/reflect/Method not found???", context);
-        let meth_params = self.GetMethodID_str(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
+        let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
         assert!(!meth_params.is_null(), "{} java/lang/reflect/Method#getParameterTypes not found???", context);
 
         //CallObjectMethodA
@@ -7297,20 +11656,23 @@ impl JNIEnv {
         assert!(!param1_class.is_null(), "{} java/lang/reflect/Method#getParameterTypes[{}] is null???", context, idx);
         self.DeleteLocalRef(parameter_array);
 
-        let class_cl = self.FindClass_str("java/lang/Class");
+        let class_cl = self.FindClass("java/lang/Class");
         assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
-        let class_name = self.GetMethodID_str(class_cl, "getName", "()Ljava/lang/String;");
+        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
         assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
-        let class_is_primitive = self.GetMethodID_str(class_cl, "isPrimitive", "()Z");
+        let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
         assert!(!class_is_primitive.is_null(), "{} java/lang/Class#isPrimitive not found???", context);
 
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
         assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
         //CallBooleanMethodA
-        let param1_is_primitive = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
+        let param1_is_primitive =
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
 
-        let the_name = self.GetStringUTFChars_as_string(name_str).expect(format!("{} failed to get/parse classname???", context).as_str());
+        let the_name = self
+            .GetStringUTFChars_as_string(name_str)
+            .expect(format!("{} failed to get/parse classname???", context).as_str());
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
 
@@ -7324,14 +11686,24 @@ impl JNIEnv {
             'F' => assert_eq!("float", the_name, "{} param{} wrong type. Method has {} but passed float", context, idx, the_name),
             'D' => assert_eq!("double", the_name, "{} param{} wrong type. Method has {} but passed double", context, idx, the_name),
             'L' => {
-                assert!(!param1_is_primitive, "{} param{} wrong type. Method has {} but passed an object or null", context, idx, the_name);
-                let jt : jtype = param1.into();
+                assert!(
+                    !param1_is_primitive,
+                    "{} param{} wrong type. Method has {} but passed an object or null",
+                    context, idx, the_name
+                );
+                let jt: jtype = param1.into();
                 let obj = jt.object;
                 if !obj.is_null() {
-                    assert!(self.IsInstanceOf(obj, param1_class), "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof", context, idx, the_name);
+                    assert!(
+                        self.IsInstanceOf(obj, param1_class),
+                        "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof",
+                        context,
+                        idx,
+                        the_name
+                    );
                 }
             }
-            _=> unreachable!("{}", T::jtype_id())
+            _ => unreachable!("{}", T::jtype_id()),
         }
 
         self.DeleteLocalRef(param1_class);
@@ -7347,9 +11719,9 @@ impl JNIEnv {
         let java_method = self.ToReflectedMethod(clazz, methodID, false);
         assert!(!java_method.is_null(), "{} -> ToReflectedMethod returned null", context);
         self.DeleteLocalRef(clazz);
-        let meth_cl = self.FindClass_str("java/lang/reflect/Method");
+        let meth_cl = self.FindClass("java/lang/reflect/Method");
         assert!(!java_method.is_null(), "{} java/lang/reflect/Method not found???", context);
-        let meth_params = self.GetMethodID_str(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
+        let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
         assert!(!meth_params.is_null(), "{} java/lang/reflect/Method#getParameterTypes not found???", context);
 
         //CallObjectMethodA
@@ -7363,20 +11735,23 @@ impl JNIEnv {
         assert!(!param1_class.is_null(), "{} java/lang/reflect/Method#getParameterTypes[{}] is null???", context, idx);
         self.DeleteLocalRef(parameter_array);
 
-        let class_cl = self.FindClass_str("java/lang/Class");
+        let class_cl = self.FindClass("java/lang/Class");
         assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
-        let class_name = self.GetMethodID_str(class_cl, "getName", "()Ljava/lang/String;");
+        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
         assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
-        let class_is_primitive = self.GetMethodID_str(class_cl, "isPrimitive", "()Z");
+        let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
         assert!(!class_is_primitive.is_null(), "{} java/lang/Class#isPrimitive not found???", context);
 
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
         assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
         //CallBooleanMethodA
-        let param1_is_primitive = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
+        let param1_is_primitive =
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
 
-        let the_name = self.GetStringUTFChars_as_string(name_str).expect(format!("{} failed to get/parse classname???", context).as_str());
+        let the_name = self
+            .GetStringUTFChars_as_string(name_str)
+            .expect(format!("{} failed to get/parse classname???", context).as_str());
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
 
@@ -7390,14 +11765,24 @@ impl JNIEnv {
             'F' => assert_eq!("float", the_name, "{} param{} wrong type. Method has {} but passed float", context, idx, the_name),
             'D' => assert_eq!("double", the_name, "{} param{} wrong type. Method has {} but passed double", context, idx, the_name),
             'L' => {
-                assert!(!param1_is_primitive, "{} param{} wrong type. Method has {} but passed an object or null", context, idx, the_name);
-                let jt : jtype = param1.into();
+                assert!(
+                    !param1_is_primitive,
+                    "{} param{} wrong type. Method has {} but passed an object or null",
+                    context, idx, the_name
+                );
+                let jt: jtype = param1.into();
                 let obj = jt.object;
                 if !obj.is_null() {
-                    assert!(self.IsInstanceOf(obj, param1_class), "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof", context, idx, the_name);
+                    assert!(
+                        self.IsInstanceOf(obj, param1_class),
+                        "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof",
+                        context,
+                        idx,
+                        the_name
+                    );
                 }
             }
-            _=> unreachable!("{}", T::jtype_id())
+            _ => unreachable!("{}", T::jtype_id()),
         }
 
         self.DeleteLocalRef(param1_class);
@@ -7413,30 +11798,32 @@ impl JNIEnv {
         let m = self.ToReflectedMethod(clazz, methodID, false);
         self.DeleteLocalRef(clazz);
         assert!(!m.is_null(), "{} -> ToReflectedMethod returned null", context);
-        let meth_cl = self.FindClass_str("java/lang/reflect/Method");
+        let meth_cl = self.FindClass("java/lang/reflect/Method");
         assert!(!m.is_null(), "{} java/lang/reflect/Method not found???", context);
-        let meth_rtyp = self.GetMethodID_str(meth_cl, "getReturnType", "()Ljava/lang/Class;");
+        let meth_rtyp = self.GetMethodID(meth_cl, "getReturnType", "()Ljava/lang/Class;");
         assert!(!meth_rtyp.is_null(), "{} java/lang/reflect/Method#getReturnType not found???", context);
         //CallObjectMethodA
         let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, m, meth_rtyp, null());
         self.DeleteLocalRef(meth_cl);
         self.DeleteLocalRef(m);
-        if rtc.is_null(){
+        if rtc.is_null() {
             if ty.eq("void") {
                 return;
             }
 
             panic!("{} return type of method is void but expected {}", context, ty);
         }
-        let class_cl = self.FindClass_str("java/lang/Class");
+        let class_cl = self.FindClass("java/lang/Class");
         assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
-        let class_name = self.GetMethodID_str(class_cl, "getName", "()Ljava/lang/String;");
+        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
         assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
         assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
         self.DeleteLocalRef(rtc);
-        let the_name = self.GetStringUTFChars_as_string(name_str).expect(format!("{} failed to get/parse classname???", context).as_str());
+        let the_name = self
+            .GetStringUTFChars_as_string(name_str)
+            .expect(format!("{} failed to get/parse classname???", context).as_str());
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
         if the_name.as_str().eq(ty) {
@@ -7448,7 +11835,7 @@ impl JNIEnv {
                 "void" | "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
                     panic!("{} return type of method is {} but expected object", context, the_name);
                 }
-                _=> {
+                _ => {
                     return;
                 }
             }
@@ -7465,24 +11852,26 @@ impl JNIEnv {
         assert!(!fieldID.is_null(), "{} fieldID is null", context);
         let f = self.ToReflectedField(clazz, fieldID, false);
         assert!(!f.is_null(), "{} -> ToReflectedField returned null", context);
-        let field_cl = self.FindClass_str("java/lang/reflect/Field");
+        let field_cl = self.FindClass("java/lang/reflect/Field");
         assert!(!f.is_null(), "{} java/lang/reflect/Method not found???", context);
-        let field_rtyp = self.GetMethodID_str(field_cl, "getType", "()Ljava/lang/Class;");
+        let field_rtyp = self.GetMethodID(field_cl, "getType", "()Ljava/lang/Class;");
         assert!(!field_rtyp.is_null(), "{} java/lang/reflect/Field#getType not found???", context);
         //CallObjectMethodA
         let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, f, field_rtyp, null());
         assert!(!rtc.is_null(), "{} java/lang/reflect/Field#getType returned null???", context);
         self.DeleteLocalRef(field_cl);
         self.DeleteLocalRef(f);
-        let class_cl = self.FindClass_str("java/lang/Class");
+        let class_cl = self.FindClass("java/lang/Class");
         assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
-        let class_name = self.GetMethodID_str(class_cl, "getName", "()Ljava/lang/String;");
+        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
         assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
         assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
         self.DeleteLocalRef(rtc);
-        let the_name = self.GetStringUTFChars_as_string(name_str).expect(format!("{} failed to get/parse classname???", context).as_str());
+        let the_name = self
+            .GetStringUTFChars_as_string(name_str)
+            .expect(format!("{} failed to get/parse classname???", context).as_str());
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
         if the_name.as_str().eq(ty) {
@@ -7494,7 +11883,7 @@ impl JNIEnv {
                 "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
                     panic!("{} type of field is {} but expected object", context, the_name);
                 }
-                _=> {
+                _ => {
                     return;
                 }
             }
@@ -7502,7 +11891,6 @@ impl JNIEnv {
 
         panic!("{} type of field is {} but expected {}", context, the_name, ty);
     }
-
 }
 
 type JNI_CreateJavaVM = extern "C" fn(*mut JNIInvPtr, *mut JNIEnv, *mut JavaVMInitArgs) -> jint;
@@ -7529,20 +11917,18 @@ impl JNIDynamicLink {
         unsafe {
             Self {
                 JNI_CreateJavaVM: JNI_CreateJavaVM.as_sync_const(),
-                JNI_GetCreatedJavaVMs: JNI_GetCreatedJavaVMs.as_sync_const()
+                JNI_GetCreatedJavaVMs: JNI_GetCreatedJavaVMs.as_sync_const(),
             }
         }
     }
 
     pub fn JNI_CreateJavaVM(&self) -> JNI_CreateJavaVM {
-        unsafe {mem::transmute(self.JNI_CreateJavaVM.inner())}
+        unsafe { mem::transmute(self.JNI_CreateJavaVM.inner()) }
     }
     pub fn JNI_GetCreatedJavaVMs(&self) -> JNI_GetCreatedJavaVMs {
-        unsafe {mem::transmute(self.JNI_GetCreatedJavaVMs.inner())}
+        unsafe { mem::transmute(self.JNI_GetCreatedJavaVMs.inner()) }
     }
 }
-
-
 
 static LINK: OnceCell<JNIDynamicLink> = OnceCell::new();
 
@@ -7552,7 +11938,7 @@ static LINK: OnceCell<JNIDynamicLink> = OnceCell::new();
 /// more than one jvm per process.
 ///
 pub fn init_dynamic_link(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs: *const c_void) {
-    _= LINK.set(JNIDynamicLink::new(JNI_CreateJavaVM, JNI_GetCreatedJavaVMs));
+    _ = LINK.set(JNIDynamicLink::new(JNI_CreateJavaVM, JNI_GetCreatedJavaVMs));
 }
 
 ///
@@ -7575,25 +11961,26 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
 
     LINK.get_or_try_init(|| {
         latch.store(true, Ordering::SeqCst);
-        let lib = libloading::Library::new(path)
-            .map_err(|e| format!("Failed to load jvm from {} reason: {}", path, e))?;
+        let lib = libloading::Library::new(path).map_err(|e| format!("Failed to load jvm from {} reason: {}", path, e))?;
 
-        let JNI_CreateJavaVM_ptr = lib.get::<JNI_CreateJavaVM>(b"JNI_CreateJavaVM\0")
+        let JNI_CreateJavaVM_ptr = lib
+            .get::<JNI_CreateJavaVM>(b"JNI_CreateJavaVM\0")
             .map_err(|e| format!("Failed to load jvm from {} reason: JNI_CreateJavaVM -> {}", path, e))?
             .try_as_raw_ptr()
             .ok_or_else(|| format!("Failed to load jvm from {} reason: JNI_CreateJavaVM -> failed to get raw ptr", path))?;
 
         if JNI_CreateJavaVM_ptr.is_null() {
-            return Err(format!("Failed to load jvm from {} reason: JNI_CreateJavaVM not found", path))
+            return Err(format!("Failed to load jvm from {} reason: JNI_CreateJavaVM not found", path));
         }
 
-        let JNI_GetCreatedJavaVMs_ptr = lib.get::<JNI_GetCreatedJavaVMs>(b"JNI_GetCreatedJavaVMs\0")
+        let JNI_GetCreatedJavaVMs_ptr = lib
+            .get::<JNI_GetCreatedJavaVMs>(b"JNI_GetCreatedJavaVMs\0")
             .map_err(|e| format!("Failed to load jvm from {} reason: JNI_GetCreatedJavaVMs -> {}", path, e))?
             .try_as_raw_ptr()
             .ok_or_else(|| format!("Failed to load jvm from {} reason: JNI_CreateJavaVM -> failed to get raw ptr", path))?;
 
         if JNI_GetCreatedJavaVMs_ptr.is_null() {
-            return Err(format!("Failed to load jvm from {} reason: JNI_GetCreatedJavaVMs not found", path))
+            return Err(format!("Failed to load jvm from {} reason: JNI_GetCreatedJavaVMs not found", path));
         }
 
         //We are good to go!
@@ -7608,7 +11995,6 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
     Ok(())
 }
 
-
 ///
 /// Convenience method to load the jvm from the JAVA_HOME environment variable
 /// that is commonly set on Windows by End-User Java Setups,
@@ -7621,20 +12007,18 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
 pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
     //All (most) jvm layouts that I am aware of on windows+linux.
     const COMMON_LIBJVM_PATHS: &[&[&str]] = &[
-        &["lib", "server", "libjvm.so"], //LINUX JAVA 11+
-        &["jre", "lib", "amd64", "server", "libjvm.so"], //LINUX JDK JAVA <= 8 amd64
-        &["lib", "amd64", "server", "libjvm.so"], //LINUX JRE JAVA <= 8 amd64
+        &["lib", "server", "libjvm.so"],                   //LINUX JAVA 11+
+        &["jre", "lib", "amd64", "server", "libjvm.so"],   //LINUX JDK JAVA <= 8 amd64
+        &["lib", "amd64", "server", "libjvm.so"],          //LINUX JRE JAVA <= 8 amd64
         &["jre", "lib", "aarch32", "server", "libjvm.so"], //LINUX JDK JAVA <= 8 arm 32
-        &["lib", "aarch32", "server", "libjvm.so"], //LINUX JRE JAVA <= 8 arm 32
+        &["lib", "aarch32", "server", "libjvm.so"],        //LINUX JRE JAVA <= 8 arm 32
         &["jre", "lib", "aarch64", "server", "libjvm.so"], //LINUX JDK JAVA <= 8 arm 64
-        &["lib", "aarch64", "server", "libjvm.so"], //LINUX JRE JAVA <= 8 arm 64
-        &["jre", "bin", "server", "jvm.dll"], //WINDOWS JDK <= 8
-        &["bin", "server", "jvm.dll"], //WINDOWS JRE <= 8 AND WINDOWS JDK/JRE 11+
+        &["lib", "aarch64", "server", "libjvm.so"],        //LINUX JRE JAVA <= 8 arm 64
+        &["jre", "bin", "server", "jvm.dll"],              //WINDOWS JDK <= 8
+        &["bin", "server", "jvm.dll"],                     //WINDOWS JRE <= 8 AND WINDOWS JDK/JRE 11+
     ];
 
-    let java_home = std::env::var("JAVA_HOME")
-        .map_err(|_| "JAVA_HOME is not set or invalid".to_string())?;
-
+    let java_home = std::env::var("JAVA_HOME").map_err(|_| "JAVA_HOME is not set or invalid".to_string())?;
 
     for parts in COMMON_LIBJVM_PATHS {
         let mut buf = PathBuf::from(java_home.as_str());
@@ -7643,8 +12027,7 @@ pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
         }
 
         if buf.try_exists().unwrap_or(false) {
-            let full_path = buf.to_str()
-                .ok_or_else(|| format!("JAVA_HOME {} is invalid", java_home))?;
+            let full_path = buf.to_str().ok_or_else(|| format!("JAVA_HOME {} is invalid", java_home))?;
 
             return load_jvm_from_library(full_path);
         }
@@ -7668,8 +12051,8 @@ pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
 
     //NOTE: Oracle spec says this will only ever yield 1 JVM.
     //I will worry about this when it actually becomes a problem
-    let mut buf : [JNIInvPtr; 64] = [SyncMutPtr::null(); 64];
-    let mut count : jint = 0;
+    let mut buf: [JNIInvPtr; 64] = [SyncMutPtr::null(); 64];
+    let mut count: jint = 0;
     let res = link.JNI_GetCreatedJavaVMs()(buf.as_mut_ptr(), 64, &mut count);
     if res != JNI_OK {
         return Err(res);
@@ -7679,14 +12062,14 @@ pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
         panic!("JNI_GetCreatedJavaVMs did set count to < 0 : {}", count);
     }
 
-    let mut result_vec : Vec<JavaVM> = Vec::with_capacity(count as usize);
-    for i in 0 .. count as usize {
+    let mut result_vec: Vec<JavaVM> = Vec::with_capacity(count as usize);
+    for i in 0..count as usize {
         let ptr = buf[i];
         if ptr.is_null() {
             panic!("JNI_GetCreatedJavaVMs VM #{} is null! count is {}", i, count);
         }
 
-        result_vec.push(JavaVM { functions: ptr});
+        result_vec.push(JavaVM { functions: ptr });
     }
 
     Ok(result_vec)
@@ -7703,10 +12086,8 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
     }
     let link = get_link();
 
-    let mut jvm : JNIInvPtr = SyncMutPtr::null();
-    let mut env : JNIEnv = JNIEnv {
-        vtable: null_mut(),
-    };
+    let mut jvm: JNIInvPtr = SyncMutPtr::null();
+    let mut env: JNIEnv = JNIEnv { vtable: null_mut() };
 
     let res = link.JNI_CreateJavaVM()(&mut jvm, &mut env, arguments);
     if res != JNI_OK {
@@ -7721,7 +12102,7 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
         panic!("JNI_CreateJavaVM returned JNI_OK but the JNIEnv pointer is null");
     }
 
-    Ok((JavaVM{ functions: jvm }, env))
+    Ok((JavaVM { functions: jvm }, env))
 }
 
 ///
@@ -7735,7 +12116,9 @@ pub unsafe fn JNI_CreateJavaVM_with_string_args(version: jint, arguments: &Vec<S
     struct DropGuard(*mut c_char);
     impl Drop for DropGuard {
         fn drop(&mut self) {
-            unsafe { _ = CString::from_raw(self.0); }
+            unsafe {
+                _ = CString::from_raw(self.0);
+            }
         }
     }
 
@@ -7745,7 +12128,7 @@ pub unsafe fn JNI_CreateJavaVM_with_string_args(version: jint, arguments: &Vec<S
         let jvm_arg = CString::new(arg.as_str()).unwrap().into_raw();
         dealloc_list.push(DropGuard(jvm_arg));
 
-        vm_args.push(JavaVMOption{
+        vm_args.push(JavaVMOption {
             optionString: jvm_arg,
             extraInfo: null_mut(),
         });
@@ -7763,13 +12146,10 @@ pub unsafe fn JNI_CreateJavaVM_with_string_args(version: jint, arguments: &Vec<S
     result
 }
 
-
-
 impl JavaVM {
-
     #[inline]
     unsafe fn jnx<X>(&self, index: usize) -> X {
-        unsafe {mem::transmute_copy(&(**self.functions.inner())[index])}
+        unsafe { mem::transmute_copy(&(**self.functions.inner())[index]) }
     }
 
     ///
@@ -7777,11 +12157,11 @@ impl JavaVM {
     /// If a thread name is provided then it will be used as the java name of the current thread.
     ///
     pub unsafe fn AttachCurrentThread_str(&self, version: jint, thread_name: Option<&str>, thread_group: jobject) -> Result<JNIEnv, jint> {
-        if thread_name.is_some() {
-            let cstr = CString::new(thread_name.unwrap()).unwrap().into_raw();
-            let mut args = JavaVMAttachArgs::new(version, cstr, thread_group);
+        if let Some(thread_name) = thread_name {
+            let cstr = CString::new(thread_name).unwrap();
+            let mut args = JavaVMAttachArgs::new(version, cstr.as_ptr(), thread_group);
             let result = self.AttachCurrentThread(&mut args);
-            _=CString::from_raw(cstr);
+            drop(cstr);
             return result;
         }
 
@@ -7794,10 +12174,9 @@ impl JavaVM {
         {
             assert!(!args.is_null(), "AttachCurrentThread args must not be null");
         }
-        let mut envptr : JNIEnvVTable = null_mut();
+        let mut envptr: JNIEnvVTable = null_mut();
 
-        let result = self.jnx::<extern "system" fn(JNIInvPtr, *mut JNIEnvVTable, *mut JavaVMAttachArgs) -> jint>(4)
-            (self.functions, &mut envptr, args);
+        let result = self.jnx::<extern "system" fn(JNIInvPtr, *mut JNIEnvVTable, *mut JavaVMAttachArgs) -> jint>(4)(self.functions, &mut envptr, args);
         if result != JNI_OK {
             return Err(result);
         }
@@ -7806,7 +12185,7 @@ impl JavaVM {
             panic!("AttachCurrentThread returned JNI_OK but did not set the JNIEnv pointer!");
         }
 
-        Ok(JNIEnv{ vtable: envptr})
+        Ok(JNIEnv { vtable: envptr })
     }
 
     ///
@@ -7814,11 +12193,11 @@ impl JavaVM {
     /// If a thread name is provided then it will be used as the java name of the current thread.
     ///
     pub unsafe fn AttachCurrentThreadAsDaemon_str(&self, version: jint, thread_name: Option<&str>, thread_group: jobject) -> Result<JNIEnv, jint> {
-        if thread_name.is_some() {
-            let cstr = CString::new(thread_name.unwrap()).unwrap().into_raw();
-            let mut args = JavaVMAttachArgs::new(version, cstr, thread_group);
+        if let Some(thread_name) = thread_name {
+            let cstr = CString::new(thread_name).unwrap();
+            let mut args = JavaVMAttachArgs::new(version, cstr.as_ptr(), thread_group);
             let result = self.AttachCurrentThreadAsDaemon(&mut args);
-            _=CString::from_raw(cstr);
+            drop(cstr);
             return result;
         }
 
@@ -7831,10 +12210,9 @@ impl JavaVM {
         {
             assert!(!args.is_null(), "AttachCurrentThreadAsDaemon args must not be null");
         }
-        let mut envptr : JNIEnvVTable = null_mut();
+        let mut envptr: JNIEnvVTable = null_mut();
 
-        let result = self.jnx::<extern "system" fn(JNIInvPtr, *mut JNIEnvVTable, *mut JavaVMAttachArgs) -> jint>(7)
-            (self.functions, &mut envptr, args);
+        let result = self.jnx::<extern "system" fn(JNIInvPtr, *mut JNIEnvVTable, *mut JavaVMAttachArgs) -> jint>(7)(self.functions, &mut envptr, args);
 
         if result != JNI_OK {
             return Err(result);
@@ -7844,17 +12222,16 @@ impl JavaVM {
             panic!("AttachCurrentThreadAsDaemon returned JNI_OK but did not set the JNIEnv pointer!");
         }
 
-        Ok(JNIEnv{ vtable: envptr})
+        Ok(JNIEnv { vtable: envptr })
     }
 
     ///
     /// Gets the JNIEnv for the current thread.
     ///
     pub unsafe fn GetEnv(&self, jni_version: jint) -> Result<JNIEnv, jint> {
-        let mut envptr : JNIEnvVTable = null_mut();
+        let mut envptr: JNIEnvVTable = null_mut();
 
-        let result = self.jnx::<extern "system" fn(JNIInvPtr, *mut JNIEnvVTable, jint) -> jint>(6)
-            (self.functions, &mut envptr, jni_version);
+        let result = self.jnx::<extern "system" fn(JNIInvPtr, *mut JNIEnvVTable, jint) -> jint>(6)(self.functions, &mut envptr, jni_version);
 
         if result != JNI_OK {
             return Err(result);
@@ -7864,7 +12241,7 @@ impl JavaVM {
             panic!("GetEnv returned JNI_OK but did not set the JNIEnv pointer!");
         }
 
-        Ok(JNIEnv{ vtable: envptr})
+        Ok(JNIEnv { vtable: envptr })
     }
 
     ///
@@ -7875,7 +12252,6 @@ impl JavaVM {
         self.jnx::<extern "system" fn(JNIInvPtr) -> jint>(5)(self.functions)
     }
 
-
     ///
     /// This function will block until all java threads have completed and then destroy the JVM.
     /// It should not be called from a method that is called from the JVM.
@@ -7883,8 +12259,6 @@ impl JavaVM {
     pub unsafe fn DestroyJavaVM(&self) {
         self.jnx::<extern "system" fn(JNIInvPtr) -> ()>(3)(self.functions);
     }
-
-
 }
 
 #[cfg(test)]

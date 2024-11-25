@@ -1,7 +1,7 @@
 #[cfg(feature = "loadjvm")]
 pub mod test {
     use jni_simple::*;
-    use std::ptr::{null, null_mut};
+    use std::ptr::{null_mut};
 
     #[test]
     fn test() {
@@ -10,24 +10,23 @@ pub mod test {
             let args: Vec<String> = vec!["-Xcheck:jni".to_string()];
             let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
             let class_blob = include_bytes!("../java_testcode/ThrowNewZa2.class");
-            let class_loaded = env.DefineClass_str("ThrowNewZa2", null_mut(), class_blob);
+            let class_loaded = env.DefineClass("ThrowNewZa2", null_mut(), class_blob);
             if class_loaded.is_null() {
                 env.ExceptionDescribe();
-                env.FatalError_str("failed to load class");
+                env.FatalError("failed to load class");
             }
 
-
-            assert_eq!(JNI_OK, env.ThrowNew_str(class_loaded, "Test Message"));
+            assert_eq!(JNI_OK, env.ThrowNew(class_loaded, "Test Message"));
             env.ExceptionDescribe();
 
-            let field = env.GetStaticFieldID_str(class_loaded, "message", "Ljava/lang/String;");
+            let field = env.GetStaticFieldID(class_loaded, "message", "Ljava/lang/String;");
             let obj = env.GetStaticObjectField(class_loaded, field);
             assert!(!obj.is_null());
             let str = env.GetStringUTFChars_as_string(obj).unwrap();
             env.DeleteLocalRef(obj);
             assert_eq!(str.as_str(), "Test Message");
 
-            assert_eq!(JNI_OK, env.ThrowNew(class_loaded, null()));
+            assert_eq!(JNI_OK, env.ThrowNew(class_loaded, ()));
             env.ExceptionDescribe();
             let obj = env.GetStaticObjectField(class_loaded, field);
             assert!(!obj.is_null());

@@ -1,8 +1,8 @@
 #[cfg(feature = "loadjvm")]
 pub mod test {
+    use jni_simple::*;
     use std::ptr::null_mut;
     use std::sync::Mutex;
-    use jni_simple::*;
 
     //Cargo runs the tests on different threads.
     static MUTEX: Mutex<()> = Mutex::new(());
@@ -18,8 +18,7 @@ pub mod test {
             //let args: Vec<String> = vec!["-Xint".to_string()];
             let args: Vec<String> = vec![];
 
-            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args)
-                .expect("failed to create jvm");
+            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
             return env;
         }
 
@@ -30,8 +29,7 @@ pub mod test {
                 panic!("JVM ERROR {}", c);
             }
 
-            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut())
-                .expect("failed to attach thread")
+            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).expect("failed to attach thread")
         });
 
         env
@@ -49,14 +47,13 @@ pub mod test {
             assert_eq!(512, env.GetDirectBufferCapacity(dir_buf));
             assert_eq!(ptr, env.GetDirectBufferAddress(dir_buf));
 
-            let buf_class = env.FindClass_str("java/nio/ByteBuffer");
+            let buf_class = env.FindClass("java/nio/ByteBuffer");
             assert!(env.IsInstanceOf(dir_buf, buf_class));
-            let get_next_byte = env.GetMethodID_str(buf_class, "get", "()B");
-            let set_next_byte = env.GetMethodID_str(buf_class, "put", "(B)Ljava/nio/ByteBuffer;");
-            let set_position = env.GetMethodID_str(buf_class, "position", "(I)Ljava/nio/Buffer;");
+            let get_next_byte = env.GetMethodID(buf_class, "get", "()B");
+            let set_next_byte = env.GetMethodID(buf_class, "put", "(B)Ljava/nio/ByteBuffer;");
+            let set_position = env.GetMethodID(buf_class, "position", "(I)Ljava/nio/Buffer;");
 
-
-            for i in 0 .. 512 {
+            for i in 0..512 {
                 let b = env.CallByteMethod0(dir_buf, get_next_byte);
                 assert_eq!(b, 123);
                 assert_eq!(some_buffer[i], 123);
@@ -64,7 +61,7 @@ pub mod test {
 
             env.DeleteLocalRef(env.CallObjectMethod1(dir_buf, set_position, 0i32));
 
-            for i in 0 .. 512 {
+            for i in 0..512 {
                 env.DeleteLocalRef(env.CallObjectMethod1(dir_buf, set_next_byte, i as i8));
                 assert_eq!(some_buffer[i], i as i8);
             }

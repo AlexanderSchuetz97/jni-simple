@@ -28,9 +28,9 @@ pub mod test {
                 assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
                 assert_eq!(JNI_EDETACHED, vm_clone.GetEnv(JNI_VERSION_1_8).unwrap_err());
                 let env = vm_clone.AttachCurrentThread_str(JNI_VERSION_1_8, Some("HelloWorld"), null_mut()).unwrap();
-                let n = env.FindClass_str("java/lang/Thread");
-                let gt = env.GetStaticMethodID_str(n, "currentThread", "()Ljava/lang/Thread;");
-                let gn = env.GetMethodID_str(n, "getName", "()Ljava/lang/String;");
+                let n = env.FindClass("java/lang/Thread");
+                let gt = env.GetStaticMethodID(n, "currentThread", "()Ljava/lang/Thread;");
+                let gn = env.GetMethodID(n, "getName", "()Ljava/lang/String;");
                 let thread = env.CallStaticObjectMethod0(n, gt);
                 let thread_name_j = env.CallObjectMethod0(thread, gn);
                 let jn = env.GetStringUTFChars_as_string(thread_name_j).unwrap();
@@ -40,7 +40,9 @@ pub mod test {
                 env.DeleteLocalRef(n);
                 assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
                 assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
-            }).join().unwrap();
+            })
+            .join()
+            .unwrap();
 
             let vm_clone = env.GetJavaVM().unwrap();
 
@@ -48,9 +50,7 @@ pub mod test {
             let l2 = l1.clone();
             let l3 = l2.clone();
 
-
             let guard = l1.0.lock().unwrap();
-
 
             std::thread::spawn(move || {
                 let guard = l2.0.lock().unwrap();
@@ -62,16 +62,17 @@ pub mod test {
 
             std::thread::spawn(move || {
                 let env = vm_clone.AttachCurrentThreadAsDaemon_str(JNI_VERSION_1_8, Some("HelloWorld"), null_mut()).unwrap();
-                let n = env.FindClass_str("java/lang/Thread");
-                let gt = env.GetStaticMethodID_str(n, "currentThread", "()Ljava/lang/Thread;");
-                let gn = env.GetMethodID_str(n, "getName", "()Ljava/lang/String;");
+                let n = env.FindClass("java/lang/Thread");
+                let gt = env.GetStaticMethodID(n, "currentThread", "()Ljava/lang/Thread;");
+                let gn = env.GetMethodID(n, "getName", "()Ljava/lang/String;");
                 let thread = env.CallStaticObjectMethod0(n, gt);
                 let thread_name_j = env.CallObjectMethod0(thread, gn);
                 let jn = env.GetStringUTFChars_as_string(thread_name_j).unwrap();
                 assert_eq!("HelloWorld", jn.as_str());
                 assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
-            }).join().unwrap();
-
+            })
+            .join()
+            .unwrap();
 
             let guard = l1.1.wait(guard).unwrap();
             let vm_clone = vm.clone();

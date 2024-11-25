@@ -1,16 +1,15 @@
 #[cfg(feature = "loadjvm")]
 pub mod test {
+    use jni_simple::*;
     use std::ptr::{null, null_mut};
     use std::sync::Mutex;
-    use jni_simple::*;
 
     //Cargo runs the tests on different threads.
     static MUTEX: Mutex<()> = Mutex::new(());
 
-    unsafe fn load_it() -> (JavaVM, JNIEnv){
+    unsafe fn load_it() -> (JavaVM, JNIEnv) {
         if !jni_simple::is_jvm_loaded() {
-            jni_simple::load_jvm_from_java_home()
-                .expect("failed to load jvm");
+            jni_simple::load_jvm_from_java_home().expect("failed to load jvm");
         }
 
         let thr = JNI_GetCreatedJavaVMs().expect("failed to get jvm");
@@ -18,7 +17,7 @@ pub mod test {
             //Adjust JVM version and arguments here, args are just like the args you pass on the command line.
             //You could provide your classpath here for example or configure the jvm heap size.
             //Default arguments (none) will do for this example.
-            let args : Vec<String> = vec![];
+            let args: Vec<String> = vec![];
             return JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
         }
 
@@ -31,8 +30,6 @@ pub mod test {
         (jvm, env.unwrap())
     }
 
-
-
     #[test]
     fn test() {
         let _lock = MUTEX.lock().unwrap();
@@ -40,14 +37,13 @@ pub mod test {
             let (_jvm, env) = load_it();
 
             //This code does not check for failure or exceptions checks or "checks" for success in general.
-            let sys = env.FindClass_str("java/lang/System");
-            let nano_time = env.GetStaticMethodID_str(sys, "nanoTime", "()J");
+            let sys = env.FindClass("java/lang/System");
+            let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
             let nanos = env.CallStaticLongMethodA(sys, nano_time, null());
             //Calls System.nanoTime() and prints the result
             println!("{}", nanos);
         }
     }
-
 
     #[test]
     fn test_call2() {
@@ -56,10 +52,10 @@ pub mod test {
             let (_jvm, env) = load_it();
 
             //This code does not check for failure or exceptions checks or "checks" for success in general.
-            let sys = env.FindClass_str("java/lang/System");
-            let get_prop = env.GetStaticMethodID_str(sys, "getProperty", "(Ljava/lang/String;)Ljava/lang/String;");
+            let sys = env.FindClass("java/lang/System");
+            let get_prop = env.GetStaticMethodID(sys, "getProperty", "(Ljava/lang/String;)Ljava/lang/String;");
 
-            let str = env.NewStringUTF_str("os.name");
+            let str = env.NewStringUTF("os.name");
             let obj = env.CallStaticObjectMethod1(sys, get_prop, str);
             let uw = env.GetStringUTFChars_as_string(obj).unwrap().to_lowercase();
             env.DeleteLocalRef(obj);
@@ -70,8 +66,8 @@ pub mod test {
             #[cfg(target_os = "windows")]
             assert_eq!(uw, "windows");
 
-            let set_prop = env.GetStaticMethodID_str(sys, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
-            let str = env.NewStringUTF_str("some_prop2");
+            let set_prop = env.GetStaticMethodID(sys, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+            let str = env.NewStringUTF("some_prop2");
             let obj = env.CallStaticObjectMethod1(sys, get_prop, str);
             assert!(obj.is_null());
             let obj = env.CallStaticObjectMethod2(sys, set_prop, str, str);
@@ -83,7 +79,6 @@ pub mod test {
             env.DeleteLocalRef(str);
             assert_eq!(uw, "some_prop2");
         }
-
     }
 
     #[test]
@@ -93,10 +88,10 @@ pub mod test {
             let (_jvm, env) = load_it();
 
             //This code does not check for failure or exceptions checks or "checks" for success in general.
-            let sys = env.FindClass_str("java/lang/System");
-            let get_prop = env.GetStaticMethodID_str(sys, "getProperty", "(Ljava/lang/String;)Ljava/lang/String;");
+            let sys = env.FindClass("java/lang/System");
+            let get_prop = env.GetStaticMethodID(sys, "getProperty", "(Ljava/lang/String;)Ljava/lang/String;");
 
-            let str = env.NewStringUTF_str("os.name");
+            let str = env.NewStringUTF("os.name");
             let obj = env.CallStaticObjectMethodA(sys, get_prop, [str.into()].as_ptr());
             assert!(!obj.is_null());
             let uw = env.GetStringUTFChars_as_string(obj).unwrap().to_lowercase();
@@ -108,9 +103,8 @@ pub mod test {
             #[cfg(target_os = "windows")]
             assert_eq!(uw, "windows");
 
-
-            let set_prop = env.GetStaticMethodID_str(sys, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
-            let str = env.NewStringUTF_str("some_prop");
+            let set_prop = env.GetStaticMethodID(sys, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+            let str = env.NewStringUTF("some_prop");
             let obj = env.CallStaticObjectMethodA(sys, get_prop, [str.into()].as_ptr());
             assert!(obj.is_null());
             let obj = env.CallStaticObjectMethodA(sys, set_prop, [str.into(), str.into()].as_ptr());

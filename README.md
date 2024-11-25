@@ -3,8 +3,8 @@
 This crate contains a simple dumb handwritten rust wrapper around the JNI (Java Native Interface) API.
 It does absolutely no magic around the JNI Calls and lets you just use them as you would in C.
 
-### Examples
-#### Loading a JVM on from a shared object file or dll
+## Examples
+### Loading a JVM on from a shared object file or dll
 Note: this example assumes the loadjvm feature is enabled!
 ```rust
 use jni_simple::{*};
@@ -35,15 +35,15 @@ fn test() {
         let (_jvm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
 
         //This code does not check for failure or exceptions checks or "checks" for success in general.
-        let sys = env.FindClass_str("java/lang/System");
-        let nano_time = env.GetStaticMethodID_str(sys, "nanoTime", "()J");
+        let sys = env.FindClass("java/lang/System");
+        let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
         let nanos = env.CallStaticLongMethodA(sys, nano_time, null());
         //Calls System.nanoTime() and prints the result
         println!("{}", nanos);
     }
 }
 ```
-#### Writing a JNI shared library that implements a native method
+### Writing a JNI shared library that implements a native method
 The complete version of this example can be found in the repository inside the example_project folder.
 ```rust
 #![allow(non_snake_case)]
@@ -73,8 +73,8 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> 
 
 
     //This code does not check for failure or exceptions checks or "checks" for success in general.
-    let sys = env.FindClass_str("java/lang/System");
-    let nano_time = env.GetStaticMethodID_str(sys, "nanoTime", "()J");
+    let sys = env.FindClass("java/lang/System");
+    let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
     let nanos = env.CallStaticLongMethodA(sys, nano_time, null());
     println!("RUST: JNI_OnLoad {}", nanos);
     stdout().flush().unwrap();
@@ -86,8 +86,8 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> 
 #[no_mangle]
 pub unsafe extern "system" fn Java_org_example_JNITest_test(env: JNIEnv, _class: jclass) {
     //This code does not check for failure or exceptions checks or "checks" for success in general.
-    let sys = env.FindClass_str("java/lang/System");
-    let nano_time = env.GetStaticMethodID_str(sys, "nanoTime", "()J");
+    let sys = env.FindClass("java/lang/System");
+    let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
     let nanos = env.CallStaticLongMethodA(sys, nano_time, null());
     println!("RUST: Java_org_example_JNITest_test {}", nanos);
     stdout().flush().unwrap();
@@ -101,11 +101,11 @@ pub unsafe extern "system" fn Java_org_example_JNITest_test(env: JNIEnv, _class:
             .first().unwrap().clone(); //There can only be one JavaVM per process as per oracle spec.
 
         //You could also provide a thread name or thread group here.
-        let mut n = JavaVMAttachArgs::new(JNI_VERSION_1_8, null(), null_mut());
-        vms.AttachCurrentThread(&mut n).unwrap();
+        let mut attach_args = JavaVMAttachArgs::new(JNI_VERSION_1_8, null(), null_mut());
+        vms.AttachCurrentThread(&mut attach_args).unwrap();
         let env = vms.GetEnv(JNI_VERSION_1_8).unwrap();
-        let sys = env.FindClass_str("java/lang/System");
-        let nano_time = env.GetStaticMethodID_str(sys, "nanoTime", "()J");
+        let sys = env.FindClass("java/lang/System");
+        let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
         let nanos = env.CallStaticLongMethodA(sys, nano_time, null());
         println!("RUST thread delayed: Java_org_example_JNITest_test {}", nanos);
         stdout().flush().unwrap();
@@ -114,20 +114,20 @@ pub unsafe extern "system" fn Java_org_example_JNITest_test(env: JNIEnv, _class:
 }
 ```
 
-### Main goals of this crate
+## Main goals of this crate
 
-#### Dont pretend that JNI is "safe"
+### Dont pretend that JNI is "safe"
 JNI is inherently unsafe (from a rust point of view) and any attempt to enforce safety will lead to 
 performance or API complexity issues. All JNI methods provided by this crate are 
 marked as "unsafe" as they should be.
 
-#### Simple type system of JNI is kept as is
+### Simple type system of JNI is kept as is
 All types like jobject, jstring, jarray,... which are opaque handles represented as pointers in C are 
 represented as raw opaque pointers in Rust that are type aliases of each other. 
 This essentially makes them just hint to the user and doesn't enforce any type safety as that would sometimes
 be a big hindrance when working with JNI.
 
-#### Designed for runtime dynamic linking of the JVM
+### Designed for runtime dynamic linking of the JVM
 The Problem: The existing jni crate depends on the jni-sys crate which requires the JVM to be resolvable by the dynamic linker.
 There are 2 ways to do this. The first is to statically link the JVM into the binary, this is rarely done, 
 very cumbersome and poorly documented. The other is to provide the JVM on the linker path so ldd can find it, 
@@ -140,9 +140,9 @@ This allows for maximum flexibility when writing a launcher app which for exampl
 As should be obvious, when writing a native library that does not launch the JVM itself and 
 is loaded by `System.load` or `System.loadLibrary` then this is irrelevant.
 
-### Features
+## Features
 
-#### loadjvm
+### loadjvm
 This feature provides functions to dynamically link the jvm using the `libloading` crate 
 from a string containing the absolute path to `libjvm.so` or `jvm.dll`.
 
@@ -153,7 +153,7 @@ Do that if you want to do dynamic linking yourself using `dlopen` or `LoadLibrar
 Note: This feature should not be used when writing a library that is loaded by `System.load` or `System.loadLibrary`. 
 It would just add a dependency that is not needed.
 
-#### asserts
+### asserts
 This feature enables assertions in the code. This is useful for debugging and testing purposes.
 These checks will cause a big performance hit and should not be used in production builds.
 
@@ -184,7 +184,65 @@ if the rust code had triggered UB in the JVM in the absence of the assertions.
 This can either be done by calling abort when "catching" the panic or compiling your rust code with panic=abort
 if you do not need to catch panics anywhere in your rust code.
 
-### Further Info
+## Further Info
+
+### String handling
+
+Many JNI methods take a zero terminated utf-8 string as parameter. It is possible to call all those fn's
+with all commonly used rust string types as well as raw *const c_char pointers.
+
+The following types are supported:
+- &str
+- String
+- &String
+- &Cow\<&str\>
+- CString
+- &CString
+- &CStr
+- &OsStr
+- OsString
+- &OsString
+- &[u8]
+- Vec\<u8\>
+- \* const c_char
+  - \* const u8
+  - \* const i8
+
+Because JNI expects a zero terminated string, some types are copied if necessary and a zero byte is appended.
+Raw pointer types are assumed to already be zero terminated and are passed as is.
+If a string already contains a 0 byte then is not copied and passed to jni as is. Should the 0 byte be somewhere
+in the middle of the string then this 0 byte effectively truncates the string at that point for the jni call.
+
+Example:
+```rust
+use std::ptr::null;
+use jni_simple::{*};
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_some_package_ClassName_method(env: JNIEnv, class: jclass) {
+    env.FindClass("java/lang/String");
+    env.FindClass("java/lang/String".as_bytes());
+    env.FindClass("java/lang/String".to_string());
+    env.FindClass("java/lang/String\0".as_ptr());
+    env.FindClass("java/lang/String\0garbage data that is ignored");
+    
+    let exception = env.FindClass("java/lang/Exception");
+    env.ThrowNew(exception, "This is a message");
+    
+    //This fn accepts different types of raw pointers so we unfortunately have to specify the type here.
+    env.ThrowNew(exception, null::<c_char>());
+    //To make this a bit shorter you can also use the unit type.
+    //This is equivalent to passing null::<c_char>()
+    env.ThrowNew(exception, ());
+    
+    
+    // !!! WARNING THIS WOULD BE UB !!!
+    //This is UB because the string is not zero terminated and passed as a raw pointer and therefore assumed to be zero terminated.
+    env.FindClass("java/lang/String".as_ptr());
+}
+```
+
+
 ### Variadic up-calls
 Currently, variadic up-calls into JVM code are only implemented for 0 to 3 parameters.
 (Do not confuse this with java "Variadic" methods, 
@@ -210,7 +268,7 @@ implementations to call this Variadic function with 0, 1, 2 and 3 parameters.
 This should cover 99% of your up-call needs. 
 To call methods with more than 3 parameters simply use Variant 2.
 
-As you can see calling Variant 2 is a bit unwieldy for so for most smaller functions using
+As you can see calling Variant 2 is a bit unwieldy so for most smaller functions using
 Variant 1 of up-calling is probably the better choice.
 Example:
 ```rust
@@ -219,12 +277,12 @@ use jni_simple::{*};
 
 #[no_mangle]
 pub unsafe extern "system" fn Java_some_package_ClassName_method(env: JNIEnv, class: jclass) {
-    let meth0 = env.GetStaticMethodID_str(class, "methodWith0IntParams", "()V");
-    let meth1 = env.GetStaticMethodID_str(class, "methodWith1IntParams", "(I)V");
-    let meth2 = env.GetStaticMethodID_str(class, "methodWith2IntParams", "(II)V");
-    let meth3 = env.GetStaticMethodID_str(class, "methodWith3IntParams", "(III)V");
+    let meth0 = env.GetStaticMethodID(class, "methodWith0IntParams", "()V");
+    let meth1 = env.GetStaticMethodID(class, "methodWith1IntParams", "(I)V");
+    let meth2 = env.GetStaticMethodID(class, "methodWith2IntParams", "(II)V");
+    let meth3 = env.GetStaticMethodID(class, "methodWith3IntParams", "(III)V");
     //for example: public static void methodWith4IntParams(int a, int b, int c, int d) {}
-    let meth4 = env.GetStaticMethodID_str(class, "methodWith4IntParams", "(IIII)V");
+    let meth4 = env.GetStaticMethodID(class, "methodWith4IntParams", "(IIII)V");
 
     //Variant 1: Variadic up-calls:
     //BE CAREFUL, this method is sensitive to difference between i32/i16/i8 etc. 

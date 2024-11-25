@@ -23,10 +23,10 @@ pub mod test {
 
             let class_blob = include_bytes!("../java_testcode/RegisterTest.class");
 
-            let registered_class = env.DefineClass_str("RegisterTest", null_mut(), class_blob.as_slice());
-            let t1m = env.GetStaticMethodID_str(registered_class, "callTest", "(Ljava/lang/String;)V");
-            let t2m = env.GetStaticMethodID_str(registered_class, "callTest", "(D)V");
-            let test_string = env.NewStringUTF_str("test_string");
+            let registered_class = env.DefineClass("RegisterTest", null_mut(), class_blob.as_slice());
+            let t1m = env.GetStaticMethodID(registered_class, "callTest", "(Ljava/lang/String;)V");
+            let t2m = env.GetStaticMethodID(registered_class, "callTest", "(D)V");
+            let test_string = env.NewStringUTF("test_string");
 
             env.CallStaticVoidMethod1(registered_class, t1m, test_string);
             assert!(env.ExceptionCheck());
@@ -36,7 +36,7 @@ pub mod test {
             let exc_class = env.GetObjectClass(exc);
             env.DeleteLocalRef(exc);
             let class_class = env.GetObjectClass(exc_class);
-            let get_name_method = env.GetMethodID_str(class_class, "getName", "()Ljava/lang/String;");
+            let get_name_method = env.GetMethodID(class_class, "getName", "()Ljava/lang/String;");
             env.DeleteLocalRef(class_class);
             let exc_class_name = env.CallObjectMethod0(exc_class, get_name_method);
             env.DeleteLocalRef(exc_class);
@@ -56,8 +56,6 @@ pub mod test {
             let exc_class_name_str = env.GetStringUTFChars_as_string(exc_class_name).unwrap();
             assert_eq!(exc_class_name_str.as_str(), "java.lang.UnsatisfiedLinkError");
             env.DeleteLocalRef(exc_class_name);
-
-
 
             let name = CString::new("test").unwrap();
             let sig1 = CString::new("(Ljava/lang/String;)V").unwrap();

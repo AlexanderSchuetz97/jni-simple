@@ -1,10 +1,9 @@
-
 #[cfg(feature = "loadjvm")]
 pub mod test {
-    use std::ffi::{c_char};
+    use jni_simple::*;
+    use std::ffi::c_char;
     use std::ptr::null_mut;
     use std::sync::Mutex;
-    use jni_simple::*;
 
     //Cargo runs the tests on different threads.
     static MUTEX: Mutex<()> = Mutex::new(());
@@ -20,8 +19,7 @@ pub mod test {
             //let args: Vec<String> = vec!["-Xint".to_string()];
             let args: Vec<String> = vec![];
 
-            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args)
-                .expect("failed to create jvm");
+            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
             return env;
         }
 
@@ -32,8 +30,7 @@ pub mod test {
                 panic!("JVM ERROR {}", c);
             }
 
-            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut())
-                .expect("failed to attach thread")
+            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).expect("failed to attach thread")
         });
 
         env
@@ -43,7 +40,9 @@ pub mod test {
     fn test_new_from_chars() {
         let _lock = MUTEX.lock().unwrap();
         unsafe {
-            let some_chars = ['T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16];
+            let some_chars = [
+                'T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16,
+            ];
             let env = get_env();
             let str = env.NewString(some_chars.as_ptr(), some_chars.len() as jsize);
             let uw = env.GetStringUTFChars_as_string(str).unwrap();
@@ -58,11 +57,14 @@ pub mod test {
 
         unsafe {
             let env = get_env();
-            let str = env.NewStringUTF_str("Test String");
+            let str = env.NewStringUTF("Test String");
             let mut data = vec![0u16; env.GetStringLength(str) as usize];
             env.GetStringRegion(str, 0, data.len() as jsize, data.as_mut_ptr());
             env.DeleteLocalRef(str);
-            assert_eq!(['T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16].as_slice(), data.as_slice());
+            assert_eq!(
+                ['T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16].as_slice(),
+                data.as_slice()
+            );
         }
     }
 
@@ -72,11 +74,27 @@ pub mod test {
 
         unsafe {
             let env = get_env();
-            let str = env.NewStringUTF_str("Test String");
+            let str = env.NewStringUTF("Test String");
             let mut data = vec![0 as c_char; env.GetStringUTFLength(str) as usize];
             env.GetStringUTFRegion(str, 0, data.len() as jsize, data.as_mut_ptr());
             env.DeleteLocalRef(str);
-            assert_eq!(['T' as c_char, 'e' as c_char, 's' as c_char, 't' as c_char, ' ' as c_char, 'S' as c_char, 't' as c_char, 'r' as c_char, 'i' as c_char, 'n' as c_char, 'g' as c_char].as_slice(), data.as_slice());
+            assert_eq!(
+                [
+                    'T' as c_char,
+                    'e' as c_char,
+                    's' as c_char,
+                    't' as c_char,
+                    ' ' as c_char,
+                    'S' as c_char,
+                    't' as c_char,
+                    'r' as c_char,
+                    'i' as c_char,
+                    'n' as c_char,
+                    'g' as c_char
+                ]
+                .as_slice(),
+                data.as_slice()
+            );
         }
     }
 
@@ -86,10 +104,27 @@ pub mod test {
 
         unsafe {
             let env = get_env();
-            let str = env.NewStringUTF_str("Test String");
+            let str = env.NewStringUTF("Test String");
             let cstr = env.GetStringUTFChars(str, null_mut());
-            let sl = std::slice::from_raw_parts(cstr, (env.GetStringUTFLength(str)+1) as usize);
-            assert_eq!(['T' as c_char, 'e' as c_char, 's' as c_char, 't' as c_char, ' ' as c_char, 'S' as c_char, 't' as c_char, 'r' as c_char, 'i' as c_char, 'n' as c_char, 'g' as c_char, 0].as_slice(), sl);
+            let sl = std::slice::from_raw_parts(cstr, (env.GetStringUTFLength(str) + 1) as usize);
+            assert_eq!(
+                [
+                    'T' as c_char,
+                    'e' as c_char,
+                    's' as c_char,
+                    't' as c_char,
+                    ' ' as c_char,
+                    'S' as c_char,
+                    't' as c_char,
+                    'r' as c_char,
+                    'i' as c_char,
+                    'n' as c_char,
+                    'g' as c_char,
+                    0
+                ]
+                .as_slice(),
+                sl
+            );
             env.ReleaseStringUTFChars(str, cstr);
             env.DeleteLocalRef(str);
         }
@@ -101,10 +136,13 @@ pub mod test {
 
         unsafe {
             let env = get_env();
-            let str = env.NewStringUTF_str("Test String");
+            let str = env.NewStringUTF("Test String");
             let cstr = env.GetStringChars(str, null_mut());
-            let sl = std::slice::from_raw_parts(cstr, (env.GetStringLength(str)+1) as usize);
-            assert_eq!(['T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16, 0].as_slice(), sl);
+            let sl = std::slice::from_raw_parts(cstr, (env.GetStringLength(str) + 1) as usize);
+            assert_eq!(
+                ['T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16, 0].as_slice(),
+                sl
+            );
             env.ReleaseStringChars(str, cstr);
             env.DeleteLocalRef(str);
         }
@@ -117,14 +155,17 @@ pub mod test {
         unsafe {
             let env = get_env();
             let m = env.NewByteArray(16);
-            let str = env.NewStringUTF_str("Test String");
+            let str = env.NewStringUTF("Test String");
             let l = env.GetStringLength(str);
             let n = env.GetStringCritical(str, null_mut());
             assert!(!n.is_null());
             let arr = env.GetPrimitiveArrayCritical(m, null_mut());
             assert!(!arr.is_null());
             let slice = std::slice::from_raw_parts(n, l as usize);
-            assert_eq!(['T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16].as_slice(), slice);
+            assert_eq!(
+                ['T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16].as_slice(),
+                slice
+            );
             env.ReleaseStringCritical(str, n);
             env.ReleasePrimitiveArrayCritical(m, arr, JNI_OK);
             assert!(!env.ExceptionCheck());
@@ -139,9 +180,9 @@ pub mod test {
         let _lock = MUTEX.lock().unwrap();
         unsafe {
             let env = get_env();
-            let array = env.NewStringUTF_str("Test String 1");
+            let array = env.NewStringUTF("Test String 1");
             assert!(!array.is_null());
-            let array2 = env.NewStringUTF_str("Test String 2");
+            let array2 = env.NewStringUTF("Test String 2");
             assert!(!array2.is_null());
             let ptr = env.GetStringCritical(array, null_mut());
             assert!(!ptr.is_null());
