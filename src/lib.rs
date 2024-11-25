@@ -821,7 +821,7 @@ impl JNIEnv {
                 self.check_no_exception("DefineClass");
                 assert!(!name.is_null(), "DefineClass name is null");
                 self.check_is_classloader_or_null("DefineClass", classloader);
-                assert!(data.is_null(), "DefineClass data is null");
+                assert!(!data.is_null(), "DefineClass data is null");
                 if len < 0 {
                     panic!("DefineClass len is negative {}", len);
                 }
@@ -1554,11 +1554,13 @@ impl JNIEnv {
         {
             self.check_not_critical("DeleteLocalRef");
             assert!(!obj.is_null(), "DeleteLocalRef obj is null");
-            match self.GetObjectRefType(obj) {
-                jobjectRefType::JNIInvalidRefType => panic!("DeleteLocalRef invalid non null reference"),
-                jobjectRefType::JNILocalRefType => {}
-                jobjectRefType::JNIGlobalRefType => panic!("DeleteLocalRef global reference passed"),
-                jobjectRefType::JNIWeakGlobalRefType => panic!("DeleteLocalRef weak global reference passed"),
+            if !self.ExceptionCheck() {
+                match self.GetObjectRefType(obj) {
+                    jobjectRefType::JNIInvalidRefType => panic!("DeleteLocalRef invalid non null reference"),
+                    jobjectRefType::JNILocalRefType => {}
+                    jobjectRefType::JNIGlobalRefType => panic!("DeleteLocalRef global reference passed"),
+                    jobjectRefType::JNIWeakGlobalRefType => panic!("DeleteLocalRef weak global reference passed"),
+                }
             }
         }
         self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(23)(self.vtable, obj)
@@ -11350,8 +11352,6 @@ impl JNIEnv {
     ///
     /// Current thread must not be detached from JNI.
     ///
-    /// Current thread must not be currently throwing an exception.
-    ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
     ///
@@ -11454,6 +11454,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jstring) -> jsize>(168)(self.vtable, string)
     }
 
+    ///
+    /// Returns the 0 terminated utf-8 representation of the String.
+    /// The returned string can be used with the "rust" `CStr` struct from the `std::ffi` module.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFChars
+    ///
+    ///
+    /// # Arguments
+    /// * `string`
+    ///     * must not be null
+    ///     * must refer to a string
+    ///     * must not be already garbage collected
+    /// * `isCopy` - optional flag for the jvm to indicate if the string is a copy of the data or not.
+    ///     * can be null
+    ///
+    /// # Returns
+    /// A pointer to the zero terminated utf-8 string or null on error.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm ran out of memory allocating the utf-8 string
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `string` must not be null, must refer to a string and not already be garbage collected.
+    ///
     pub unsafe fn GetStringUTFChars(&self, string: jstring, isCopy: *mut jboolean) -> *const c_char {
         #[cfg(feature = "asserts")]
         {
@@ -11473,6 +11505,18 @@ impl JNIEnv {
     ///
     /// If GetStringUTFChars fails then None is returned and ExceptionCheck should be performed.
     /// If parsing the String as utf-8 fails (it shouldn't) then None is returned.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `string` must not be null, must refer to a string and not already be garbage collected.
+    ///
     ///
     pub unsafe fn GetStringUTFChars_as_string(&self, string: jstring) -> Option<String> {
         #[cfg(feature = "asserts")]
@@ -11499,6 +11543,31 @@ impl JNIEnv {
         None
     }
 
+    ///
+    /// Frees the utf-8 string returned by GetStringUTFChars.
+    /// After this method is called the pointer returned by GetStringUTFChars becomes invalid
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFChars
+    ///
+    ///
+    /// # Arguments
+    /// * `string` - the string refercence used in GetStringUTFChars
+    ///     * must not be null
+    ///     * must refer to a string
+    ///     * must not be already garbage collected
+    /// * `utf` - the raw utf8 data returned by GetStringUTFChars
+    ///     * must not be null
+    ///     * must be the exact return value of GetStringUTFChars
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `string` must not be null, must refer to a string and not already be garbage collected.
+    ///
     pub unsafe fn ReleaseStringUTFChars(&self, string: jstring, utf: *const c_char) {
         #[cfg(feature = "asserts")]
         {
@@ -11511,6 +11580,40 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const c_char)>(170)(self.vtable, string, utf)
     }
 
+    ///
+    /// Copies a part of the string into a provided jchar buffer
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringRegion
+    ///
+    ///
+    /// # Arguments
+    /// * `string` - the string reference used in GetStringUTFChars
+    ///     * must not be null
+    ///     * must refer to a string
+    ///     * must not be already garbage collected
+    /// * `start` - the index of the first jchar to copy
+    /// * `len` - the amount of jchar's to copy
+    /// * `buffer` - the target buffer where the jchar's should be copied to
+    ///     * must not be null
+    ///
+    /// # Throws Java Exception
+    /// * StringIndexOutOfBoundsException - if start or start + len is out of bounds
+    ///     * The state of the output buffer is undefined if this exception is thrown.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `string` must not be null, must refer to a string and not already be garbage collected.
+    /// `buffer` must be valid
+    /// `buffer` must be aligned to jchar
+    /// `buffer` must be large enough to hold the requested amount of jchar's
+    ///
     pub unsafe fn GetStringRegion(&self, string: jstring, start: jsize, len: jsize, buffer: *mut jchar) {
         #[cfg(feature = "asserts")]
         {
@@ -11518,12 +11621,90 @@ impl JNIEnv {
             self.check_no_exception("GetStringRegion");
             assert!(!string.is_null(), "GetStringRegion string must not be null");
             assert!(!buffer.is_null(), "GetStringRegion buffer must not be null");
+            assert!(buffer.is_aligned(), "GetStringRegion buffer is not aligned properly!");
             self.check_if_arg_is_string("GetStringRegion", string);
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jstring, jsize, jsize, *mut jchar)>(220)(self.vtable, string, start, len, buffer)
     }
 
+    ///
+    /// Copies a part of the string into a provided jchar buffer
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringRegion
+    ///
+    ///
+    /// # Arguments
+    /// * `string` - the string reference used in GetStringUTFChars
+    ///     * must not be null
+    ///     * must refer to a string
+    ///     * must not be already garbage collected
+    /// * `start` - the index of the first jchar to copy
+    /// * `buffer` - the target buffer where the jchar's should be copied to
+    ///
+    /// # Throws Java Exception
+    /// * StringIndexOutOfBoundsException - if start or start + buffer.len() is out of bounds
+    ///     * The state of the output buffer is undefined if this exception is thrown.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `string` must not be null, must refer to a string and not already be garbage collected.
+    ///
+    pub unsafe fn GetStringRegion_into_slice(&self, string: jstring, start: jsize, buffer: &mut [jchar]) {
+        self.GetStringRegion(string, start, buffer.len() as jsize, buffer.as_mut_ptr())
+    }
+
+    ///
+    /// Copies a part of the string into a provided c_char buffer
+    /// This fn always appends a '0' byte to the output c_char buffer!
+    ///
+    /// This fn is not recommended for use. It is prone for out of bounds problems because
+    /// the size of the buffer cannot be predicted easily because the `len` parameter is the amount of jchar's
+    /// to copy and each jchar may turn into 1-4 bytes of output.
+    /// The only "safe" way to call this fn is to ensure buffer is len*4+1 bytes large. +1 for the trailing 0 byte.
+    ///
+    /// The speed of this fn is also questionable on newer jvm's (at least since java17)
+    /// as their internal represetation of String makes perform this operation very expensive.
+    ///
+    /// This fn may be usefull on newer jvm's if you need to copy from the start of the string as that should be reasonably efficient,
+    /// and you can predict the buffer sizes with certaining because you know the requrested characters are only ascii for example.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFRegion
+    ///
+    ///
+    /// # Arguments
+    /// * `string` - the string reference used in GetStringUTFChars
+    ///     * must not be null
+    ///     * must refer to a string
+    ///     * must not be already garbage collected
+    /// * `start` - the index of the first jchar to copy
+    /// * `len` - the amount of java chars to copy. This has no relation to the output buffer size.
+    /// * `buffer` - the target buffer where the jchar's should be copied to as utf-8
+    ///
+    /// # Throws Java Exception
+    /// * StringIndexOutOfBoundsException - if start or start + len is out of bounds
+    ///     * The state of the output buffer is undefined if this exception is thrown.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `string` must not be null, must refer to a string and not already be garbage collected.
+    /// `buffer` must be valid
+    /// `buffer` must be large enough to hold the requested amount of jchar's
+    ///
     pub unsafe fn GetStringUTFRegion(&self, string: jstring, start: jsize, len: jsize, buffer: *mut c_char) {
         #[cfg(feature = "asserts")]
         {
@@ -11573,8 +11754,12 @@ impl JNIEnv {
     /// Due to newer JVM's using UTF-8 internal representation this method is likely slower than
     /// just copying out the UTF-8 string directly for newer JVMs.
     ///
+    /// # Returns
+    /// A pointer to the jchar array of the string.
+    ///
     /// # Safety
     /// Writing to the returned `*const jchar` in any way is UB.
+    /// `string` must be non-null, valid, actually refer to a string and not yet be garbage collected.
     ///
     pub unsafe fn GetStringCritical(&self, string: jstring, isCopy: *mut jboolean) -> *const jchar {
         #[cfg(feature = "asserts")]
@@ -11610,6 +11795,14 @@ impl JNIEnv {
         crit
     }
 
+    ///
+    /// This fn ends a critical string section.
+    /// After the call ends the underlying jchar array may be freed, moved by the jvm or garbage collected.
+    ///
+    /// # Safety
+    /// `string` must be non-null and valid
+    /// `cstring` must be non-null and the result of a GetStringCritical call
+    ///
     pub unsafe fn ReleaseStringCritical(&self, string: jstring, cstring: *const jchar) {
         #[cfg(feature = "asserts")]
         {
@@ -11633,6 +11826,31 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(225)(self.vtable, string, cstring)
     }
 
+    ///
+    /// Returns the size of an array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetArrayLength
+    ///
+    ///
+    /// # Arguments
+    /// * `array`
+    ///     * must not be null
+    ///     * must refer to an array of any primitve type or Object[]
+    ///     * must not be already garbage collected
+    /// # Returns
+    /// the size of the array in elements
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    ///
     pub unsafe fn GetArrayLength(&self, array: jarray) -> jsize {
         #[cfg(feature = "asserts")]
         {
@@ -11645,6 +11863,43 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jarray) -> jsize>(171)(self.vtable, array)
     }
 
+    ///
+    /// Creates a new array of Objects
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObjectArray
+    ///
+    /// # Arguments
+    /// * `len` - capcity of the new array
+    ///     * must not be negative
+    /// * `elementClass` - the class of the elements in the array
+    ///     * must not be null
+    ///     * must refer to a class
+    ///     * must not be already garbage collected
+    /// * `initialElement` - the initial value of all elements in the array
+    ///     * may be null
+    ///     * must be an instance of the class referred to by `elementClass`
+    ///     * must not be already garbage collected
+    ///
+    ///
+    /// # Returns
+    /// A reference to the new array or null on failure
+    ///
+    /// # Throws Java Exception
+    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `elementClass` must not be null, must refer to a class and not already be garbage collected.
+    /// `len` must not be negative
+    /// `initialElement` must be null or an instance of the class referred to by `elementClass and not already be garbage collected.
+    ///
     pub unsafe fn NewObjectArray(&self, len: jsize, elementClass: jclass, initialElement: jobject) -> jobjectArray {
         #[cfg(feature = "asserts")]
         {
@@ -11657,6 +11912,35 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jsize, jclass, jobject) -> jobjectArray>(172)(self.vtable, len, elementClass, initialElement)
     }
 
+    ///
+    /// Returns a local reference to a single element in the given object array.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the object array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `index` - the index of the element to get
+    ///
+    /// # Returns
+    /// A local reference to the element at the index in the array or null if the element was null or an error occured.
+    ///
+    /// # Throws Java Exception
+    /// * ArrayIndexOutOfBoundsException - if the index is out of bounds
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    ///
     pub unsafe fn GetObjectArrayElement(&self, array: jobjectArray, index: jsize) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -11668,12 +11952,44 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobjectArray, jsize) -> jobject>(173)(self.vtable, array, index)
     }
 
+    ///
+    /// Set a single element in a object array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the object array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `index` - the index of the element to get
+    /// * `value` - the new value of the element
+    ///     * may be null
+    ///     * must match the type of the array
+    ///     * must not be already garbage collected
+    ///
+    /// # Throws Java Exception
+    /// * ArrayIndexOutOfBoundsException - if the index is out of bounds
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    /// `value` must be null or an instance of the type contained inside the array and not already be garbage collected.
+    ///
     pub unsafe fn SetObjectArrayElement(&self, array: jobjectArray, index: jsize, value: jobject) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("SetObjectArrayElement");
             self.check_no_exception("SetObjectArrayElement");
             assert!(!array.is_null(), "SetObjectArrayElement array must not be null");
+            //TODO check array component type matches value
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jobjectArray, jsize, jobject)>(174)(self.vtable, array, index, value);

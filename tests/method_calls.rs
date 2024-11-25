@@ -46,7 +46,7 @@ pub mod test {
 
         env.ExceptionClear(); //Clear ClassNotFoundException
         let class_blob = include_bytes!("../java_testcode/MethodCalls.class");
-        let class_loaded = env.DefineClass("MethodCalls", null_mut(), class_blob);
+        let class_loaded = env.DefineClass_from_slice("MethodCalls", null_mut(), class_blob);
         if class_loaded.is_null() {
             env.ExceptionDescribe();
             env.FatalError("failed to load class");
@@ -70,7 +70,7 @@ pub mod test {
 
         env.ExceptionClear(); //Clear ClassNotFoundException
         let class_blob = include_bytes!("../java_testcode/MethodCalls$NvChild.class");
-        let class_loaded = env.DefineClass("MethodCalls$NvChild", null_mut(), class_blob);
+        let class_loaded = env.DefineClass_from_slice("MethodCalls$NvChild", null_mut(), class_blob);
         if class_loaded.is_null() {
             env.ExceptionDescribe();
             env.FatalError("failed to load class");

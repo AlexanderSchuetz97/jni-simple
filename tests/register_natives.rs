@@ -23,7 +23,7 @@ pub mod test {
 
             let class_blob = include_bytes!("../java_testcode/RegisterTest.class");
 
-            let registered_class = env.DefineClass("RegisterTest", null_mut(), class_blob.as_slice());
+            let registered_class = env.DefineClass_from_slice("RegisterTest", null_mut(), class_blob.as_slice());
             let t1m = env.GetStaticMethodID(registered_class, "callTest", "(Ljava/lang/String;)V");
             let t2m = env.GetStaticMethodID(registered_class, "callTest", "(D)V");
             let test_string = env.NewStringUTF("test_string");

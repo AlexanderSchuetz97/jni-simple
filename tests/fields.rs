@@ -46,7 +46,7 @@ pub mod test {
 
         env.ExceptionClear(); //Clear ClassNotFoundException
         let class_blob = include_bytes!("../java_testcode/FieldTests.class");
-        let class_loaded = env.DefineClass("FieldTests", null_mut(), class_blob);
+        let class_loaded = env.DefineClass_from_slice("FieldTests", null_mut(), class_blob);
         if class_loaded.is_null() {
             env.ExceptionDescribe();
             env.FatalError("failed to load class");

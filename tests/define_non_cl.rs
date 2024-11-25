@@ -15,7 +15,7 @@ pub mod test {
             let class_blob = include_bytes!("../java_testcode/ThrowNewZa.class");
             panic::catch_unwind(|| {
                 //cl is not a classloader. This is UB in the JVM.
-                env.DefineClass("ThrowNewZa", cl, class_blob);
+                env.DefineClass_from_slice("ThrowNewZa", cl, class_blob);
             })
             .expect_err("Error expected");
             vm.DestroyJavaVM();

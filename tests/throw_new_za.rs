@@ -10,7 +10,7 @@ pub mod test {
             let args: Vec<String> = vec!["-Xcheck:jni".to_string()];
             let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
             let class_blob = include_bytes!("../java_testcode/ThrowNewZa.class");
-            let class_loaded = env.DefineClass("ThrowNewZa", null_mut(), class_blob);
+            let class_loaded = env.DefineClass_from_slice("ThrowNewZa", null_mut(), class_blob);
             if class_loaded.is_null() {
                 env.ExceptionDescribe();
                 env.FatalError("failed to load class");

@@ -75,8 +75,8 @@ pub mod test {
         unsafe {
             let env = get_env();
             let str = env.NewStringUTF("Test String");
-            let mut data = vec![0 as c_char; env.GetStringUTFLength(str) as usize];
-            env.GetStringUTFRegion(str, 0, data.len() as jsize, data.as_mut_ptr());
+            let mut data = vec![1 as c_char; (env.GetStringUTFLength(str) as usize) + 2];
+            env.GetStringUTFRegion(str, 0, (data.len() - 2) as jsize, data.as_mut_ptr());
             env.DeleteLocalRef(str);
             assert_eq!(
                 [
@@ -90,7 +90,9 @@ pub mod test {
                     'r' as c_char,
                     'i' as c_char,
                     'n' as c_char,
-                    'g' as c_char
+                    'g' as c_char,
+                    0 as c_char,
+                    1 as c_char,
                 ]
                 .as_slice(),
                 data.as_slice()
