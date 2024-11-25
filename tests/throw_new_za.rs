@@ -1,7 +1,7 @@
 #[cfg(feature = "loadjvm")]
 pub mod test {
     use jni_simple::*;
-    use std::ptr::{null_mut};
+    use std::ptr::null_mut;
 
     #[test]
     fn test() {

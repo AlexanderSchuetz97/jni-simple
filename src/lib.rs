@@ -556,7 +556,6 @@ impl JavaVMAttachArgs {
 /// - Doing this on with any call to JNI will result in undefined behavior.
 ///
 pub trait UseCString: private::SealedUseCString {
-
     /// Transform the string into a zero terminated string if necessary and calls the closure with it.
     /// The pointer passed into the closure only stays valid until the closure returns.
     /// The string is guaranteed to be 0 terminated!
@@ -684,13 +683,12 @@ impl UseCString for &Vec<u8> {
     }
 }
 
-
 impl private::SealedUseCString for &[u8] {}
 
 impl UseCString for &[u8] {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
         if let Ok(c_str) = CStr::from_bytes_until_nul(self) {
-            return func(c_str.as_ptr())
+            return func(c_str.as_ptr());
         }
 
         unsafe {
@@ -815,7 +813,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn DefineClass(&self, name: impl UseCString, classloader: jobject, data: *const jbyte, len: i32) -> jclass {
+    pub unsafe fn DefineClass(&self, name: impl UseCString, classloader: jobject, data: *const jbyte, len: jsize) -> jclass {
         name.use_as_const_c_char(|name| {
             #[cfg(feature = "asserts")]
             {
@@ -891,7 +889,6 @@ impl JNIEnv {
         let slice = data.as_ref();
         self.DefineClass(name, classloader, slice.as_ptr() as *const jbyte, slice.len() as i32)
     }
-
 
     ///
     /// Finds or loads a class.
@@ -2400,7 +2397,7 @@ impl JNIEnv {
     /// `obj` must a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
     /// `fieldID` must not be from a static field
-    /// `fieldID` must refer to a field that is an object and not a primitve.
+    /// `fieldID` must refer to a field that is an object and not a primitive.
     ///
     pub unsafe fn GetObjectField(&self, obj: jobject, fieldID: jfieldID) -> jobject {
         #[cfg(feature = "asserts")]
@@ -2779,7 +2776,7 @@ impl JNIEnv {
     /// `obj` must be a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
     /// `fieldID` must not be from a static field
-    /// `fieldID` must refer to a field that is an object and not a primitve.
+    /// `fieldID` must refer to a field that is an object and not a primitive.
     /// `value` must be a valid reference to the object that is not already garbage collected or it must be null.
     /// `value` must be assignable to the field type (i.e. if it's a String field setting to an ArrayList for example is UB)
     ///
@@ -7965,6 +7962,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Gets the field id of a static field
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStaticFieldID
+    ///
+    ///
+    /// # Arguments
+    /// * `clazz` - reference to the clazz where the field is declared in.
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `name` - name of the field
+    ///     * must not be null
+    ///     * must be zero terminated utf-8
+    /// * `sig` - jni signature of the field
+    ///     * must not be null
+    ///     * must be zero terminated utf-8
+    ///
+    /// # Returns
+    /// A non-null field handle or null on error.
+    /// The field handle can be assumed to be constant for the given class and must not be freed.
+    /// It can also be safely shared with any thread or stored in a constant.
+    ///
+    /// # Throws Java Exception
+    /// * NoSuchFieldError - field with the given name and sig doesn't exist in the class
+    /// * ExceptionInInitializerError - Exception occurs in initializer of the class
+    /// * OutOfMemoryError - if the jvm runs out of memory
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must a valid reference to a class that is not already garbage collected.
+    /// `name` must be non-null and zero terminated utf-8.
+    /// `sig` must be non-null and zero terminated utf-8.
+    ///
     pub unsafe fn GetStaticFieldID(&self, clazz: jclass, name: impl UseCString, sig: impl UseCString) -> jfieldID {
         name.use_as_const_c_char(|name| {
             sig.use_as_const_c_char(|sig| {
@@ -7981,6 +8019,38 @@ impl JNIEnv {
         })
     }
 
+    ///
+    /// Returns a local reference from a static field.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the class the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be an object field
+    ///
+    /// # Returns
+    /// A local reference to the fields value or null if the field is null
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to a class that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field located in `obj` class and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is an object and not a primitive.
+    ///
     pub unsafe fn GetStaticObjectField(&self, obj: jclass, fieldID: jfieldID) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -7991,6 +8061,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jobject>(145)(self.vtable, obj, fieldID)
     }
 
+    ///
+    /// Returns a boolean from a static field.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the class the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a boolean field
+    ///
+    /// # Returns
+    /// A local reference to the fields value or null if the field is null
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to a class that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a boolean.
+    ///
     pub unsafe fn GetStaticBooleanField(&self, obj: jclass, fieldID: jfieldID) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -8001,6 +8103,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jboolean>(146)(self.vtable, obj, fieldID)
     }
 
+    ///
+    /// Returns a byte from a static field.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the class the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a byte field
+    ///
+    /// # Returns
+    /// A local reference to the fields value or null if the field is null
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to a class that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a byte.
+    ///
     pub unsafe fn GetStaticByteField(&self, obj: jclass, fieldID: jfieldID) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -8011,6 +8145,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jbyte>(147)(self.vtable, obj, fieldID)
     }
 
+    ///
+    /// Returns a char from a static field.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the class the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a char field
+    ///
+    /// # Returns
+    /// A local reference to the fields value or null if the field is null
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to a class that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a char.
+    ///
     pub unsafe fn GetStaticCharField(&self, obj: jclass, fieldID: jfieldID) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -8021,6 +8187,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jchar>(148)(self.vtable, obj, fieldID)
     }
 
+    ///
+    /// Returns a short from a static field.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the class the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a short field
+    ///
+    /// # Returns
+    /// A local reference to the fields value or null if the field is null
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to a class that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a short.
+    ///
     pub unsafe fn GetStaticShortField(&self, obj: jclass, fieldID: jfieldID) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -8031,6 +8229,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jshort>(149)(self.vtable, obj, fieldID)
     }
 
+    ///
+    /// Returns a int from a static field.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the class the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a int field
+    ///
+    /// # Returns
+    /// A local reference to the fields value or null if the field is null
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to a class that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a int.
+    ///
     pub unsafe fn GetStaticIntField(&self, obj: jclass, fieldID: jfieldID) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -8041,6 +8271,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jint>(150)(self.vtable, obj, fieldID)
     }
 
+    ///
+    /// Returns a long from a static field.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the class the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a long field
+    ///
+    /// # Returns
+    /// A local reference to the fields value or null if the field is null
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to a class that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a long.
+    ///
     pub unsafe fn GetStaticLongField(&self, obj: jclass, fieldID: jfieldID) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -8051,6 +8313,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jlong>(151)(self.vtable, obj, fieldID)
     }
 
+    ///
+    /// Returns a float from a static field.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the class the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a float field
+    ///
+    /// # Returns
+    /// A local reference to the fields value or null if the field is null
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to a class that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a float.
+    ///
     pub unsafe fn GetStaticFloatField(&self, obj: jclass, fieldID: jfieldID) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -8061,6 +8355,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jfloat>(152)(self.vtable, obj, fieldID)
     }
 
+    ///
+    /// Returns a double from a static field.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the class the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to get
+    ///     * must be valid
+    ///     * must be a double field
+    ///
+    /// # Returns
+    /// A local reference to the fields value or null if the field is null
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid reference to a class that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a double.
+    ///
     pub unsafe fn GetStaticDoubleField(&self, obj: jclass, fieldID: jfieldID) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -8071,6 +8397,41 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jdouble>(153)(self.vtable, obj, fieldID)
     }
 
+    ///
+    /// Sets a static object field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value`
+    ///     * must be null or valid
+    ///     * must not be already garbage collected (if non-null)
+    ///     * must be assignable to the field type (if non-null)
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is an object and not a primitive.
+    /// `value` must be a valid reference to the object that is not already garbage collected or it must be null.
+    /// `value` must be assignable to the field type (i.e. if it's a String field setting to an ArrayList for example is UB)
+    ///
     pub unsafe fn SetStaticObjectField(&self, obj: jclass, fieldID: jfieldID, value: jobject) {
         #[cfg(feature = "asserts")]
         {
@@ -8081,6 +8442,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jobject)>(154)(self.vtable, obj, fieldID, value)
     }
 
+    ///
+    /// Sets a static boolean field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - that value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a boolean.
+    ///
     pub unsafe fn SetStaticBooleanField(&self, obj: jclass, fieldID: jfieldID, value: jboolean) {
         #[cfg(feature = "asserts")]
         {
@@ -8091,6 +8482,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(155)(self.vtable, obj, fieldID, value)
     }
 
+    ///
+    /// Sets a static byte field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - that value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a byte.
+    ///
     pub unsafe fn SetStaticByteField(&self, obj: jclass, fieldID: jfieldID, value: jbyte) {
         #[cfg(feature = "asserts")]
         {
@@ -8101,6 +8522,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jbyte)>(156)(self.vtable, obj, fieldID, value)
     }
 
+    ///
+    /// Sets a static char field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - that value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a char.
+    ///
     pub unsafe fn SetStaticCharField(&self, obj: jclass, fieldID: jfieldID, value: jchar) {
         #[cfg(feature = "asserts")]
         {
@@ -8111,6 +8562,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jchar)>(157)(self.vtable, obj, fieldID, value)
     }
 
+    ///
+    /// Sets a static short field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - that value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a short.
+    ///
     pub unsafe fn SetStaticShortField(&self, obj: jclass, fieldID: jfieldID, value: jshort) {
         #[cfg(feature = "asserts")]
         {
@@ -8121,6 +8602,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jshort)>(158)(self.vtable, obj, fieldID, value)
     }
 
+    ///
+    /// Sets a static int field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - that value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a int.
+    ///
     pub unsafe fn SetStaticIntField(&self, obj: jclass, fieldID: jfieldID, value: jint) {
         #[cfg(feature = "asserts")]
         {
@@ -8131,6 +8642,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jint)>(159)(self.vtable, obj, fieldID, value)
     }
 
+    ///
+    /// Sets a static long field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - that value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a long.
+    ///
     pub unsafe fn SetStaticLongField(&self, obj: jclass, fieldID: jfieldID, value: jlong) {
         #[cfg(feature = "asserts")]
         {
@@ -8141,6 +8682,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jlong)>(160)(self.vtable, obj, fieldID, value)
     }
 
+    ///
+    /// Sets a static float field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - that value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a float.
+    ///
     pub unsafe fn SetStaticFloatField(&self, obj: jclass, fieldID: jfieldID, value: jfloat) {
         #[cfg(feature = "asserts")]
         {
@@ -8151,6 +8722,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jfloat)>(161)(self.vtable, obj, fieldID, value)
     }
 
+    ///
+    /// Sets a static double field to a given value
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    ///
+    /// # Arguments
+    /// * `obj` - reference to the object the field is in
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `fieldID` - the field to set
+    ///     * must be valid
+    ///     * must be a object field
+    ///     * must reside in the object `obj`
+    /// * `value` - that value to set
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
+    /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
+    /// `fieldID` must be from a static field
+    /// `fieldID` must refer to a field that is a double.
+    ///
     pub unsafe fn SetStaticDoubleField(&self, obj: jclass, fieldID: jfieldID, value: jdouble) {
         #[cfg(feature = "asserts")]
         {
@@ -8161,6 +8762,47 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(162)(self.vtable, obj, fieldID, value)
     }
 
+    ///
+    /// Gets the method id of a static method
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetMethodID
+    ///
+    ///
+    /// # Arguments
+    /// * `clazz` - reference to the clazz where the field is declared in.
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `name` - name of the method
+    ///     * must not be null
+    ///     * must be zero terminated utf-8
+    /// * `sig` - jni signature of the method
+    ///     * must not be null
+    ///     * must be zero terminated utf-8
+    ///
+    /// # Returns
+    /// A non-null field handle or null on error.
+    /// The field handle can be assumed to be constant for the given class and must not be freed.
+    /// It can also be safely shared with any thread or stored in a constant.
+    ///
+    /// # Throws Java Exception
+    /// * NoSuchMethodError - method with the given name and sig doesn't exist in the class
+    /// * ExceptionInInitializerError - Exception occurs in initializer of the class
+    /// * OutOfMemoryError - if the jvm runs out of memory
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must a valid reference to a class that is not already garbage collected.
+    /// `name` must be non-null and zero terminated utf-8.
+    /// `sig` must be non-null and zero terminated utf-8.
+    ///
     pub unsafe fn GetStaticMethodID(&self, class: jclass, name: impl UseCString, sig: impl UseCString) -> jmethodID {
         name.use_as_const_c_char(|name| {
             sig.use_as_const_c_char(|sig| {
@@ -8178,6 +8820,44 @@ impl JNIEnv {
         })
     }
 
+    ///
+    /// Calls a static java method that returns void
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj` class and return void
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallStaticVoidMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) {
         #[cfg(feature = "asserts")]
         {
@@ -8188,6 +8868,39 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype)>(143)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a static java method that has 0 arguments and returns void
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 0 arguments
+    ///
     pub unsafe fn CallStaticVoidMethod0(&self, obj: jobject, methodID: jmethodID) {
         #[cfg(feature = "asserts")]
         {
@@ -8198,6 +8911,39 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, obj, methodID)
     }
 
+    ///
+    /// Calls a static java method that has 1 arguments and returns void
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 1 arguments
+    ///
     pub unsafe fn CallStaticVoidMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) {
         #[cfg(feature = "asserts")]
         {
@@ -8209,6 +8955,39 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1)
     }
 
+    ///
+    /// Calls a static java method that has 2 arguments and returns void
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 2 arguments
+    ///
     pub unsafe fn CallStaticVoidMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) {
         #[cfg(feature = "asserts")]
         {
@@ -8221,6 +9000,39 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1, arg2)
     }
 
+    ///
+    /// Calls a static java method that has 3 arguments and returns void
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 3 arguments
+    ///
     pub unsafe fn CallStaticVoidMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
         #[cfg(feature = "asserts")]
         {
@@ -8234,6 +9046,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a static java method that returns an object
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj` class and return an object
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallStaticObjectMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -8244,6 +9097,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(116)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a static java method that has 0 arguments and returns an object
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 0 arguments
+    ///
     pub unsafe fn CallStaticObjectMethod0(&self, obj: jobject, methodID: jmethodID) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -8254,6 +9143,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jobject>(114)(self.vtable, obj, methodID)
     }
 
+    ///
+    /// Calls a static java method that has 1 arguments and returns an object
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 1 arguments
+    ///
     pub unsafe fn CallStaticObjectMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -8265,6 +9190,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1)
     }
 
+    ///
+    /// Calls a static java method that has 2 arguments and returns an object
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 2 arguments
+    ///
     pub unsafe fn CallStaticObjectMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -8277,6 +9238,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1, arg2)
     }
 
+    ///
+    /// Calls a static java method that has 3 arguments and returns an object
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 3 arguments
+    ///
     pub unsafe fn CallStaticObjectMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -8290,6 +9287,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a static java method that returns a boolean
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or null if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj` class and return a boolean
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallStaticBooleanMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -8300,6 +9338,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(119)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a static java method that has 0 arguments and returns boolean
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 0 arguments
+    ///
     pub unsafe fn CallStaticBooleanMethod0(&self, obj: jobject, methodID: jmethodID) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -8310,6 +9384,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jboolean>(117)(self.vtable, obj, methodID)
     }
 
+    ///
+    /// Calls a static java method that has 1 arguments and returns boolean
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 1 arguments
+    ///
     pub unsafe fn CallStaticBooleanMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -8321,6 +9431,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1)
     }
 
+    ///
+    /// Calls a static java method that has 2 arguments and returns boolean
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 2 arguments
+    ///
     pub unsafe fn CallStaticBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -8333,6 +9479,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2)
     }
 
+    ///
+    /// Calls a static java method that has 3 arguments and returns boolean
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or false if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 3 arguments
+    ///
     pub unsafe fn CallStaticBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -8346,6 +9528,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a static java method that returns a byte
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj` class and return a byte
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallStaticByteMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -8356,6 +9579,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jbyte>(122)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a static java method that has 0 arguments and returns byte
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 0 arguments
+    ///
     pub unsafe fn CallStaticByteMethod0(&self, obj: jobject, methodID: jmethodID) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -8366,6 +9625,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jbyte>(120)(self.vtable, obj, methodID)
     }
 
+    ///
+    /// Calls a static java method that has 1 arguments and returns byte
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 1 arguments
+    ///
     pub unsafe fn CallStaticByteMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -8377,6 +9672,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1)
     }
 
+    ///
+    /// Calls a static java method that has 2 arguments and returns byte
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 2 arguments
+    ///
     pub unsafe fn CallStaticByteMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -8389,6 +9720,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1, arg2)
     }
 
+    ///
+    /// Calls a static java method that has 3 arguments and returns byte
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 3 arguments
+    ///
     pub unsafe fn CallStaticByteMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -8402,6 +9769,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a static java method that returns a char
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj` class and return a char
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallStaticCharMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -8412,6 +9820,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jchar>(125)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a static java method that has 0 arguments and returns char
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 0 arguments
+    ///
     pub unsafe fn CallStaticCharMethod0(&self, obj: jobject, methodID: jmethodID) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -8422,6 +9866,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jchar>(123)(self.vtable, obj, methodID)
     }
 
+    ///
+    /// Calls a static java method that has 1 arguments and returns char
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 1 arguments
+    ///
     pub unsafe fn CallStaticCharMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -8433,6 +9913,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1)
     }
 
+    ///
+    /// Calls a static java method that has 2 arguments and returns char
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 2 arguments
+    ///
     pub unsafe fn CallStaticCharMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -8445,6 +9961,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1, arg2)
     }
 
+    ///
+    /// Calls a static java method that has 3 arguments and returns char
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 3 arguments
+    ///
     pub unsafe fn CallStaticCharMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -8458,6 +10010,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a static java method that returns a short
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj` class and return a short
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallStaticShortMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -8468,6 +10061,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jshort>(128)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a static java method that has 0 arguments and returns short
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 0 arguments
+    ///
     pub unsafe fn CallStaticShortMethod0(&self, obj: jobject, methodID: jmethodID) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -8478,6 +10107,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jshort>(126)(self.vtable, obj, methodID)
     }
 
+    ///
+    /// Calls a static java method that has 1 arguments and returns short
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 1 arguments
+    ///
     pub unsafe fn CallStaticShortMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -8489,6 +10154,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1)
     }
 
+    ///
+    /// Calls a static java method that has 2 arguments and returns short
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 2 arguments
+    ///
     pub unsafe fn CallStaticShortMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -8501,6 +10202,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1, arg2)
     }
 
+    ///
+    /// Calls a static java method that has 3 arguments and returns short
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 3 arguments
+    ///
     pub unsafe fn CallStaticShortMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -8514,6 +10251,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a static java method that returns a int
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj` class and return a int
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallStaticIntMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -8524,6 +10302,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jint>(131)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a static java method that has 0 arguments and returns int
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 0 arguments
+    ///
     pub unsafe fn CallStaticIntMethod0(&self, obj: jobject, methodID: jmethodID) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -8534,6 +10348,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jint>(129)(self.vtable, obj, methodID)
     }
 
+    ///
+    /// Calls a static java method that has 1 arguments and returns int
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 1 arguments
+    ///
     pub unsafe fn CallStaticIntMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -8545,6 +10395,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1)
     }
 
+    ///
+    /// Calls a static java method that has 2 arguments and returns int
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 2 arguments
+    ///
     pub unsafe fn CallStaticIntMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -8557,6 +10443,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1, arg2)
     }
 
+    ///
+    /// Calls a static java method that has 3 arguments and returns int
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 3 arguments
+    ///
     pub unsafe fn CallStaticIntMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -8570,6 +10492,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a static java method that returns a long
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj` class and return a long
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallStaticLongMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -8580,6 +10543,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jlong>(134)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a static java method that has 0 arguments and returns long
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 0 arguments
+    ///
     pub unsafe fn CallStaticLongMethod0(&self, obj: jobject, methodID: jmethodID) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -8590,6 +10589,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jlong>(132)(self.vtable, obj, methodID)
     }
 
+    ///
+    /// Calls a static java method that has 1 arguments and returns long
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 1 arguments
+    ///
     pub unsafe fn CallStaticLongMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -8601,6 +10636,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1)
     }
 
+    ///
+    /// Calls a static java method that has 2 arguments and returns long
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 2 arguments
+    ///
     pub unsafe fn CallStaticLongMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -8613,6 +10684,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1, arg2)
     }
 
+    ///
+    /// Calls a static java method that has 3 arguments and returns long
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 3 arguments
+    ///
     pub unsafe fn CallStaticLongMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -8626,6 +10733,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a static java method that returns a float
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj` class and return a float
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallStaticFloatMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -8636,6 +10784,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jfloat>(137)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a static java method that has 0 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 0 arguments
+    ///
     pub unsafe fn CallStaticFloatMethod0(&self, obj: jobject, methodID: jmethodID) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -8646,6 +10830,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jfloat>(135)(self.vtable, obj, methodID)
     }
 
+    ///
+    /// Calls a static java method that has 1 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 1 arguments
+    ///
     pub unsafe fn CallStaticFloatMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -8657,6 +10877,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1)
     }
 
+    ///
+    /// Calls a static java method that has 2 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 2 arguments
+    ///
     pub unsafe fn CallStaticFloatMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -8669,6 +10925,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1, arg2)
     }
 
+    ///
+    /// Calls a static java method that has 3 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 3 arguments
+    ///
     pub unsafe fn CallStaticFloatMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -8682,6 +10974,47 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a static java method that returns a double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj` class and return a double
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallStaticDoubleMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -8692,6 +11025,42 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jdouble>(140)(self.vtable, obj, methodID, args)
     }
 
+    ///
+    /// Calls a static java method that has 0 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 0 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 0 arguments
+    ///
     pub unsafe fn CallStaticDoubleMethod0(&self, obj: jobject, methodID: jmethodID) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -8702,6 +11071,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jdouble>(138)(self.vtable, obj, methodID)
     }
 
+    ///
+    /// Calls a static java method that has 1 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 1 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 1 arguments
+    ///
     pub unsafe fn CallStaticDoubleMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -8713,6 +11118,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1)
     }
 
+    ///
+    /// Calls a static java method that has 2 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 2 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 2 arguments
+    ///
     pub unsafe fn CallStaticDoubleMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -8725,6 +11166,42 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1, arg2)
     }
 
+    ///
+    /// Calls a static java method that has 3 arguments and returns double
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must be a static
+    ///     * must actually be a method of `obj`
+    ///     * must refer to a method with 3 arguments
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 3 arguments
+    ///
     pub unsafe fn CallStaticDoubleMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -11954,6 +14431,9 @@ pub fn is_jvm_loaded() -> bool {
 /// This is usually fine because unloading the jvm is not supported anyway.
 /// If you do not desire this then use init_dynamic_link.
 ///
+/// # Safety
+/// The Safety of this fn depends on the shared object that will be loaded as a result of this call.
+///
 #[cfg(feature = "loadjvm")]
 pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -12003,6 +14483,9 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
 /// If JAVA_HOME is not set or doesn't point to a known layout of a JVM installation
 /// then this function returns an error.
 ///
+/// # Safety
+/// The Safety of this fn depends on the shared object that will be loaded as a result of this call.
+///
 #[cfg(feature = "loadjvm")]
 pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
     //All (most) jvm layouts that I am aware of on windows+linux.
@@ -12046,6 +14529,9 @@ fn get_link() -> &'static JNIDynamicLink {
 ///
 /// Will panic if the JVM shared library has not been loaded yet.
 ///
+/// # Safety
+/// The Safety of this fn is implementation dependant.
+///
 pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
     let link = get_link();
 
@@ -12063,13 +14549,12 @@ pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
     }
 
     let mut result_vec: Vec<JavaVM> = Vec::with_capacity(count as usize);
-    for i in 0..count as usize {
-        let ptr = buf[i];
-        if ptr.is_null() {
+    for (i, env) in buf.into_iter().enumerate().take(count as usize) {
+        if env.is_null() {
             panic!("JNI_GetCreatedJavaVMs VM #{} is null! count is {}", i, count);
         }
 
-        result_vec.push(JavaVM { functions: ptr });
+        result_vec.push(JavaVM { functions: env });
     }
 
     Ok(result_vec)
@@ -12078,6 +14563,11 @@ pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
 ///
 /// Directly calls JNI_CreateJavaVM with the provided arguments.
 /// Will panic if the JVM shared library has not been loaded yet.
+///
+/// # Safety
+/// The Safety of this fn is implementation dependant.
+/// On Hotspot JVM's this fn cannot be called successfully more than once.
+/// Subsequent calls are undefined behaviour.
 ///
 pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM, JNIEnv), jint> {
     #[cfg(feature = "asserts")]
@@ -12111,6 +14601,11 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
 /// Some options differ slightly. Consult the JNI Invocation API documentation for more information.
 ///
 /// Will panic if the JVM shared library has not been loaded yet.
+///
+/// # Safety
+/// The Safety of this fn is implementation dependant.
+/// On Hotspot JVM's this fn cannot be called successfully more than once.
+/// Subsequent calls are undefined behaviour.
 ///
 pub unsafe fn JNI_CreateJavaVM_with_string_args(version: jint, arguments: &Vec<String>) -> Result<(JavaVM, JNIEnv), jint> {
     struct DropGuard(*mut c_char);
@@ -12156,6 +14651,9 @@ impl JavaVM {
     /// Attaches the current thread to the JVM as a normal thread.
     /// If a thread name is provided then it will be used as the java name of the current thread.
     ///
+    /// # Safety
+    /// This fn must not be called on a JavaVM object that has been destroyed or is in the process of being destroyed.
+    ///
     pub unsafe fn AttachCurrentThread_str(&self, version: jint, thread_name: Option<&str>, thread_group: jobject) -> Result<JNIEnv, jint> {
         if let Some(thread_name) = thread_name {
             let cstr = CString::new(thread_name).unwrap();
@@ -12169,6 +14667,13 @@ impl JavaVM {
         self.AttachCurrentThread(&mut args)
     }
 
+    ///
+    /// Attaches the current thread to the JVM as a normal thread.
+    /// If a thread name is provided then it will be used as the java name of the current thread.
+    ///
+    /// # Safety
+    /// This fn must not be called on a JavaVM object that has been destroyed or is in the process of being destroyed.
+    ///
     pub unsafe fn AttachCurrentThread(&self, args: *mut JavaVMAttachArgs) -> Result<JNIEnv, jint> {
         #[cfg(feature = "asserts")]
         {
@@ -12192,6 +14697,9 @@ impl JavaVM {
     /// Attaches the current thread to the JVM as a daemon thread.
     /// If a thread name is provided then it will be used as the java name of the current thread.
     ///
+    /// # Safety
+    /// This fn must not be called on a JavaVM object that has been destroyed or is in the process of being destroyed.
+    ///
     pub unsafe fn AttachCurrentThreadAsDaemon_str(&self, version: jint, thread_name: Option<&str>, thread_group: jobject) -> Result<JNIEnv, jint> {
         if let Some(thread_name) = thread_name {
             let cstr = CString::new(thread_name).unwrap();
@@ -12205,6 +14713,13 @@ impl JavaVM {
         self.AttachCurrentThreadAsDaemon(&mut args)
     }
 
+    ///
+    /// Attaches the current thread to the JVM as a daemon thread.
+    /// If a thread name is provided then it will be used as the java name of the current thread.
+    ///
+    /// # Safety
+    /// This fn must not be called on a JavaVM object that has been destroyed or is in the process of being destroyed.
+    ///
     pub unsafe fn AttachCurrentThreadAsDaemon(&self, args: *mut JavaVMAttachArgs) -> Result<JNIEnv, jint> {
         #[cfg(feature = "asserts")]
         {
@@ -12227,6 +14742,8 @@ impl JavaVM {
 
     ///
     /// Gets the JNIEnv for the current thread.
+    /// # Safety
+    /// This fn must not be called on a JavaVM object that has been destroyed or is in the process of being destroyed.
     ///
     pub unsafe fn GetEnv(&self, jni_version: jint) -> Result<JNIEnv, jint> {
         let mut envptr: JNIEnvVTable = null_mut();
@@ -12248,6 +14765,10 @@ impl JavaVM {
     /// Detaches the current thread from the jvm.
     /// This should only be called on functions that were attached with AttachCurrentThread or AttachCurrentThreadAsDaemon.
     ///
+    /// # Safety
+    /// Detaches the current thread. The JNIEnv of the current thread is no longer valid after this call.
+    /// Any further calls made using it will result in undefined behavior.
+    ///
     pub unsafe fn DetachCurrentThread(&self) -> jint {
         self.jnx::<extern "system" fn(JNIInvPtr) -> jint>(5)(self.functions)
     }
@@ -12255,6 +14776,23 @@ impl JavaVM {
     ///
     /// This function will block until all java threads have completed and then destroy the JVM.
     /// It should not be called from a method that is called from the JVM.
+    ///
+    /// # Safety
+    /// Careful consideration should be taken when this fn is called. As mentioned calling it from
+    /// a JVM Thread will probably just block the calling thread forever. However, this fn also
+    /// does stuff internally with the jvm, after/during its return the JVM can no longer be used in
+    /// any thread. Any existing JavaVM object will become invalid. Attempts to obtain a JNIEnv after
+    /// this fn returns by way of calling AttachThread will likely lead to undefined behavior.
+    /// Shutting down a JVM is a "terminal" operation for any Hotspot implementation of the JVM.
+    /// The current process will never be able to relaunch a hotspot JVM.
+    ///
+    /// This fn should therefore only be used if a rust thread needs to "wait" until the JVM is dead to then perform
+    /// some operations such a cleanup before eventually calling exit()
+    ///
+    /// Please note that this fn never returns if the JavaVM terminates abnormally (e.g. due to a crash),
+    /// or someone calling Runtime.getRuntime().halt(...), because this just terminates the Process.
+    /// Its usefulness to run shutdown code is therefore limited.
+    ///
     ///
     pub unsafe fn DestroyJavaVM(&self) {
         self.jnx::<extern "system" fn(JNIInvPtr) -> ()>(3)(self.functions);
