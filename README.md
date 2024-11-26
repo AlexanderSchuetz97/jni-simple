@@ -314,3 +314,4 @@ pub unsafe extern "system" fn Java_some_package_ClassName_method(env: JNIEnv, cl
     let macro_result : [jtype; 4] = [jtype::from(1i32), jtype::from(2i32), jtype::from(3i32), jtype::from(4i32)];
 }
 ```
+
