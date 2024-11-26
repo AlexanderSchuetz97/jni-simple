@@ -279,56 +279,89 @@ impl jtype {
         }
     }
 
+    /// read this jtype as jlong
+    /// # Safety
+    /// only safe if jtype was a jlong.
     #[inline(always)]
     pub const unsafe fn long(&self) -> jlong {
         self.long
     }
 
+    /// read this jtype as jint
+    /// # Safety
+    /// only safe if jtype was a jint.
     #[inline(always)]
     pub const unsafe fn int(&self) -> jint {
         self.int
     }
 
+    /// read this jtype as jshort
+    /// # Safety
+    /// only safe if jtype was a jshort.
     #[inline(always)]
     pub const unsafe fn short(&self) -> jshort {
         self.short
     }
 
+    /// read this jtype as jchar
+    /// # Safety
+    /// only safe if jtype was a jchar.
     #[inline(always)]
     pub const unsafe fn char(&self) -> jchar {
         self.char
     }
 
+    /// read this jtype as jbyte
+    /// # Safety
+    /// only safe if jtype was a jbyte.
     #[inline(always)]
     pub const unsafe fn byte(&self) -> jbyte {
         self.byte
     }
 
+    /// read this jtype as jboolean
+    /// # Safety
+    /// only safe if jtype was a jboolean.
     #[inline(always)]
     pub const unsafe fn boolean(&self) -> jboolean {
         self.boolean
     }
 
+    /// read this jtype as jfloat
+    /// # Safety
+    /// only safe if jtype was a jfloat.
     #[inline(always)]
     pub const unsafe fn float(&self) -> jfloat {
         self.float
     }
 
+    /// read this jtype as jdouble
+    /// # Safety
+    /// only safe if jtype was a jdouble.
     #[inline(always)]
     pub const unsafe fn double(&self) -> jdouble {
         self.double
     }
 
+    /// read this jtype as jobject
+    /// # Safety
+    /// only safe if jtype was a jobject.
     #[inline(always)]
     pub const unsafe fn object(&self) -> jobject {
         self.object
     }
 
+    /// read this jtype as jclass
+    /// # Safety
+    /// only safe if jtype was a jclass.
     #[inline(always)]
     pub const unsafe fn class(&self) -> jclass {
         self.class
     }
 
+    /// read this jtype as jthrowable
+    /// # Safety
+    /// only safe if jtype was a jthrowable.
     #[inline(always)]
     pub const unsafe fn throwable(&self) -> jthrowable {
         self.throwable
@@ -1671,8 +1704,8 @@ impl JNIEnv {
     ///
     /// # Arguments
     /// * result - arbitrary jni reference that should be moved to the parent reference frame.
-    /// this is similar to a "return" value and may be null if no such result is needed.
-    /// the local reference this function returns is valid within the parent local reference frame.
+    ///   this is similar to a "return" value and may be null if no such result is needed.
+    ///   the local reference this function returns is valid within the parent local reference frame.
     ///
     /// # Returns
     /// A valid local reference that points to the same object as the reference `result`. Is null if `result` is null.
@@ -6638,6 +6671,51 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method with 3 arguments that returns char without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a char
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallNonvirtualCharMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jchar {
         #[cfg(feature = "asserts")]
         {
@@ -6859,6 +6937,51 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method with 3 arguments that returns short without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a short
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallNonvirtualShortMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jshort {
         #[cfg(feature = "asserts")]
         {
@@ -7080,6 +7203,51 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method with 3 arguments that returns int without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a int
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallNonvirtualIntMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -7301,6 +7469,51 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method with 3 arguments that returns long without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a long
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallNonvirtualLongMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -7522,6 +7735,51 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method with 3 arguments that returns float without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a float
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallNonvirtualFloatMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -7743,6 +8001,51 @@ impl JNIEnv {
         self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
+    ///
+    /// Calls a non-static java method with 3 arguments that returns double without using the objects vtable to look up the method.
+    /// This means that should the object be a subclass of the class that the method is declared in
+    /// then the base method that the methodID refers to is invoked instead of a potentially overwritten one.
+    ///
+    /// This is roughly equivalent to calling "super.someMethod(...)" in java
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    ///
+    ///
+    /// # Arguments
+    /// * `obj` - which object the method should be called on
+    ///     * must be valid
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methodID` - method id of the method
+    ///     * must not be null
+    ///     * must be valid
+    ///     * must not be a static
+    ///     * must actually be a method of `obj`
+    /// * `args` - argument pointer
+    ///     * can be null if the method has no arguments
+    ///     * must not be null otherwise and point to the exact number of arguments the method expects
+    ///
+    /// # Returns
+    /// Whatever the method returned or 0 if it threw
+    ///
+    /// # Throws Java Exception
+    /// * Whatever the method threw
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `obj` must a valid and not already garbage collected.
+    /// `methodID` must be valid, non-static and actually be a method of `obj` and return a double
+    /// `args` must have sufficient length to contain the amount of parameter required by the java method.
+    /// `args` union must contain types that match the java methods parameters.
+    /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
+    ///
     pub unsafe fn CallNonvirtualDoubleMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -12036,7 +12339,7 @@ impl JNIEnv {
     ///
     /// Creates a new byte array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewByteArray
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12074,7 +12377,7 @@ impl JNIEnv {
     ///
     /// Creates a new char array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewCharArray
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12112,7 +12415,7 @@ impl JNIEnv {
     ///
     /// Creates a new short array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewShortArray
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12150,7 +12453,7 @@ impl JNIEnv {
     ///
     /// Creates a new int array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewIntArray
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12188,7 +12491,7 @@ impl JNIEnv {
     ///
     /// Creates a new long array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewLongArray
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12226,7 +12529,7 @@ impl JNIEnv {
     ///
     /// Creates a new float array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewFloatArray
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12264,7 +12567,7 @@ impl JNIEnv {
     ///
     /// Creates a new double array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewDoubleArray
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12302,7 +12605,7 @@ impl JNIEnv {
     ///
     /// Get the boolean content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetBooleanArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12343,7 +12646,7 @@ impl JNIEnv {
     ///
     /// Get the byte content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetByteArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12384,7 +12687,7 @@ impl JNIEnv {
     ///
     /// Get the char content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetCharArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12425,7 +12728,7 @@ impl JNIEnv {
     ///
     /// Get the short content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetShortArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12466,7 +12769,7 @@ impl JNIEnv {
     ///
     /// Get the int content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetIntArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12507,7 +12810,7 @@ impl JNIEnv {
     ///
     /// Get the long content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetLongArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12548,7 +12851,7 @@ impl JNIEnv {
     ///
     /// Get the float content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetFloatArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12589,7 +12892,7 @@ impl JNIEnv {
     ///
     /// Get the double content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetDoubleArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12630,7 +12933,7 @@ impl JNIEnv {
     ///
     /// Releases the boolean array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseBooleanArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12650,8 +12953,6 @@ impl JNIEnv {
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
@@ -12679,7 +12980,7 @@ impl JNIEnv {
     ///
     /// Releases the byte array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseByteArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12699,8 +13000,6 @@ impl JNIEnv {
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
@@ -12728,7 +13027,7 @@ impl JNIEnv {
     ///
     /// Releases the char array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseCharArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12748,8 +13047,6 @@ impl JNIEnv {
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
@@ -12777,7 +13074,7 @@ impl JNIEnv {
     ///
     /// Releases the short array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseShortArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12797,8 +13094,6 @@ impl JNIEnv {
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
@@ -12826,7 +13121,7 @@ impl JNIEnv {
     ///
     /// Releases the int array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseIntArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12846,8 +13141,6 @@ impl JNIEnv {
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
@@ -12875,7 +13168,7 @@ impl JNIEnv {
     ///
     /// Releases the long array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseLongArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12895,8 +13188,6 @@ impl JNIEnv {
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
@@ -12924,7 +13215,7 @@ impl JNIEnv {
     ///
     /// Releases the float array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseFloatArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12944,8 +13235,6 @@ impl JNIEnv {
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
@@ -12973,7 +13262,7 @@ impl JNIEnv {
     ///
     /// Releases the double array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseDoubleArrayElements
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12993,8 +13282,6 @@ impl JNIEnv {
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
     /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
@@ -13039,6 +13326,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jbooleanArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity to store `len` bytes.
     ///
@@ -13092,6 +13386,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity to store `len` bytes.
     ///
@@ -13144,6 +13445,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     ///
     /// # Example
@@ -13151,7 +13459,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
-    ///         array: jbyteArray, chunk_buffer: &mut [i8], chunk_offset: usize) -> bool {
+    ///         array: jbyteArray, chunk_buffer: &mut [jbyte], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13166,7 +13474,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetByteArrayRegion_into_slice(&self, array: jbyteArray, start: jsize, buf: &mut [i8]) {
+    pub unsafe fn GetByteArrayRegion_into_slice(&self, array: jbyteArray, start: jsize, buf: &mut [jbyte]) {
         self.GetByteArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
     }
 
@@ -13187,6 +13495,63 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must be a valid non-null reference to a jbyteArray.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_chunk_from_rust_to_java(env: JNIEnv,
+    ///         array: jbyteArray, chunk_buffer: &[jbyte], chunk_offset: usize) -> bool {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///
+    ///     env.SetByteArrayRegion_from_slice(array, chunk_offset as jsize, chunk_buffer);
+    ///     if env.ExceptionCheck() {
+    ///         //ArrayIndexOutOfBoundsException
+    ///         env.ExceptionClear();
+    ///         return false;
+    ///     }
+    ///     true
+    /// }
+    /// ```
+    ///
+    pub unsafe fn SetByteArrayRegion_from_slice(&self, array: jbyteArray, start: jsize, buf: &[jbyte]) {
+        self.SetByteArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+    }
+
+    ///
+    /// Copies data from the slice `buf` into the jbyteArray `array` starting at the given `start` index.
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jbyteArray.
+    /// * `start` - the index where the first element should be coped into in the Java jybteArray
+    /// * `buf` - the slice where data is copied from
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if the slice `buf` is larger than the amount of remaining elements in the `array`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or >= env.GetArrayLength(array)
+    ///
+    /// It is JVM implementation specific what is stored inside `array` if this function throws an exception.
+    /// * Data partially written
+    /// * No data written
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     ///
     /// # Example
@@ -13209,8 +13574,8 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn SetByteArrayRegion_from_slice(&self, array: jbyteArray, start: jsize, buf: &[i8]) {
-        self.SetByteArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+    pub unsafe fn SetBooleanArrayRegion_from_slice(&self, array: jbyteArray, start: jsize, buf: &[jboolean]) {
+        self.SetBooleanArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
     }
 
     ///
@@ -13238,13 +13603,20 @@ impl JNIEnv {
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     ///
     /// # Example
     /// ```rust
     /// use jni_simple::{*};
     ///
-    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jbyteArray) -> Vec<i8> {
+    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jbyteArray) -> Vec<jbyte> {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13252,7 +13624,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetByteArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<i8> {
+    pub unsafe fn GetByteArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<jbyte> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
@@ -13282,6 +13654,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jcharArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jchar's.
     ///
@@ -13290,7 +13669,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
-    ///         array: jcharArray, chunk_buffer: &mut [u16], chunk_offset: usize) -> bool {
+    ///         array: jcharArray, chunk_buffer: &mut [jchar], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13335,6 +13714,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jcharArray.
     ///
     /// # Example
@@ -13342,7 +13728,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
-    ///         array: jcharArray, chunk_buffer: &mut [u16], chunk_offset: usize) -> bool {
+    ///         array: jcharArray, chunk_buffer: &mut [jchar], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13357,7 +13743,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetCharArrayRegion_into_slice(&self, array: jcharArray, start: jsize, buf: &mut [u16]) {
+    pub unsafe fn GetCharArrayRegion_into_slice(&self, array: jcharArray, start: jsize, buf: &mut [jchar]) {
         self.GetCharArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
     }
 
@@ -13378,6 +13764,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jcharArray.
     ///
     /// # Example
@@ -13400,7 +13793,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn SetCharArrayRegion_from_slice(&self, array: jcharArray, start: jsize, buf: &[u16]) {
+    pub unsafe fn SetCharArrayRegion_from_slice(&self, array: jcharArray, start: jsize, buf: &[jchar]) {
         self.SetCharArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
     }
 
@@ -13429,13 +13822,20 @@ impl JNIEnv {
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     ///
     /// # Example
     /// ```rust
     /// use jni_simple::{*};
     ///
-    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jcharArray) -> Vec<u16> {
+    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jcharArray) -> Vec<jchar> {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13443,7 +13843,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetCharArrayRegion_as_vec(&self, array: jcharArray, start: jsize, len: Option<jsize>) -> Vec<u16> {
+    pub unsafe fn GetCharArrayRegion_as_vec(&self, array: jcharArray, start: jsize, len: Option<jsize>) -> Vec<jchar> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
@@ -13473,6 +13873,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jshortArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jshort's.
     ///
@@ -13481,7 +13888,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
-    ///         array: jshortArray, chunk_buffer: &mut [i16], chunk_offset: usize) -> bool {
+    ///         array: jshortArray, chunk_buffer: &mut [jshort], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13526,6 +13933,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jshortArray.
     ///
     /// # Example
@@ -13533,7 +13947,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
-    ///         array: jshortArray, chunk_buffer: &mut [i16], chunk_offset: usize) -> bool {
+    ///         array: jshortArray, chunk_buffer: &mut [jshort], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13548,7 +13962,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetShortArrayRegion_into_slice(&self, array: jshortArray, start: jsize, buf: &mut [i16]) {
+    pub unsafe fn GetShortArrayRegion_into_slice(&self, array: jshortArray, start: jsize, buf: &mut [jshort]) {
         self.GetShortArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
     }
 
@@ -13569,6 +13983,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jshortArray.
     ///
     /// # Example
@@ -13576,7 +13997,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_rust_to_java(env: JNIEnv,
-    ///         array: jshortArray, chunk_buffer: &[i16], chunk_offset: usize) -> bool {
+    ///         array: jshortArray, chunk_buffer: &[jshort], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13591,7 +14012,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn SetShortArrayRegion_from_slice(&self, array: jshortArray, start: jsize, buf: &[i16]) {
+    pub unsafe fn SetShortArrayRegion_from_slice(&self, array: jshortArray, start: jsize, buf: &[jshort]) {
         self.SetShortArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
     }
 
@@ -13620,13 +14041,20 @@ impl JNIEnv {
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jshortArray.
     ///
     /// # Example
     /// ```rust
     /// use jni_simple::{*};
     ///
-    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jshortArray) -> Vec<i16> {
+    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jshortArray) -> Vec<jshort> {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13634,7 +14062,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetShortArrayRegion_as_vec(&self, array: jshortArray, start: jsize, len: Option<jsize>) -> Vec<i16> {
+    pub unsafe fn GetShortArrayRegion_as_vec(&self, array: jshortArray, start: jsize, len: Option<jsize>) -> Vec<jshort> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
@@ -13664,6 +14092,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jintArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jint's.
     ///
@@ -13672,7 +14107,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
-    ///         array: jintArray, chunk_buffer: &mut [i32], chunk_offset: usize) -> bool {
+    ///         array: jintArray, chunk_buffer: &mut [jint], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13717,6 +14152,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jintArray.
     ///
     /// # Example
@@ -13724,7 +14166,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
-    ///         array: jintArray, chunk_buffer: &mut [i32], chunk_offset: usize) -> bool {
+    ///         array: jintArray, chunk_buffer: &mut [jint], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13739,7 +14181,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetIntArrayRegion_into_slice(&self, array: jshortArray, start: jsize, buf: &mut [i32]) {
+    pub unsafe fn GetIntArrayRegion_into_slice(&self, array: jshortArray, start: jsize, buf: &mut [jint]) {
         self.GetIntArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
     }
 
@@ -13760,6 +14202,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jintArray.
     ///
     /// # Example
@@ -13767,7 +14216,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_rust_to_java(env: JNIEnv,
-    ///         array: jintArray, chunk_buffer: &[i32], chunk_offset: usize) -> bool {
+    ///         array: jintArray, chunk_buffer: &[jint], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13782,7 +14231,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn SetIntArrayRegion_from_slice(&self, array: jintArray, start: jsize, buf: &[i32]) {
+    pub unsafe fn SetIntArrayRegion_from_slice(&self, array: jintArray, start: jsize, buf: &[jint]) {
         self.SetIntArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
     }
 
@@ -13811,13 +14260,20 @@ impl JNIEnv {
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jintArray.
     ///
     /// # Example
     /// ```rust
     /// use jni_simple::{*};
     ///
-    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jintArray) -> Vec<i32> {
+    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jintArray) -> Vec<jint> {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13825,7 +14281,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetIntArrayRegion_as_vec(&self, array: jintArray, start: jsize, len: Option<jsize>) -> Vec<i32> {
+    pub unsafe fn GetIntArrayRegion_as_vec(&self, array: jintArray, start: jsize, len: Option<jsize>) -> Vec<jint> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
@@ -13855,6 +14311,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jlongArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jlong's.
     ///
@@ -13863,7 +14326,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
-    ///         array: jlongArray, chunk_buffer: &mut [i64], chunk_offset: usize) -> bool {
+    ///         array: jlongArray, chunk_buffer: &mut [jlong], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13908,6 +14371,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jlongArray.
     ///
     /// # Example
@@ -13915,7 +14385,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
-    ///         array: jlongArray, chunk_buffer: &mut [i64], chunk_offset: usize) -> bool {
+    ///         array: jlongArray, chunk_buffer: &mut [jlong], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13951,6 +14421,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jlongArray.
     ///
     /// # Example
@@ -13958,7 +14435,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_rust_to_java(env: JNIEnv,
-    ///         array: jlongArray, chunk_buffer: &[i64], chunk_offset: usize) -> bool {
+    ///         array: jlongArray, chunk_buffer: &[jlong], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -13973,12 +14450,12 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn SetLongArrayRegion_from_slice(&self, array: jlongArray, start: jsize, buf: &[i64]) {
+    pub unsafe fn SetLongArrayRegion_from_slice(&self, array: jlongArray, start: jsize, buf: &[jlong]) {
         self.SetLongArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
     }
 
     ///
-    /// Copies data from a Java jlongArray `array` into a new Vec<i64>
+    /// Copies data from a Java jlongArray `array` into a new Vec<jlong>
     ///
     /// # Arguments
     /// * `array` - handle to a Java jlongArray.
@@ -14002,13 +14479,20 @@ impl JNIEnv {
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jlongArray.
     ///
     /// # Example
     /// ```rust
     /// use jni_simple::{*};
     ///
-    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jlongArray) -> Vec<i64> {
+    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jlongArray) -> Vec<jlong> {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -14016,7 +14500,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetLongArrayRegion_as_vec(&self, array: jlongArray, start: jsize, len: Option<jsize>) -> Vec<i64> {
+    pub unsafe fn GetLongArrayRegion_as_vec(&self, array: jlongArray, start: jsize, len: Option<jsize>) -> Vec<jlong> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
@@ -14046,6 +14530,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jfloatArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jfloat's.
     ///
@@ -14099,6 +14590,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jfloatArray.
     ///
     /// # Example
@@ -14142,6 +14640,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jfloatArray.
     ///
     /// # Example
@@ -14193,6 +14698,13 @@ impl JNIEnv {
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jfloatArray.
     ///
     /// # Example
@@ -14207,7 +14719,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetFloatArrayRegion_as_vec(&self, array: jfloatArray, start: jsize, len: Option<jsize>) -> Vec<f32> {
+    pub unsafe fn GetFloatArrayRegion_as_vec(&self, array: jfloatArray, start: jsize, len: Option<jsize>) -> Vec<jfloat> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
@@ -14237,6 +14749,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jdoubleArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jdouble's.
     ///
@@ -14290,6 +14809,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jdoubleArray.
     ///
     /// # Example
@@ -14333,6 +14859,13 @@ impl JNIEnv {
     /// * No data written
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jfloatArray.
     ///
     /// # Example
@@ -14384,6 +14917,13 @@ impl JNIEnv {
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
     /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     /// `array` must be a valid non-null reference to a jdoubleArray.
     ///
     /// # Example
@@ -14398,7 +14938,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetDoubleArrayRegion_as_vec(&self, array: jdoubleArray, start: jsize, len: Option<jsize>) -> Vec<f64> {
+    pub unsafe fn GetDoubleArrayRegion_as_vec(&self, array: jdoubleArray, start: jsize, len: Option<jsize>) -> Vec<jdouble> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if len < 0 {
             return Vec::new();
@@ -14408,6 +14948,37 @@ impl JNIEnv {
         data
     }
 
+    ///
+    /// Sets a boolean array region from a buffer
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java array.
+    ///     * must not be null
+    /// * `start` - index in the `array` where the fist element should be copied to
+    /// * `len` - amount of elements to copy
+    /// * `buf` - buffer where the elements are copied from.
+    ///     * must not be null
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
+    ///
+    /// The state of the array is implementation specific if the fn throws an exception.
+    /// It may have partially copied some data or copied no data.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must be a valid non-null reference to a jbooleanArray.
+    /// `buf` must be at least `len` elements in size
+    ///
     pub unsafe fn SetBooleanArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *const jboolean) {
         #[cfg(feature = "asserts")]
         {
@@ -14420,7 +14991,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jboolean)>(207)(self.vtable, array, start, len, buf);
     }
 
-    pub unsafe fn SetByteArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *const jbyte) {
+    ///
+    /// Sets a byte array region from a buffer
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java array.
+    ///     * must not be null
+    /// * `start` - index in the `array` where the fist element should be copied to
+    /// * `len` - amount of elements to copy
+    /// * `buf` - buffer where the elements are copied from.
+    ///     * must not be null
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
+    ///
+    /// The state of the array is implementation specific if the fn throws an exception.
+    /// It may have partially copied some data or copied no data.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must be a valid non-null reference to a jbyteArray.
+    /// `buf` must be at least `len` elements in size
+    ///
+    pub unsafe fn SetByteArrayRegion(&self, array: jbyteArray, start: jsize, len: jsize, buf: *const jbyte) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("SetByteArrayRegion");
@@ -14429,10 +15031,41 @@ impl JNIEnv {
             assert!(!buf.is_null(), "SetByteArrayRegion buf must not be null");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jbyte)>(208)(self.vtable, array, start, len, buf);
+        self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, jsize, jsize, *const jbyte)>(208)(self.vtable, array, start, len, buf);
     }
 
-    pub unsafe fn SetCharArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *const jchar) {
+    ///
+    /// Sets a char array region from a buffer
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java array.
+    ///     * must not be null
+    /// * `start` - index in the `array` where the fist element should be copied to
+    /// * `len` - amount of elements to copy
+    /// * `buf` - buffer where the elements are copied from.
+    ///     * must not be null
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
+    ///
+    /// The state of the array is implementation specific if the fn throws an exception.
+    /// It may have partially copied some data or copied no data.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must be a valid non-null reference to a jcharArray.
+    /// `buf` must be at least `len` elements in size
+    ///
+    pub unsafe fn SetCharArrayRegion(&self, array: jcharArray, start: jsize, len: jsize, buf: *const jchar) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("SetCharArrayRegion");
@@ -14442,10 +15075,41 @@ impl JNIEnv {
             assert_eq!(0, buf.align_offset(align_of::<jchar>()), "SetCharArrayRegion buf pointer is not aligned");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jchar)>(209)(self.vtable, array, start, len, buf);
+        self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, jsize, jsize, *const jchar)>(209)(self.vtable, array, start, len, buf);
     }
 
-    pub unsafe fn SetShortArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *const jshort) {
+    ///
+    /// Sets a short array region from a buffer
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java array.
+    ///     * must not be null
+    /// * `start` - index in the `array` where the fist element should be copied to
+    /// * `len` - amount of elements to copy
+    /// * `buf` - buffer where the elements are copied from.
+    ///     * must not be null
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
+    ///
+    /// The state of the array is implementation specific if the fn throws an exception.
+    /// It may have partially copied some data or copied no data.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must be a valid non-null reference to a jshortArray.
+    /// `buf` must be at least `len` elements in size
+    ///
+    pub unsafe fn SetShortArrayRegion(&self, array: jshortArray, start: jsize, len: jsize, buf: *const jshort) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("SetShortArrayRegion");
@@ -14455,10 +15119,41 @@ impl JNIEnv {
             assert_eq!(0, buf.align_offset(align_of::<jshort>()), "SetShortArrayRegion buf pointer is not aligned");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jshort)>(210)(self.vtable, array, start, len, buf);
+        self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, jsize, jsize, *const jshort)>(210)(self.vtable, array, start, len, buf);
     }
 
-    pub unsafe fn SetIntArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *const jint) {
+    ///
+    /// Sets a int array region from a buffer
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java array.
+    ///     * must not be null
+    /// * `start` - index in the `array` where the fist element should be copied to
+    /// * `len` - amount of elements to copy
+    /// * `buf` - buffer where the elements are copied from.
+    ///     * must not be null
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
+    ///
+    /// The state of the array is implementation specific if the fn throws an exception.
+    /// It may have partially copied some data or copied no data.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must be a valid non-null reference to a jintArray.
+    /// `buf` must be at least `len` elements in size
+    ///
+    pub unsafe fn SetIntArrayRegion(&self, array: jintArray, start: jsize, len: jsize, buf: *const jint) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("SetIntArrayRegion");
@@ -14468,10 +15163,41 @@ impl JNIEnv {
             assert_eq!(0, buf.align_offset(align_of::<jint>()), "SetIntArrayRegion buf pointer is not aligned");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jint)>(211)(self.vtable, array, start, len, buf);
+        self.jni::<extern "system" fn(JNIEnvVTable, jintArray, jsize, jsize, *const jint)>(211)(self.vtable, array, start, len, buf);
     }
 
-    pub unsafe fn SetLongArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *const jlong) {
+    ///
+    /// Sets a long array region from a buffer
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java array.
+    ///     * must not be null
+    /// * `start` - index in the `array` where the fist element should be copied to
+    /// * `len` - amount of elements to copy
+    /// * `buf` - buffer where the elements are copied from.
+    ///     * must not be null
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
+    ///
+    /// The state of the array is implementation specific if the fn throws an exception.
+    /// It may have partially copied some data or copied no data.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must be a valid non-null reference to a jlongArray.
+    /// `buf` must be at least `len` elements in size
+    ///
+    pub unsafe fn SetLongArrayRegion(&self, array: jlongArray, start: jsize, len: jsize, buf: *const jlong) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("SetLongArrayRegion");
@@ -14481,10 +15207,41 @@ impl JNIEnv {
             assert_eq!(0, buf.align_offset(align_of::<jlong>()), "SetLongArrayRegion buf pointer is not aligned");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jlong)>(212)(self.vtable, array, start, len, buf);
+        self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, jsize, jsize, *const jlong)>(212)(self.vtable, array, start, len, buf);
     }
 
-    pub unsafe fn SetFloatArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *const jfloat) {
+    ///
+    /// Sets a float array region from a buffer
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java array.
+    ///     * must not be null
+    /// * `start` - index in the `array` where the fist element should be copied to
+    /// * `len` - amount of elements to copy
+    /// * `buf` - buffer where the elements are copied from.
+    ///     * must not be null
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
+    ///
+    /// The state of the array is implementation specific if the fn throws an exception.
+    /// It may have partially copied some data or copied no data.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must be a valid non-null reference to a jfloatArray.
+    /// `buf` must be at least `len` elements in size
+    ///
+    pub unsafe fn SetFloatArrayRegion(&self, array: jfloatArray, start: jsize, len: jsize, buf: *const jfloat) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("SetFloatArrayRegion");
@@ -14494,10 +15251,41 @@ impl JNIEnv {
             assert_eq!(0, buf.align_offset(align_of::<jfloat>()), "SetFloatArrayRegion buf pointer is not aligned");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jfloat)>(213)(self.vtable, array, start, len, buf);
+        self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, jsize, jsize, *const jfloat)>(213)(self.vtable, array, start, len, buf);
     }
 
-    pub unsafe fn SetDoubleArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *const jdouble) {
+    ///
+    /// Sets a double array region from a buffer
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java array.
+    ///     * must not be null
+    /// * `start` - index in the `array` where the fist element should be copied to
+    /// * `len` - amount of elements to copy
+    /// * `buf` - buffer where the elements are copied from.
+    ///     * must not be null
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
+    ///
+    /// The state of the array is implementation specific if the fn throws an exception.
+    /// It may have partially copied some data or copied no data.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must be a valid non-null reference to a jdoubleArray.
+    /// `buf` must be at least `len` elements in size
+    ///
+    pub unsafe fn SetDoubleArrayRegion(&self, array: jdoubleArray, start: jsize, len: jsize, buf: *const jdouble) {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("SetDoubleArrayRegion");
@@ -14507,7 +15295,7 @@ impl JNIEnv {
             assert_eq!(0, buf.align_offset(align_of::<jdouble>()), "SetDoubleArrayRegion buf pointer is not aligned");
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jdouble)>(214)(self.vtable, array, start, len, buf);
+        self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, jsize, jsize, *const jdouble)>(214)(self.vtable, array, start, len, buf);
     }
 
     #[cfg(feature = "asserts")]
@@ -14547,6 +15335,12 @@ impl JNIEnv {
     /// is a better choice. One use case I can think of where this method is a valid choice
     /// is performing pixel manipulations on the int[]/byte[] inside a large existing BufferedImage.
     ///
+    /// # Returns
+    /// returns null on error otherwise returns a pointer into the data and begins a critical section.
+    ///
+    /// # Safety
+    /// `array` must be valid non null reference to a array that is not already garbage collected
+    ///
     pub unsafe fn GetPrimitiveArrayCritical(&self, array: jarray, isCopy: *mut jboolean) -> *mut c_void {
         #[cfg(feature = "asserts")]
         {
@@ -14580,6 +15374,14 @@ impl JNIEnv {
         crit
     }
 
+    ///
+    /// Releases a critical array obtains in GetPrimitiveArrayCritical
+    ///
+    /// # Safety
+    /// `array` must be valid non null reference to a array that is not already garbage collected
+    /// `carray` must be the result of a GetPrimitiveArrayCritical call with the same `array`
+    /// `mode` must be one of JNI_OK, JNI_COMMIT or JNI_ABORT constant values.
+    ///
     pub unsafe fn ReleasePrimitiveArrayCritical(&self, array: jarray, carray: *mut c_void, mode: jint) {
         #[cfg(feature = "asserts")]
         {
@@ -14611,10 +15413,55 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut c_void, jint)>(223)(self.vtable, array, carray, mode);
     }
 
+    ///
+    /// Registers native methods to a java class with native methods
+    ///
+    /// # Arguments
+    /// * `clazz` - handle to a Java array.
+    ///     * must not be null
+    /// * `methods` - the native method function pointers
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must be a valid non-null reference to a class.
+    /// `methods` all elements and their function pointers must be non null and valid.
+    ///
     pub unsafe fn RegisterNatives_from_slice(&self, clazz: jclass, methods: &[JNINativeMethod]) -> jint {
         self.RegisterNatives(clazz, methods.as_ptr(), methods.len() as jint)
     }
 
+    ///
+    /// Registers native methods to a java class with native methods
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#RegisterNatives
+    ///
+    /// # Arguments
+    /// * `clazz`
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    /// * `methods` - the native method function pointers
+    ///     * must not be null
+    /// * `size` - amount of JNINativeMethod's in `methods`
+    ///     * must not be negative
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must be a valid non-null reference to a class.
+    /// `methods` all elements and their function pointers must be non null and valid.
+    /// `methods` must be at least `size` elements large
+    ///
     pub unsafe fn RegisterNatives(&self, clazz: jclass, methods: *const JNINativeMethod, size: jint) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -14634,6 +15481,28 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const JNINativeMethod, jint) -> jint>(215)(self.vtable, clazz, methods, size)
     }
 
+    ///
+    /// Unregisters all native bindings from a java class.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#UnregisterNatives
+    ///
+    /// # Arguments
+    /// * `clazz`
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `clazz` must be a valid non-null reference to a class.
+    /// `methods` all elements and their function pointers must be non null and valid.
+    /// `methods` must be at least `size` elements large
+    ///
     pub unsafe fn UnregisterNatives(&self, clazz: jclass) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -14645,6 +15514,32 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jint>(216)(self.vtable, clazz)
     }
 
+    ///
+    /// Enters a monitor on a java object.
+    /// A will cause all other java threads to block when trying to enter a synchronized block
+    /// on the object or other native threads to block when trying to enter a monitor.
+    /// This fn will block until all other threads have either left their synchronized block or monitor sections.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#MonitorEnter
+    ///
+    /// # Returns
+    /// JNI_OK on success
+    ///
+    /// # Arguments
+    /// * `obj`
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `jobject` must be a valid non-null reference that is not yet garbage collected.
+    ///
     pub unsafe fn MonitorEnter(&self, obj: jobject) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -14656,6 +15551,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jint>(217)(self.vtable, obj)
     }
 
+    ///
+    /// Leaves a monitor entered by MonitorEnter
+    /// This fn cannot be used to "leave" synchronized blocks entered into by java code.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#MonitorExit
+    ///
+    /// # Arguments
+    /// * `obj`
+    ///     * must not be null
+    ///     * must not be already garbage collected
+    ///
+    /// # Returns
+    /// JNI_OK on success
+    ///
+    /// # Throws Java Exception
+    /// * IllegalMonitorStateException - if the current thread does not own the monitor
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `jobject` must be a valid non-null reference that is not yet garbage collected.
+    ///
     pub unsafe fn MonitorExit(&self, obj: jobject) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -14666,6 +15588,34 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jint>(218)(self.vtable, obj)
     }
 
+    ///
+    /// Creates a new nio direct ByteBuffer that is backed by some native memory provided to by the pointer.
+    /// When garbage collection collects that ByteBuffer it will not perform any operation on the backed memory.
+    /// The caller has to ensure that the pointer remains valid for the entire existance of the ByteBuffer
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewDirectByteBuffer
+    ///
+    /// # Arguments
+    /// * `address`
+    ///     * must not be null
+    /// * `capacity`
+    ///     * size of the memory pointed to by address
+    ///     * must be positive
+    ///
+    /// # Returns
+    /// A local reference to the newly created ByteBuffer
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `address` must be a valid non-null.
+    /// `capacity` must be positive, the memory pointed to by `address` must have at least this amount of bytes in space.
+    ///
     pub unsafe fn NewDirectByteBuffer(&self, address: *mut c_void, capacity: jlong) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -14683,6 +15633,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, *mut c_void, jlong) -> jobject>(229)(self.vtable, address, capacity)
     }
 
+    ///
+    /// Gets the memory address that backs a direct nio buffer.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetDirectBufferAddress
+    ///
+    /// # Arguments
+    /// * `buf`
+    ///     * must not be null
+    ///     * must not be garbage collected
+    ///
+    /// If `buf` does not refer to a Buffer object or is not direct then this fn returns -1.
+    /// If the jvm does not support accessing direct buffers then this fn returns -1.
+    ///
+    /// # Returns
+    /// The backing pointer or -1 on error
+    ///
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `buf` must be a valid non-null reference to a object and not be garbage collected.
+    ///
     pub unsafe fn GetDirectBufferAddress(&self, buf: jobject) -> *mut c_void {
         #[cfg(feature = "asserts")]
         {
@@ -14693,6 +15670,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> *mut c_void>(230)(self.vtable, buf)
     }
 
+    ///
+    /// Gets the capacity of a direct nio buffer.
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetDirectBufferCapacity
+    ///
+    /// # Arguments
+    /// * `buf`
+    ///     * must not be null
+    ///     * must not be garbage collected
+    ///
+    /// If `buf` does not refer to a Buffer object or is not direct then this fn returns -1.
+    /// If the jvm does not support accessing direct buffers then this fn returns -1.
+    ///
+    /// # Returns
+    /// The capacity or -1 on error
+    ///
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `buf` must be a valid non-null reference to a object and not be garbage collected.
+    ///
     pub unsafe fn GetDirectBufferCapacity(&self, buf: jobject) -> jlong {
         #[cfg(feature = "asserts")]
         {
@@ -14703,6 +15707,32 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jlong>(231)(self.vtable, buf)
     }
 
+    ///
+    /// Converts a reflection Method to a jmethodID
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedMethod
+    ///
+    /// # Arguments
+    /// * `method`
+    ///     * must not be null
+    ///     * must not be garbage collected
+    ///     * must be instanceof a java.lang.reflect.Method or java.lang.reflect.Constructor
+    ///
+    ///
+    /// # Returns
+    /// the jmethodID that refers to the same method.
+    ///
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `method` must be a valid non-null reference to a java.lang.reflect.Method or java.lang.reflect.Constructor and not be garbage collected.
+    ///
     pub unsafe fn FromReflectedMethod(&self, method: jobject) -> jmethodID {
         #[cfg(feature = "asserts")]
         {
@@ -14713,6 +15743,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jmethodID>(7)(self.vtable, method)
     }
 
+    ///
+    /// Converts a jmethodID into a reflection Method
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedField
+    ///
+    /// # Arguments
+    /// * `cls` - the class the method is in
+    ///     * must not be null
+    ///     * must not be garbage collected
+    /// * `jmethodID`
+    ///     * must not be null
+    ///     * must refer to a method that is in `cls`
+    /// * `isStatic` - is the method static or not?
+    ///
+    ///
+    /// # Returns
+    /// a local reference that refers to the same method as the jmethodID or null on erro
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm runs out of memory.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `cls` must be a valid non-null reference to a Class and not be garbage collected.
+    /// `jmethodID` must refer to a method in `cls` and must be either static or not static depending on the `isStatic` flag.
+    ///
     pub unsafe fn ToReflectedMethod(&self, cls: jclass, jmethodID: jmethodID, isStatic: jboolean) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -14724,6 +15786,32 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jclass, jmethodID, jboolean) -> jobject>(9)(self.vtable, cls, jmethodID, isStatic)
     }
 
+    ///
+    /// Converts a reflection Field to a jfieldID
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedField
+    ///
+    /// # Arguments
+    /// * `field`
+    ///     * must not be null
+    ///     * must not be garbage collected
+    ///     * must be instanceof a java.lang.reflect.Field
+    ///
+    ///
+    /// # Returns
+    /// the jfieldID that refers to the same field.
+    ///
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `field` must be a valid non-null reference to a java.lang.reflect.Field and not be garbage collected.
+    ///
     pub unsafe fn FromReflectedField(&self, field: jobject) -> jfieldID {
         #[cfg(feature = "asserts")]
         {
@@ -14734,6 +15822,38 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jfieldID>(8)(self.vtable, field)
     }
 
+    ///
+    /// Converts a jfieldID into a reflection Field
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedField
+    ///
+    /// # Arguments
+    /// * `cls` - the class the method is in
+    ///     * must not be null
+    ///     * must not be garbage collected
+    /// * `jfieldID`
+    ///     * must not be null
+    ///     * must refer to a field that is in `cls`
+    /// * `isStatic` - is the method static or not?
+    ///
+    ///
+    /// # Returns
+    /// a local reference that refers to the same field as the jfieldID or null on erro
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm runs out of memory.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `cls` must be a valid non-null reference to a Class and not be garbage collected.
+    /// `jfieldID` must refer to a field in `cls` and must be either static or not static depending on the `isStatic` flag.
+    ///
     pub unsafe fn ToReflectedField(&self, cls: jclass, jfieldID: jfieldID, isStatic: jboolean) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -14745,6 +15865,25 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jclass, jfieldID, jboolean) -> jobject>(12)(self.vtable, cls, jfieldID, isStatic)
     }
 
+    ///
+    /// Returns the JavaVM assosicated with this JNIEnv
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetJavaVM
+    ///
+    /// # Panics
+    /// if the JVM does not return an error but refuses to set the JavaVM pointer.
+    ///
+    /// # Returns
+    /// the JavaVM "object" or an error code.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
     pub unsafe fn GetJavaVM(&self) -> Result<JavaVM, jint> {
         #[cfg(feature = "asserts")]
         {
@@ -14762,6 +15901,32 @@ impl JNIEnv {
         Ok(JavaVM { functions: r })
     }
 
+    ///
+    /// Returns the module of the given class.
+    ///
+    /// https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html#getmodule
+    ///
+    /// # Arguments
+    /// * `cls`
+    ///     * must not be null
+    ///     * must not be garbage collected
+    ///     * must refer to a class
+    ///
+    /// # Returns
+    /// a local reference to the module object.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// The JVM must be at least Java 9
+    ///
+    /// `cls` must refer to a non-null class that is not yet garbage collected.
+    ///
     pub unsafe fn GetModule(&self, cls: jclass) -> jobject {
         #[cfg(feature = "asserts")]
         {
@@ -14773,10 +15938,37 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jobject>(233)(self.vtable, cls)
     }
 
+    ///
+    /// Returns the module of the given class.
+    ///
+    /// https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html#isvirtualthread
+    ///
+    /// # Arguments
+    /// * `thread`
+    ///     * must not be null
+    ///     * must not be garbage collected
+    ///     * must refer to a java.lang.Thread
+    ///
+    /// # Returns
+    /// true if the thread is virtual, false if not.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// The JVM must be at least Java 21
+    ///
+    /// `thread` must refer to a non-null java.lang.Thread that is not yet garbage collected.
+    ///
     pub unsafe fn IsVirtualThread(&self, thread: jobject) -> jboolean {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("IsVirtualThread");
+            self.check_no_exception("IsVirtualThread");
             assert!(self.GetVersion() >= JNI_VERSION_21);
         }
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jboolean>(234)(self.vtable, thread)
