@@ -64,7 +64,7 @@ pub mod test {
             let method1 = JNINativeMethod::new(name.as_ptr(), sig1.as_ptr(), t1 as *const c_void);
             let method2 = JNINativeMethod::new(name.as_ptr(), sig2.as_ptr(), t2 as *const c_void);
 
-            assert_eq!(JNI_OK, env.RegisterNatives_slice(registered_class, &[method1, method2]));
+            assert_eq!(JNI_OK, env.RegisterNatives_from_slice(registered_class, &[method1, method2]));
 
             env.CallStaticVoidMethod1(registered_class, t2m, 754.156f64);
             assert!(!env.ExceptionCheck());

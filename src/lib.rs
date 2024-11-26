@@ -11995,6 +11995,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobjectArray, jsize, jobject)>(174)(self.vtable, array, index, value);
     }
 
+    ///
+    /// Creates a new boolean array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    ///
+    /// # Arguments
+    /// * `size` - capacity of the new array
+    ///     * must not be negative
+    ///
+    ///
+    /// # Returns
+    /// A reference to the new array or null on failure
+    ///
+    /// # Throws Java Exception
+    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `size` must not be negative
+    ///
     pub unsafe fn NewBooleanArray(&self, size: jsize) -> jbooleanArray {
         #[cfg(feature = "asserts")]
         {
@@ -12006,6 +12033,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jobject>(175)(self.vtable, size)
     }
 
+    ///
+    /// Creates a new byte array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    ///
+    /// # Arguments
+    /// * `size` - capacity of the new array
+    ///     * must not be negative
+    ///
+    ///
+    /// # Returns
+    /// A reference to the new array or null on failure
+    ///
+    /// # Throws Java Exception
+    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `size` must not be negative
+    ///
     pub unsafe fn NewByteArray(&self, size: jsize) -> jbyteArray {
         #[cfg(feature = "asserts")]
         {
@@ -12017,6 +12071,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jbyteArray>(176)(self.vtable, size)
     }
 
+    ///
+    /// Creates a new char array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    ///
+    /// # Arguments
+    /// * `size` - capacity of the new array
+    ///     * must not be negative
+    ///
+    ///
+    /// # Returns
+    /// A reference to the new array or null on failure
+    ///
+    /// # Throws Java Exception
+    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `size` must not be negative
+    ///
     pub unsafe fn NewCharArray(&self, size: jsize) -> jcharArray {
         #[cfg(feature = "asserts")]
         {
@@ -12028,6 +12109,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jcharArray>(177)(self.vtable, size)
     }
 
+    ///
+    /// Creates a new short array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    ///
+    /// # Arguments
+    /// * `size` - capacity of the new array
+    ///     * must not be negative
+    ///
+    ///
+    /// # Returns
+    /// A reference to the new array or null on failure
+    ///
+    /// # Throws Java Exception
+    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `size` must not be negative
+    ///
     pub unsafe fn NewShortArray(&self, size: jsize) -> jshortArray {
         #[cfg(feature = "asserts")]
         {
@@ -12039,6 +12147,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jshortArray>(178)(self.vtable, size)
     }
 
+    ///
+    /// Creates a new int array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    ///
+    /// # Arguments
+    /// * `size` - capacity of the new array
+    ///     * must not be negative
+    ///
+    ///
+    /// # Returns
+    /// A reference to the new array or null on failure
+    ///
+    /// # Throws Java Exception
+    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `size` must not be negative
+    ///
     pub unsafe fn NewIntArray(&self, size: jsize) -> jintArray {
         #[cfg(feature = "asserts")]
         {
@@ -12050,6 +12185,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jintArray>(179)(self.vtable, size)
     }
 
+    ///
+    /// Creates a new long array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    ///
+    /// # Arguments
+    /// * `size` - capacity of the new array
+    ///     * must not be negative
+    ///
+    ///
+    /// # Returns
+    /// A reference to the new array or null on failure
+    ///
+    /// # Throws Java Exception
+    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `size` must not be negative
+    ///
     pub unsafe fn NewLongArray(&self, size: jsize) -> jlongArray {
         #[cfg(feature = "asserts")]
         {
@@ -12061,6 +12223,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jlongArray>(180)(self.vtable, size)
     }
 
+    ///
+    /// Creates a new float array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    ///
+    /// # Arguments
+    /// * `size` - capacity of the new array
+    ///     * must not be negative
+    ///
+    ///
+    /// # Returns
+    /// A reference to the new array or null on failure
+    ///
+    /// # Throws Java Exception
+    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `size` must not be negative
+    ///
     pub unsafe fn NewFloatArray(&self, size: jsize) -> jfloatArray {
         #[cfg(feature = "asserts")]
         {
@@ -12072,6 +12261,33 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jfloatArray>(181)(self.vtable, size)
     }
 
+    ///
+    /// Creates a new double array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    ///
+    /// # Arguments
+    /// * `size` - capacity of the new array
+    ///     * must not be negative
+    ///
+    ///
+    /// # Returns
+    /// A reference to the new array or null on failure
+    ///
+    /// # Throws Java Exception
+    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `size` must not be negative
+    ///
     pub unsafe fn NewDoubleArray(&self, size: jsize) -> jdoubleArray {
         #[cfg(feature = "asserts")]
         {
@@ -12083,6 +12299,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jdoubleArray>(182)(self.vtable, size)
     }
 
+    ///
+    /// Get the boolean content inside the array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `isCopy` - optional flag for the jvm to indicate if the data is a copy or not.
+    ///     * can be null
+    ///
+    /// # Returns
+    /// A pointer to the elements or null if an error occured.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm ran out of memory.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    ///
     pub unsafe fn GetBooleanArrayElements(&self, array: jbooleanArray, is_copy: *mut jboolean) -> *mut jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -12094,6 +12340,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, *mut jboolean) -> *mut jboolean>(183)(self.vtable, array, is_copy)
     }
 
+    ///
+    /// Get the byte content inside the array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `isCopy` - optional flag for the jvm to indicate if the data is a copy or not.
+    ///     * can be null
+    ///
+    /// # Returns
+    /// A pointer to the elements or null if an error occured.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm ran out of memory.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    ///
     pub unsafe fn GetByteArrayElements(&self, array: jbyteArray, is_copy: *mut jboolean) -> *mut jbyte {
         #[cfg(feature = "asserts")]
         {
@@ -12105,6 +12381,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, *mut jboolean) -> *mut jbyte>(184)(self.vtable, array, is_copy)
     }
 
+    ///
+    /// Get the char content inside the array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `isCopy` - optional flag for the jvm to indicate if the data is a copy or not.
+    ///     * can be null
+    ///
+    /// # Returns
+    /// A pointer to the elements or null if an error occured.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm ran out of memory.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    ///
     pub unsafe fn GetCharArrayElements(&self, array: jcharArray, is_copy: *mut jboolean) -> *mut jchar {
         #[cfg(feature = "asserts")]
         {
@@ -12116,6 +12422,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, *mut jboolean) -> *mut jchar>(185)(self.vtable, array, is_copy)
     }
 
+    ///
+    /// Get the short content inside the array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `isCopy` - optional flag for the jvm to indicate if the data is a copy or not.
+    ///     * can be null
+    ///
+    /// # Returns
+    /// A pointer to the elements or null if an error occured.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm ran out of memory.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    ///
     pub unsafe fn GetShortArrayElements(&self, array: jshortArray, is_copy: *mut jboolean) -> *mut jshort {
         #[cfg(feature = "asserts")]
         {
@@ -12127,6 +12463,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, *mut jboolean) -> *mut jshort>(186)(self.vtable, array, is_copy)
     }
 
+    ///
+    /// Get the int content inside the array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `isCopy` - optional flag for the jvm to indicate if the data is a copy or not.
+    ///     * can be null
+    ///
+    /// # Returns
+    /// A pointer to the elements or null if an error occured.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm ran out of memory.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    ///
     pub unsafe fn GetIntArrayElements(&self, array: jintArray, is_copy: *mut jboolean) -> *mut jint {
         #[cfg(feature = "asserts")]
         {
@@ -12138,6 +12504,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jintArray, *mut jboolean) -> *mut jint>(187)(self.vtable, array, is_copy)
     }
 
+    ///
+    /// Get the long content inside the array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `isCopy` - optional flag for the jvm to indicate if the data is a copy or not.
+    ///     * can be null
+    ///
+    /// # Returns
+    /// A pointer to the elements or null if an error occured.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm ran out of memory.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    ///
     pub unsafe fn GetLongArrayElements(&self, array: jlongArray, is_copy: *mut jboolean) -> *mut jlong {
         #[cfg(feature = "asserts")]
         {
@@ -12149,6 +12545,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, *mut jboolean) -> *mut jlong>(188)(self.vtable, array, is_copy)
     }
 
+    ///
+    /// Get the float content inside the array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `isCopy` - optional flag for the jvm to indicate if the data is a copy or not.
+    ///     * can be null
+    ///
+    /// # Returns
+    /// A pointer to the elements or null if an error occured.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm ran out of memory.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    ///
     pub unsafe fn GetFloatArrayElements(&self, array: jfloatArray, is_copy: *mut jboolean) -> *mut jfloat {
         #[cfg(feature = "asserts")]
         {
@@ -12160,6 +12586,36 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, *mut jboolean) -> *mut jfloat>(189)(self.vtable, array, is_copy)
     }
 
+    ///
+    /// Get the double content inside the array
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `isCopy` - optional flag for the jvm to indicate if the data is a copy or not.
+    ///     * can be null
+    ///
+    /// # Returns
+    /// A pointer to the elements or null if an error occured.
+    ///
+    /// # Throws Java Exception
+    /// * OutOfMemoryError - if the jvm ran out of memory.
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    ///
     pub unsafe fn GetDoubleArrayElements(&self, array: jdoubleArray, is_copy: *mut jboolean) -> *mut jdouble {
         #[cfg(feature = "asserts")]
         {
@@ -12171,6 +12627,39 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, *mut jboolean) -> *mut jdouble>(190)(self.vtable, array, is_copy)
     }
 
+    ///
+    /// Releases the boolean array elements back to the jvm
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `elems`
+    ///     * must not be null
+    /// * `mode`
+    ///     * must be one of the following constants:
+    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    /// `elems` must be the buffer of the same `array` reference
+    /// `mode` must be one of the constants
+    ///
     pub unsafe fn ReleaseBooleanArrayElements(&self, array: jbooleanArray, elems: *mut jboolean, mode: jint) {
         #[cfg(feature = "asserts")]
         {
@@ -12187,6 +12676,39 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, *mut jboolean, jint)>(191)(self.vtable, array, elems, mode);
     }
 
+    ///
+    /// Releases the byte array elements back to the jvm
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `elems`
+    ///     * must not be null
+    /// * `mode`
+    ///     * must be one of the following constants:
+    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    /// `elems` must be the buffer of the same `array` reference
+    /// `mode` must be one of the constants
+    ///
     pub unsafe fn ReleaseByteArrayElements(&self, array: jbyteArray, elems: *mut jbyte, mode: jint) {
         #[cfg(feature = "asserts")]
         {
@@ -12203,6 +12725,39 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, *mut jbyte, jint)>(192)(self.vtable, array, elems, mode);
     }
 
+    ///
+    /// Releases the char array elements back to the jvm
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `elems`
+    ///     * must not be null
+    /// * `mode`
+    ///     * must be one of the following constants:
+    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    /// `elems` must be the buffer of the same `array` reference
+    /// `mode` must be one of the constants
+    ///
     pub unsafe fn ReleaseCharArrayElements(&self, array: jcharArray, elems: *mut jchar, mode: jint) {
         #[cfg(feature = "asserts")]
         {
@@ -12219,6 +12774,39 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, *mut jchar, jint)>(193)(self.vtable, array, elems, mode);
     }
 
+    ///
+    /// Releases the short array elements back to the jvm
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `elems`
+    ///     * must not be null
+    /// * `mode`
+    ///     * must be one of the following constants:
+    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    /// `elems` must be the buffer of the same `array` reference
+    /// `mode` must be one of the constants
+    ///
     pub unsafe fn ReleaseShortArrayElements(&self, array: jshortArray, elems: *mut jshort, mode: jint) {
         #[cfg(feature = "asserts")]
         {
@@ -12235,6 +12823,39 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, *mut jshort, jint)>(194)(self.vtable, array, elems, mode);
     }
 
+    ///
+    /// Releases the int array elements back to the jvm
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `elems`
+    ///     * must not be null
+    /// * `mode`
+    ///     * must be one of the following constants:
+    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    /// `elems` must be the buffer of the same `array` reference
+    /// `mode` must be one of the constants
+    ///
     pub unsafe fn ReleaseIntArrayElements(&self, array: jintArray, elems: *mut jint, mode: jint) {
         #[cfg(feature = "asserts")]
         {
@@ -12251,6 +12872,39 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jintArray, *mut jint, jint)>(195)(self.vtable, array, elems, mode);
     }
 
+    ///
+    /// Releases the long array elements back to the jvm
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `elems`
+    ///     * must not be null
+    /// * `mode`
+    ///     * must be one of the following constants:
+    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    /// `elems` must be the buffer of the same `array` reference
+    /// `mode` must be one of the constants
+    ///
     pub unsafe fn ReleaseLongArrayElements(&self, array: jlongArray, elems: *mut jlong, mode: jint) {
         #[cfg(feature = "asserts")]
         {
@@ -12267,6 +12921,39 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, *mut jlong, jint)>(196)(self.vtable, array, elems, mode);
     }
 
+    ///
+    /// Releases the float array elements back to the jvm
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `elems`
+    ///     * must not be null
+    /// * `mode`
+    ///     * must be one of the following constants:
+    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    /// `elems` must be the buffer of the same `array` reference
+    /// `mode` must be one of the constants
+    ///
     pub unsafe fn ReleaseFloatArrayElements(&self, array: jfloatArray, elems: *mut jfloat, mode: jint) {
         #[cfg(feature = "asserts")]
         {
@@ -12283,6 +12970,39 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, *mut jfloat, jint)>(197)(self.vtable, array, elems, mode);
     }
 
+    ///
+    /// Releases the double array elements back to the jvm
+    ///
+    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    ///
+    /// # Arguments
+    /// * `array` - the array
+    ///     * must not be null
+    ///     * must be an array
+    ///     * must not already be garbage collected
+    /// * `elems`
+    ///     * must not be null
+    /// * `mode`
+    ///     * must be one of the following constants:
+    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    ///
+    /// `array` must not be null, must refer to a array and not already be garbage collected.
+    /// `elems` must be the buffer of the same `array` reference
+    /// `mode` must be one of the constants
+    ///
     pub unsafe fn ReleaseDoubleArrayElements(&self, array: jdoubleArray, elems: *mut jdouble, mode: jint) {
         #[cfg(feature = "asserts")]
         {
@@ -13891,7 +14611,7 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut c_void, jint)>(223)(self.vtable, array, carray, mode);
     }
 
-    pub unsafe fn RegisterNatives_slice(&self, clazz: jclass, methods: &[JNINativeMethod]) -> jint {
+    pub unsafe fn RegisterNatives_from_slice(&self, clazz: jclass, methods: &[JNINativeMethod]) -> jint {
         self.RegisterNatives(clazz, methods.as_ptr(), methods.len() as jint)
     }
 
