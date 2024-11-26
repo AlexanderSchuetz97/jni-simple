@@ -30,7 +30,7 @@ pub mod test {
                 let _g2 = l2.0.lock().unwrap();
                 l2.1.notify_all();
                 env.MonitorExit(global);
-                vm_clone.DetachCurrentThread();
+                let _ = vm_clone.DetachCurrentThread();
             });
 
             let g = l1.0.lock().unwrap();

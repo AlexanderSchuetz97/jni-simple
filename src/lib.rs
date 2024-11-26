@@ -3,13 +3,32 @@
 //! It does absolutely no magic around the JNI Calls and lets you just use it as you would in C.
 //!
 //! If you are looking to start a jvm from rust then the entrypoints in this create are
-//! init_dynamic_link, load_jvm_from_library, JNI_CreateJavaVM and JNI_GetCreatedJavaVMs.
+//! `init_dynamic_link`, `load_jvm_from_library`, `JNI_CreateJavaVM` and `JNI_GetCreatedJavaVMs`.
 //!
-//! If you are looking to write a jni library in rust then the types JNIEnv and jclass, etc.
+//! If you are looking to write a jni library in rust then the types `JNIEnv` and jclass, etc.
 //! should be sufficient.
 //!
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
+#![deny(clippy::correctness)]
+#![deny(
+    clippy::perf,
+    clippy::complexity,
+    clippy::style,
+    clippy::nursery,
+    clippy::pedantic,
+    clippy::clone_on_ref_ptr,
+    clippy::decimal_literal_representation,
+    clippy::float_cmp_const,
+    clippy::missing_docs_in_private_items,
+    clippy::multiple_inherent_impl,
+    clippy::unwrap_used,
+    clippy::cargo_common_metadata,
+    clippy::used_underscore_binding
+)]
+#![allow(clippy::cognitive_complexity)]
+#![allow(clippy::inline_always)]
+#![allow(clippy::trivially_copy_pass_by_ref)]
 
 use std::borrow::Cow;
 use std::ffi::{c_char, c_void, CStr, CString, OsStr, OsString};
@@ -36,16 +55,16 @@ pub const JNI_ENOMEM: jint = -4;
 pub const JNI_EEXIST: jint = -5;
 pub const JNI_EINVAL: jint = -6;
 
-pub const JNI_VERSION_1_1: jint = 0x00010001;
-pub const JNI_VERSION_1_2: jint = 0x00010002;
-pub const JNI_VERSION_1_4: jint = 0x00010004;
-pub const JNI_VERSION_1_6: jint = 0x00010006;
-pub const JNI_VERSION_1_8: jint = 0x00010008;
-pub const JNI_VERSION_9: jint = 0x00090000;
-pub const JNI_VERSION_10: jint = 0x000a0000;
-pub const JNI_VERSION_19: jint = 0x00130000;
-pub const JNI_VERSION_20: jint = 0x00140000;
-pub const JNI_VERSION_21: jint = 0x00150000;
+pub const JNI_VERSION_1_1: jint = 0x0001_0001;
+pub const JNI_VERSION_1_2: jint = 0x0001_0002;
+pub const JNI_VERSION_1_4: jint = 0x0001_0004;
+pub const JNI_VERSION_1_6: jint = 0x0001_0006;
+pub const JNI_VERSION_1_8: jint = 0x0001_0008;
+pub const JNI_VERSION_9: jint = 0x0009_0000;
+pub const JNI_VERSION_10: jint = 0x000a_0000;
+pub const JNI_VERSION_19: jint = 0x0013_0000;
+pub const JNI_VERSION_20: jint = 0x0014_0000;
+pub const JNI_VERSION_21: jint = 0x0015_0000;
 
 pub type jlong = i64;
 pub type jint = i32;
@@ -94,8 +113,12 @@ pub enum jobjectRefType {
     JNIWeakGlobalRefType = 3,
 }
 
+/// Mod for private trait seals that should be hidden.
 mod private {
+    /// Trait seal for `JType`
     pub trait SealedJType {}
+
+    /// Trait Seal for `UseCString`
     pub trait SealedUseCString {}
 }
 
@@ -192,6 +215,7 @@ impl JType for jdouble {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+#[allow(clippy::missing_docs_in_private_items)]
 pub union jtype {
     long: jlong,
     int: jint,
@@ -210,13 +234,13 @@ pub union jtype {
 /// This macro is usefull for constructing jtype arrays.
 /// This is often needed when making upcalls into the jvm with many arguments using the 'A' type functions:
 /// * CallStatic(TYPE)MethodA
-///     * CallStaticVoidMethodA
-///     * CallStaticIntMethodA
+///     * `CallStaticVoidMethodA`
+///     * `CallStaticIntMethodA`
 ///     * ...
 /// * Call(TYPE)MethodA
-///     * CallVoidMethodA
+///     * `CallVoidMethodA`
 ///     * ...
-/// * NewObjectA
+/// * `NewObjectA`
 ///
 /// # Example
 /// ```rust
@@ -246,16 +270,15 @@ impl Debug for jtype {
     #[inline(never)]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         unsafe {
-            let long = std::ptr::read_unaligned(&self.long as *const jlong);
-            let int = std::ptr::read_unaligned(&self.int as *const jint);
-            let short = std::ptr::read_unaligned(&self.short as *const jshort);
-            let byte = std::ptr::read_unaligned(&self.byte as *const jbyte);
-            let float = std::ptr::read_unaligned(&self.float as *const jfloat);
-            let double = std::ptr::read_unaligned(&self.double as *const jdouble);
+            let long = std::ptr::read_unaligned(std::ptr::from_ref::<jlong>(&self.long));
+            let int = std::ptr::read_unaligned(std::ptr::from_ref::<jint>(&self.int));
+            let short = std::ptr::read_unaligned(std::ptr::from_ref::<jshort>(&self.short));
+            let byte = std::ptr::read_unaligned(std::ptr::from_ref::<jbyte>(&self.byte));
+            let float = std::ptr::read_unaligned(std::ptr::from_ref::<jfloat>(&self.float));
+            let double = std::ptr::read_unaligned(std::ptr::from_ref::<jdouble>(&self.double));
 
             f.write_fmt(format_args!(
-                "jtype union[long=0x{:x} int=0x{:x} short=0x{:x} byte=0x{:x} float={:e} double={:e}]",
-                long, int, short, byte, float, double
+                "jtype union[long=0x{long:x} int=0x{int:x} short=0x{short:x} byte=0x{byte:x} float={float:e} double={double:e}]"
             ))
         }
     }
@@ -266,7 +289,8 @@ impl jtype {
     /// Helper function to "create" a jtype with a null jobject.
     ///
     #[inline(always)]
-    pub const fn null() -> jtype {
+    #[must_use]
+    pub const fn null() -> Self {
         #[cfg(target_pointer_width = "32")]
         {
             let mut jt = jtype { long: 0 };
@@ -283,6 +307,7 @@ impl jtype {
     /// # Safety
     /// only safe if jtype was a jlong.
     #[inline(always)]
+    #[must_use]
     pub const unsafe fn long(&self) -> jlong {
         self.long
     }
@@ -291,6 +316,7 @@ impl jtype {
     /// # Safety
     /// only safe if jtype was a jint.
     #[inline(always)]
+    #[must_use]
     pub const unsafe fn int(&self) -> jint {
         self.int
     }
@@ -299,6 +325,7 @@ impl jtype {
     /// # Safety
     /// only safe if jtype was a jshort.
     #[inline(always)]
+    #[must_use]
     pub const unsafe fn short(&self) -> jshort {
         self.short
     }
@@ -307,6 +334,7 @@ impl jtype {
     /// # Safety
     /// only safe if jtype was a jchar.
     #[inline(always)]
+    #[must_use]
     pub const unsafe fn char(&self) -> jchar {
         self.char
     }
@@ -315,6 +343,7 @@ impl jtype {
     /// # Safety
     /// only safe if jtype was a jbyte.
     #[inline(always)]
+    #[must_use]
     pub const unsafe fn byte(&self) -> jbyte {
         self.byte
     }
@@ -323,6 +352,7 @@ impl jtype {
     /// # Safety
     /// only safe if jtype was a jboolean.
     #[inline(always)]
+    #[must_use]
     pub const unsafe fn boolean(&self) -> jboolean {
         self.boolean
     }
@@ -331,6 +361,7 @@ impl jtype {
     /// # Safety
     /// only safe if jtype was a jfloat.
     #[inline(always)]
+    #[must_use]
     pub const unsafe fn float(&self) -> jfloat {
         self.float
     }
@@ -339,6 +370,7 @@ impl jtype {
     /// # Safety
     /// only safe if jtype was a jdouble.
     #[inline(always)]
+    #[must_use]
     pub const unsafe fn double(&self) -> jdouble {
         self.double
     }
@@ -347,6 +379,7 @@ impl jtype {
     /// # Safety
     /// only safe if jtype was a jobject.
     #[inline(always)]
+    #[must_use]
     pub const unsafe fn object(&self) -> jobject {
         self.object
     }
@@ -355,6 +388,7 @@ impl jtype {
     /// # Safety
     /// only safe if jtype was a jclass.
     #[inline(always)]
+    #[must_use]
     pub const unsafe fn class(&self) -> jclass {
         self.class
     }
@@ -363,12 +397,13 @@ impl jtype {
     /// # Safety
     /// only safe if jtype was a jthrowable.
     #[inline(always)]
+    #[must_use]
     pub const unsafe fn throwable(&self) -> jthrowable {
         self.throwable
     }
 
     #[inline(always)]
-    pub fn set<T: Into<jtype>>(&mut self, value: T) {
+    pub fn set<T: Into<Self>>(&mut self, value: T) {
         *self = value.into();
     }
 }
@@ -448,8 +483,11 @@ impl From<jboolean> for jtype {
 #[repr(C)]
 #[derive(Debug)]
 pub struct JNINativeMethod {
+    /// Name of the native method
     name: *const c_char,
+    /// JNI Signature of the native method
     signature: *const c_char,
+    /// raw Function pointer that should be called when the native method is called.
     fnPtr: *const c_void,
 }
 
@@ -458,37 +496,45 @@ type JNIInvPtr = SyncMutPtr<*mut [*mut c_void; 10]>;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct JavaVM {
+    /// The vtable of the `JavaVM` object.
     functions: JNIInvPtr,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct JavaVMAttachArgs {
+    /// Jni version
     version: jint,
+    /// Thread name as a C-Linke string
     name: *const c_char,
+    /// `ThreadGroup` reference. This can be null
     group: jobject,
 }
 
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct JavaVMOption {
+    /// this field contains the string option as a C-like string.
     optionString: *mut c_char,
+    /// This field is reserved and should be set to null
     extraInfo: *mut c_void,
 }
 
 impl JavaVMOption {
-    pub fn new(option_string: *mut c_char, extra_info: *mut c_void) -> JavaVMOption {
-        JavaVMOption {
+    pub const fn new(option_string: *mut c_char, extra_info: *mut c_void) -> Self {
+        Self {
             optionString: option_string,
             extraInfo: extra_info,
         }
     }
 
-    pub fn optionString(&self) -> *mut c_char {
+    #[must_use]
+    pub const fn optionString(&self) -> *mut c_char {
         self.optionString
     }
 
-    pub fn extraInfo(&self) -> *mut c_void {
+    #[must_use]
+    pub const fn extraInfo(&self) -> *mut c_void {
         self.extraInfo
     }
 }
@@ -496,15 +542,19 @@ impl JavaVMOption {
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct JavaVMInitArgs {
+    /// The JNI version
     version: i32,
+    /// amount of options
     nOptions: i32,
+    /// options
     options: *mut JavaVMOption,
+    /// flat to indicate if the jvm should ignore unrecognized options instead of returning an error 1 = yes, 0 = no
     ignoreUnrecognized: u8,
 }
 
 impl JavaVMInitArgs {
-    pub fn new(version: i32, n_options: i32, options: *mut JavaVMOption, ignore_unrecognized: u8) -> JavaVMInitArgs {
-        JavaVMInitArgs {
+    pub const fn new(version: i32, n_options: i32, options: *mut JavaVMOption, ignore_unrecognized: u8) -> Self {
+        Self {
             version,
             nOptions: n_options,
             options,
@@ -512,65 +562,78 @@ impl JavaVMInitArgs {
         }
     }
 
-    pub fn version(&self) -> i32 {
+    #[must_use]
+    pub const fn version(&self) -> i32 {
         self.version
     }
 
-    pub fn nOptions(&self) -> i32 {
+    #[must_use]
+    pub const fn nOptions(&self) -> i32 {
         self.nOptions
     }
 
-    pub fn options(&self) -> *mut JavaVMOption {
+    #[must_use]
+    pub const fn options(&self) -> *mut JavaVMOption {
         self.options
     }
 
-    pub fn ignoreUnrecognized(&self) -> u8 {
+    #[must_use]
+    pub const fn ignoreUnrecognized(&self) -> u8 {
         self.ignoreUnrecognized
     }
 }
 
+/// Vtable of `JNIEnv` is passed like this.
 type JNIEnvVTable = *mut *mut [*mut c_void; 235];
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct JNIEnv {
+    /// The vtable that contains all the functions
     vtable: JNIEnvVTable,
 }
 
 impl JNINativeMethod {
-    pub fn new(name: *const c_char, signature: *const c_char, function_pointer: *const c_void) -> JNINativeMethod {
-        JNINativeMethod {
+    #[must_use]
+    pub const fn new(name: *const c_char, signature: *const c_char, function_pointer: *const c_void) -> Self {
+        Self {
             name,
             signature,
             fnPtr: function_pointer,
         }
     }
 
-    pub fn name(&self) -> *const c_char {
+    #[must_use]
+    pub const fn name(&self) -> *const c_char {
         self.name
     }
 
-    pub fn signature(&self) -> *const c_char {
+    #[must_use]
+    pub const fn signature(&self) -> *const c_char {
         self.signature
     }
 
-    pub fn fnPtr(&self) -> *const c_void {
+    #[must_use]
+    pub const fn fnPtr(&self) -> *const c_void {
         self.fnPtr
     }
 }
 
 impl JavaVMAttachArgs {
-    pub fn new(version: jint, name: *const c_char, group: jobject) -> Self {
+    pub const fn new(version: jint, name: *const c_char, group: jobject) -> Self {
         Self { version, name, group }
     }
 
-    pub fn version(&self) -> jint {
+    #[must_use]
+    pub const fn version(&self) -> jint {
         self.version
     }
-    pub fn name(&self) -> *const c_char {
+    #[must_use]
+    pub const fn name(&self) -> *const c_char {
         self.name
     }
-    pub fn group(&self) -> jobject {
+    #[must_use]
+    pub const fn group(&self) -> jobject {
         self.group
     }
 }
@@ -579,13 +642,13 @@ impl JavaVMAttachArgs {
 ///
 /// This trait is implemented for:
 /// &str, String, &String,
-/// CString, CStr, *const c_char,
-/// &OsStr, OsString, &OsString,
+/// `CString`, `CStr`, *const `c_char`,
+/// &`OsStr`, `OsString`, &`OsString`,
 /// &[u8], Vec<u8>,
 ///
 /// If the String contains the equivalent of a 0 byte then the string stops at the 0 byte ignoring the rest of the string.
-/// Any non Unicode characters in OsString and its derivatives will be replaced with the Unicode replacement character by using to to_str_lossy fn.
-/// Using non utf-8 binary data in the u8 slices/Vec will not be checked for validity before being converted into a *const c_char!
+/// Any non Unicode characters in `OsString` and its derivatives will be replaced with the Unicode replacement character by using to `to_str_lossy` fn.
+/// Using non utf-8 binary data in the u8 slices/Vec will not be checked for validity before being converted into a *const `c_char`!
 /// - Doing this on with any call to JNI will result in undefined behavior.
 ///
 pub trait UseCString: private::SealedUseCString {
@@ -753,21 +816,25 @@ impl JNIEnv {
     ///
     /// Returns the version of the JNI interface.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetVersion
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetVersion>
     ///
-    /// The returned value must be compared against a constant. (They start with JNI_VERSION_...)
+    /// The returned value must be compared against a constant. (They start with `JNI_VERSION`_...)
     /// Not every java version has such a constant.
     /// Only java versions where a function in the JNI interface was added has one.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     ///
     /// # Example
@@ -779,6 +846,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
+    #[must_use]
     pub unsafe fn GetVersion(&self) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -791,7 +859,7 @@ impl JNIEnv {
     ///
     /// Defines a class in the given classloader.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DefineClass
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DefineClass>
     ///
     /// # Arguments
     /// * `name` - name of the class
@@ -809,15 +877,19 @@ impl JNIEnv {
     /// * `OutOfMemoryError` - if the system runs out of memory.
     /// * `SecurityException` - if the caller attempts to define a class in the "java" package tree.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     /// The `classloader` handle must be a valid handle if it is not null.
     /// `name` must be a valid pointer to a 0 terminated utf-8 string. It must not be null.
@@ -855,9 +927,7 @@ impl JNIEnv {
                 assert!(!name.is_null(), "DefineClass name is null");
                 self.check_is_classloader_or_null("DefineClass", classloader);
                 assert!(!data.is_null(), "DefineClass data is null");
-                if len < 0 {
-                    panic!("DefineClass len is negative {}", len);
-                }
+                assert!(len >= 0, "DefineClass len is negative {len}");
             }
 
             self.jni::<extern "system" fn(JNIEnvVTable, *const c_char, jobject, *const jbyte, i32) -> jclass>(5)(self.vtable, name, classloader, data, len)
@@ -867,7 +937,7 @@ impl JNIEnv {
     ///
     /// Defines a class in the given classloader.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DefineClass
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DefineClass>
     ///
     /// # Arguments
     /// * `name` - name of the class
@@ -884,15 +954,19 @@ impl JNIEnv {
     /// * `OutOfMemoryError` - if the system runs out of memory.
     /// * `SecurityException` - if the caller attempts to define a class in the "java" package tree.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     /// The `classloader` handle must be a valid handle if it is not null.
     /// `name` must be a valid pointer to a 0 terminated utf-8 string. It must not be null.
@@ -920,7 +994,12 @@ impl JNIEnv {
     ///
     pub unsafe fn DefineClass_from_slice(&self, name: impl UseCString, classloader: jobject, data: impl AsRef<[u8]>) -> jclass {
         let slice = data.as_ref();
-        self.DefineClass(name, classloader, slice.as_ptr() as *const jbyte, slice.len() as i32)
+        self.DefineClass(
+            name,
+            classloader,
+            slice.as_ptr().cast::<jbyte>(),
+            jsize::try_from(slice.len()).expect("data.len() > jsize::MAX"),
+        )
     }
 
     ///
@@ -929,7 +1008,7 @@ impl JNIEnv {
     /// If the class was not previously loaded then the current JNI Classloader will attempt to
     /// load it.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FindClass
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FindClass>
     ///
     /// # Arguments
     /// * `name` - name of the class in jni notation (i.e: "java/lang/Object")
@@ -944,15 +1023,19 @@ impl JNIEnv {
     /// * `OutOfMemoryError` - if the system runs out of memory.
     /// * `NoClassDefFoundError` -  if no definition for a requested class or interface can be found.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     /// `name` must be a valid pointer to a 0 terminated utf-8 string. It must not be null.
     ///
@@ -990,7 +1073,7 @@ impl JNIEnv {
     ///
     /// Gets the superclass of the class `class`.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetSuperclass
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetSuperclass>
     ///
     /// # Arguments
     /// * `class` - handle to a class object. must not be null.
@@ -1001,15 +1084,19 @@ impl JNIEnv {
     /// If `class` refers to any Interface then null is returned.
     ///
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     /// `class` must be a valid non-null handle to a class object.
     ///
@@ -1045,7 +1132,7 @@ impl JNIEnv {
     ///
     /// Determines whether an object of clazz1 can be safely cast to clazz2.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#IsAssignableFrom
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#IsAssignableFrom>
     ///
     /// # Arguments
     /// * `class1` - handle to a class object. must not be null.
@@ -1057,15 +1144,19 @@ impl JNIEnv {
     /// * class1 is a subclass of class2.
     /// * class1 has class2 as one of its interfaces.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     /// `class1` and `class2` must be valid non-null handles to class objects.
     ///
@@ -1105,46 +1196,50 @@ impl JNIEnv {
     ///
     /// Throws a java.lang.Throwable. This is roughly equal to the throw keyword in Java.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Throw
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Throw>
     ///
     /// # Arguments
     /// * `throwable` - handle to an object which is instanceof java.lang.Throwable. must not be null.
     ///
     /// # Returns
-    /// JNI_OK on success. a negative value on failure.
+    /// `JNI_OK` on success. a negative value on failure.
     ///
-    /// ## If JNI_OK was returned
+    /// ## If `JNI_OK` was returned
     /// The JVM will be throwing an exception as a result of this call.
     ///
     /// When the current thread is throwing an exception you may only call the following JNI functions:
-    /// * ExceptionOccurred
-    /// * ExceptionDescribe
-    /// * ExceptionClear
-    /// * ExceptionCheck
-    /// * ReleaseStringChars
-    /// * ReleaseStringUTFChars
-    /// * ReleaseStringCritical
-    /// * Release<Type>ArrayElements
-    /// * ReleasePrimitiveArrayCritical
-    /// * DeleteLocalRef
-    /// * DeleteGlobalRef
-    /// * DeleteWeakGlobalRef
-    /// * MonitorExit
-    /// * PushLocalFrame
-    /// * PopLocalFrame
+    /// * `ExceptionOccurred`
+    /// * `ExceptionDescribe`
+    /// * `ExceptionClear`
+    /// * `ExceptionCheck`
+    /// * `ReleaseStringChars`
+    /// * `ReleaseStringUTFChars`
+    /// * `ReleaseStringCritical`
+    /// * Release<Type>`ArrayElements`
+    /// * `ReleasePrimitiveArrayCritical`
+    /// * `DeleteLocalRef`
+    /// * `DeleteGlobalRef`
+    /// * `DeleteWeakGlobalRef`
+    /// * `MonitorExit`
+    /// * `PushLocalFrame`
+    /// * `PopLocalFrame`
     ///
     /// Calling any other JNI function is UB.
     ///
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     /// `throwable` must be a valid non-null handle to an object which is instanceof java.lang.Throwable.
     ///
@@ -1189,51 +1284,55 @@ impl JNIEnv {
     ///
     /// Throws a new instance `class`. This is roughly equal to `throw new ...` in Java.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ThrowNew
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ThrowNew>
     ///
     /// # Arguments
     /// * `class` - handle to a non-abstract class instances of which can be cast to java.lang.Throwable. Must not be null.
     /// * `message` - the exception message. Must be null or a pointer to a 0 terminated utf-8 string.
     ///
     /// # Returns
-    /// JNI_OK on success. a negative value on failure.
+    /// `JNI_OK` on success. a negative value on failure.
     ///
-    /// ## If JNI_OK was returned
+    /// ## If `JNI_OK` was returned
     /// The JVM will be throwing an exception as a result of this call.
     ///
     /// When the current thread is throwing an exception you may only call the following JNI functions:
-    /// * ExceptionOccurred
-    /// * ExceptionDescribe
-    /// * ExceptionClear
-    /// * ExceptionCheck
-    /// * ReleaseStringChars
-    /// * ReleaseStringUTFChars
-    /// * ReleaseStringCritical
-    /// * Release<Type>ArrayElements
-    /// * ReleasePrimitiveArrayCritical
-    /// * DeleteLocalRef
-    /// * DeleteGlobalRef
-    /// * DeleteWeakGlobalRef
-    /// * MonitorExit
-    /// * PushLocalFrame
-    /// * PopLocalFrame
+    /// * `ExceptionOccurred`
+    /// * `ExceptionDescribe`
+    /// * `ExceptionClear`
+    /// * `ExceptionCheck`
+    /// * `ReleaseStringChars`
+    /// * `ReleaseStringUTFChars`
+    /// * `ReleaseStringCritical`
+    /// * Release<Type>`ArrayElements`
+    /// * `ReleasePrimitiveArrayCritical`
+    /// * `DeleteLocalRef`
+    /// * `DeleteGlobalRef`
+    /// * `DeleteWeakGlobalRef`
+    /// * `MonitorExit`
+    /// * `PushLocalFrame`
+    /// * `PopLocalFrame`
     ///
     /// Calling any other JNI function is UB.
     ///
     /// # Throws Java Exception:
-    /// * NoSuchMethodError if the class has no suitable constructor for the argument supplied. Note: the return value remains JNI_OK!
+    /// * `NoSuchMethodError` if the class has no suitable constructor for the argument supplied. Note: the return value remains `JNI_OK`!
     ///   - null `message`: no zero arg or one arg String constructor exists.
     ///   - non-null `message`: no one arg String constructor exists.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     /// `class` must be a valid non-null handle to a class which is:
     /// * Not abstract
@@ -1284,18 +1383,22 @@ impl JNIEnv {
     /// Calling this function does not clear the exception.
     /// It stays thrown until for example `ExceptionClear` is called.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionOccurred
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionOccurred>
     ///
     /// # Returns
     /// A local ref to the throwable that is currently being thrown.
     /// null if no throwable is currently thrown.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// # Example
     /// ```rust
@@ -1329,6 +1432,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
+    #[must_use]
     pub unsafe fn ExceptionOccurred(&self) -> jthrowable {
         #[cfg(feature = "asserts")]
         {
@@ -1342,16 +1446,20 @@ impl JNIEnv {
     /// A side effect of this function is that the exception is also cleared.
     /// This is roughly equivalent to calling `java.lang.Throwable#printStackTrace()` in java.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionDescribe
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionDescribe>
     ///
     /// If no exception is currently thrown then this method is a no-op.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// # Example
     /// ```rust
@@ -1381,16 +1489,20 @@ impl JNIEnv {
     /// A side effect of this function is that the exception is also cleared.
     /// This is roughly equivalent to calling `java.lang.Throwable#printStackTrace()` in java.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionDescribe
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionDescribe>
     ///
     /// If no exception is currently thrown then this method is a no-op.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// # Example
     /// ```rust
@@ -1418,10 +1530,14 @@ impl JNIEnv {
     ///
     /// Raises a fatal error and does not expect the VM to recover. This function does not return.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FatalError
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FatalError>
     ///
     /// # Arguments
     /// * `msg` - message that should be present in the error report. 0 terminated utf-8. Must not be null.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -1443,17 +1559,21 @@ impl JNIEnv {
     ///
     /// Checks if an exception is thrown on the current thread.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionCheck
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ExceptionCheck>
     ///
     /// # Returns
     /// true if an exception is thrown on the current thread, false otherwise.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// # Example
     /// ```rust
@@ -1477,6 +1597,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
+    #[must_use]
     pub unsafe fn ExceptionCheck(&self) -> jboolean {
         #[cfg(feature = "asserts")]
         {
@@ -1488,7 +1609,7 @@ impl JNIEnv {
     ///
     /// Creates a new global reference from an existing reference.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewGlobalRef
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewGlobalRef>
     ///
     /// # Arguments
     /// * `obj` - a valid reference or null.
@@ -1500,17 +1621,21 @@ impl JNIEnv {
     /// * the system ran out of memory
     /// * `obj` is a weak reference that has already been garbage collected.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
-    /// `obj` must not refer to a reference that has already been deleted by calling DeleteLocalRef, DeleteGlobalRef, DeleteWeakGlobalRef
+    /// `obj` must not refer to a reference that has already been deleted by calling `DeleteLocalRef`, `DeleteGlobalRef`, `DeleteWeakGlobalRef`
     ///
     pub unsafe fn NewGlobalRef(&self, obj: jobject) -> jobject {
         #[cfg(feature = "asserts")]
@@ -1525,20 +1650,24 @@ impl JNIEnv {
     /// Deletes a global reference to an object allowing the garbage collector to free it if no more
     /// references to it exists.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DeleteGlobalRef
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DeleteGlobalRef>
     ///
     /// # Arguments
     /// * `obj` - a valid non-null global reference.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     /// `obj` must not be null.
     /// `obj` must be a global reference.
@@ -1553,30 +1682,34 @@ impl JNIEnv {
                 jobjectRefType::JNIInvalidRefType => panic!("DeleteGlobalRef invalid non null reference"),
                 jobjectRefType::JNILocalRefType => panic!("DeleteGlobalRef local reference passed"),
                 jobjectRefType::JNIWeakGlobalRefType => panic!("DeleteGlobalRef weak global reference passed"),
-                _ => {}
+                jobjectRefType::JNIGlobalRefType => {}
             }
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(22)(self.vtable, obj)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(22)(self.vtable, obj);
     }
 
     ///
     /// Deletes a local reference to an object allowing the garbage collector to free it if no more
     /// references to it exists.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DeleteGlobalRef
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DeleteGlobalRef>
     ///
     /// # Arguments
     /// * `obj` - a valid non-null local reference.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     /// `obj` must not be null.
     /// `obj` must be a local reference.
@@ -1596,7 +1729,7 @@ impl JNIEnv {
                 }
             }
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(23)(self.vtable, obj)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(23)(self.vtable, obj);
     }
 
     ///
@@ -1606,7 +1739,7 @@ impl JNIEnv {
     /// `capacity` amount of local references are available for allocation.
     /// This function can be called multiple times to increase the amount of required locals.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#EnsureLocalCapacity
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#EnsureLocalCapacity>
     ///
     ///
     /// # Arguments
@@ -1616,27 +1749,32 @@ impl JNIEnv {
     /// 0 on success, negative value indicating the error.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the vm runs out of memory ensuring capacity. This is never the case when 0 is returned.
+    /// * `OutOfMemoryError` - if the vm runs out of memory ensuring capacity. This is never the case when 0 is returned.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     /// `capacity` must not be 0 or negative.
     ///
     /// ## Observed UB when more locals are allocated than ensured
     /// This behavior depends heavily on the jvm used and the arguments used to start it. This list is incomplete
     /// * Heap/Stack corruption.
-    /// * JVM calls FatalError and aborts the process.
+    /// * JVM calls `FatalError` and aborts the process.
     /// * JVM Functions that would return a local reference return null.
     /// * JVM simply allocates more locals than ensured. (starting the jvm with -verbose:jni will log this)
     ///
+    #[must_use]
     pub unsafe fn EnsureLocalCapacity(&self, capacity: jint) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -1651,10 +1789,10 @@ impl JNIEnv {
     /// Creates a new local reference frame, in which at least a given number of local references can be created.
     /// Note that local references already created in previous local frames are still valid in the current local frame.
     /// This method should be called by code that is called from unknown code where it is not known if enough
-    /// local capacity is available. This method is superior to just increasing the capacity by calling EnsureLocalCapacity
+    /// local capacity is available. This method is superior to just increasing the capacity by calling `EnsureLocalCapacity`
     /// because that requires at least a rough knowledge of how many locals the caller itself has used and still needs.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#PushLocalFrame
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#PushLocalFrame>
     ///
     ///
     /// # Arguments
@@ -1664,17 +1802,21 @@ impl JNIEnv {
     /// 0 on success, negative value indicating the error.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the vm runs out of memory ensuring capacity. This is never the case when 0 is returned.
+    /// * `OutOfMemoryError` - if the vm runs out of memory ensuring capacity. This is never the case when 0 is returned.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// Current thread is not currently throwing a Java exception.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/design.html#java_exceptions>
     ///
     /// `capacity` must not be 0 or negative.
     ///
@@ -1683,10 +1825,11 @@ impl JNIEnv {
     /// ## Observed UB when more locals are allocated than ensured
     /// This behavior depends heavily on the jvm used and the arguments used to start it. This list is incomplete
     /// * Heap/Stack corruption.
-    /// * JVM calls FatalError and aborts the process.
+    /// * JVM calls `FatalError` and aborts the process.
     /// * JVM Functions that would return a local reference return null.
     /// * JVM simply allocates more locals than ensured. (starting the jvm with -verbose:jni will log this)
     ///
+    #[must_use]
     pub unsafe fn PushLocalFrame(&self, capacity: jint) -> jint {
         #[cfg(feature = "asserts")]
         {
@@ -1696,11 +1839,11 @@ impl JNIEnv {
     }
 
     ///
-    /// Pops a local reference frame created with PushLocalFrame
+    /// Pops a local reference frame created with `PushLocalFrame`
     /// All local references created within this reference frame are freed automatically
     /// and are no longer valid when this call returns.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#PopLocalFrame
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#PopLocalFrame>
     ///
     /// # Arguments
     /// * result - arbitrary jni reference that should be moved to the parent reference frame.
@@ -1710,12 +1853,16 @@ impl JNIEnv {
     /// # Returns
     /// A valid local reference that points to the same object as the reference `result`. Is null if `result` is null.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// result must be a valid reference or null
     ///
@@ -1732,13 +1879,17 @@ impl JNIEnv {
     ///
     /// Creates a new local reference from the given jobject.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewLocalRef
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewLocalRef>
     ///
     /// # Arguments
     /// * obj - arbitrary valid jni reference or null
     ///
     /// # Returns
     /// A valid local reference that points to the same object as the reference `obj`. Is null if `obj` is null.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -1747,7 +1898,7 @@ impl JNIEnv {
     /// Current thread must not be throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference or null
     ///
@@ -1764,7 +1915,7 @@ impl JNIEnv {
     ///
     /// Creates a new weak global reference from the given jobject.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewWeakGlobalRef
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewWeakGlobalRef>
     ///
     /// # Arguments
     /// * obj - arbitrary valid jni reference or null
@@ -1773,7 +1924,11 @@ impl JNIEnv {
     /// A valid local weak global reference that points to the same object as the reference `obj`. Is null if `obj` is null.
     ///
     /// # Throws Java Exception
-    /// If the JVM runs out of memory, an OutOfMemoryError will be thrown.
+    /// If the JVM runs out of memory, an `OutOfMemoryError` will be thrown.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -1782,7 +1937,7 @@ impl JNIEnv {
     /// Current thread must not be throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference or null
     ///
@@ -1798,7 +1953,7 @@ impl JNIEnv {
     ///
     /// Deletes a weak global reference.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DeleteWeakGlobalRef
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#DeleteWeakGlobalRef>
     ///
     /// # Arguments
     /// * obj - a weak global reference.
@@ -1809,12 +1964,16 @@ impl JNIEnv {
     /// # Returns
     /// A valid local weak global reference that points to the same object as the reference `obj`. Is null if `obj` is null.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must not be null and be a valid weak reference that has not yet been deleted.
     ///
@@ -1828,7 +1987,7 @@ impl JNIEnv {
                     jobjectRefType::JNIInvalidRefType => panic!("DeleteWeakGlobalRef invalid non null reference"),
                     jobjectRefType::JNILocalRefType => panic!("DeleteWeakGlobalRef local reference passed"),
                     jobjectRefType::JNIGlobalRefType => panic!("DeleteWeakGlobalRef strong global reference passed"),
-                    _ => {}
+                    jobjectRefType::JNIWeakGlobalRefType => {}
                 }
             }
         }
@@ -1849,13 +2008,13 @@ impl JNIEnv {
     /// ```java
     /// private int x = 5;
     /// ```
-    /// This field would not be 5 but be 0 in the instance returned by AllocObject.
+    /// This field would not be 5 but be 0 in the instance returned by `AllocObject`.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#AllocObject
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#AllocObject>
     ///
     /// # Note
     /// Be aware that the created instance may be initially in a state that is invalid for the given java object.
-    /// Any object constructed using AllocObject should be brought into a valid state by essentially performing duties similar to
+    /// Any object constructed using `AllocObject` should be brought into a valid state by essentially performing duties similar to
     /// what the constructor of that object would do. Handling errors during the subsequent initialization process can
     /// be especially tricky concerning object finalization. As part of error handling the object will likely be freed which
     /// then causes the JVM may run the finalization implementation on the object that is from a java point of view in an invalid state.
@@ -1876,18 +2035,22 @@ impl JNIEnv {
     /// A local reference to the newly created object or null if the object could not be created.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError
+    /// * `OutOfMemoryError`
     ///     * if the jvm runs out of memory.
-    /// * InstantiationException
+    /// * `InstantiationException`
     ///     * if the class is an interface or an abstract class.
     ///
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
     ///
@@ -1906,7 +2069,7 @@ impl JNIEnv {
     ///
     /// Allocates an object by calling a constructor.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject>
     ///
     ///
     /// # Arguments
@@ -1926,18 +2089,22 @@ impl JNIEnv {
     /// A local reference to the newly created object or null if the object could not be created.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError
+    /// * `OutOfMemoryError`
     ///     * if the jvm runs out of memory.
-    /// * InstantiationException
+    /// * `InstantiationException`
     ///     * if the class is an interface or an abstract class.
     /// * Any exception thrown by the constructor
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
     ///
@@ -1962,7 +2129,7 @@ impl JNIEnv {
     ///
     /// Creates a new object instance by calling the zero arg constructor.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject>
     ///
     ///
     /// # Arguments
@@ -1979,18 +2146,22 @@ impl JNIEnv {
     /// A local reference to the newly created object or null if the object could not be created.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError
+    /// * `OutOfMemoryError`
     ///     * if the jvm runs out of memory.
-    /// * InstantiationException
+    /// * `InstantiationException`
     ///     * if the class is an interface or an abstract class.
     /// * Any exception thrown by the constructor
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
     ///
@@ -2014,7 +2185,7 @@ impl JNIEnv {
     ///
     /// Creates a new object instance by calling the one arg constructor.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject>
     ///
     ///
     /// # Arguments
@@ -2033,18 +2204,22 @@ impl JNIEnv {
     /// A local reference to the newly created object or null if the object could not be created.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError
+    /// * `OutOfMemoryError`
     ///     * if the jvm runs out of memory.
-    /// * InstantiationException
+    /// * `InstantiationException`
     ///     * if the class is an interface or an abstract class.
     /// * Any exception thrown by the constructor
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
     ///
@@ -2052,7 +2227,7 @@ impl JNIEnv {
     ///
     /// `constructor` must have 1 argument.
     ///
-    /// JType of `arg1` must match the argument type of the java method exactly.
+    /// `JType` of `arg1` must match the argument type of the java method exactly.
     /// * absolutely no coercion is performed. Not even between trivially coercible types such as for example jint->jlong.
     ///     * ex: calling a constructor that expects a jlong with a jint is UB.
     ///
@@ -2072,7 +2247,7 @@ impl JNIEnv {
     ///
     /// Creates a new object instance by calling the two arg constructor.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject>
     ///
     ///
     /// # Arguments
@@ -2091,18 +2266,22 @@ impl JNIEnv {
     /// A local reference to the newly created object or null if the object could not be created.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError
+    /// * `OutOfMemoryError`
     ///     * if the jvm runs out of memory.
-    /// * InstantiationException
+    /// * `InstantiationException`
     ///     * if the class is an interface or an abstract class.
     /// * Any exception thrown by the constructor
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
     ///
@@ -2110,7 +2289,7 @@ impl JNIEnv {
     ///
     /// `constructor` must have 2 arguments.
     ///
-    /// JType of `arg1` & `arg2` must match the argument type of the java method exactly.
+    /// `JType` of `arg1` & `arg2` must match the argument type of the java method exactly.
     /// * absolutely no coercion is performed. Not even between trivially coercible types such as for example jint->jlong.
     ///     * ex: calling a constructor that expects a jlong with a jint is UB.
     ///
@@ -2131,7 +2310,7 @@ impl JNIEnv {
     ///
     /// Creates a new object instance by calling the three arg constructor.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObject>
     ///
     ///
     /// # Arguments
@@ -2150,18 +2329,22 @@ impl JNIEnv {
     /// A local reference to the newly created object or null if the object could not be created.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError
+    /// * `OutOfMemoryError`
     ///     * if the jvm runs out of memory.
-    /// * InstantiationException
+    /// * `InstantiationException`
     ///     * if the class is an interface or an abstract class.
     /// * Any exception thrown by the constructor
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must not be null and be a valid reference that has not yet been deleted or garbage collected.
     ///
@@ -2169,7 +2352,7 @@ impl JNIEnv {
     ///
     /// `constructor` must have 2 arguments.
     ///
-    /// JType of `arg1` & `arg2` & `arg3` must match the argument type of the java method exactly.
+    /// `JType` of `arg1` & `arg2` & `arg3` must match the argument type of the java method exactly.
     /// * absolutely no coercion is performed. Not even between trivially coercible types such as for example jint->jlong.
     ///     * ex: calling a constructor that expects a jlong with a jint is UB.
     ///
@@ -2191,7 +2374,7 @@ impl JNIEnv {
     ///
     /// Gets the class of an object instance.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectClass
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectClass>
     ///
     ///
     /// # Arguments
@@ -2203,6 +2386,10 @@ impl JNIEnv {
     /// # Returns
     /// A local reference to the class of the object.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2210,7 +2397,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must not be null and be a valid reference that has not yet been deleted or garbage collected.
     ///
@@ -2227,7 +2414,7 @@ impl JNIEnv {
     ///
     /// Gets the type of reference
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectRefType
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectRefType>
     ///
     ///
     /// # Arguments
@@ -2236,7 +2423,11 @@ impl JNIEnv {
     ///
     /// # Returns
     /// The type of reference
-    /// JNIInvalidRefType is returned for null inputs.
+    /// `JNIInvalidRefType` is returned for null inputs.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -2245,7 +2436,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference.
     ///
@@ -2263,7 +2454,7 @@ impl JNIEnv {
     ///
     /// Checks if the obj is instanceof the given class
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#IsInstanceOf
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#IsInstanceOf>
     ///
     ///
     /// # Arguments
@@ -2279,6 +2470,10 @@ impl JNIEnv {
     /// true if `obj` is instanceof `clazz`, false otherwise
     /// if `obj` is null then this fn returns false for any `clazz` input
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2286,7 +2481,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be null or a valid reference that is not already garbage collected.
     /// `clazz` must be a valid non-null reference to a class that is not already garbage collected.
@@ -2307,7 +2502,7 @@ impl JNIEnv {
     /// The opaque handles of the 2 objects could be different but refer to the same underlying object.
     /// This fn exists in order to be able to check this.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#IsSameObject
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#IsSameObject>
     ///
     ///
     /// # Arguments
@@ -2322,6 +2517,10 @@ impl JNIEnv {
     /// true if `obj1` == `obj2`, false otherwise
     ///
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2329,7 +2528,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj1` must be null or a valid reference that is not already garbage collected.
     /// `obj2` must be null or a valid reference that is not already garbage collected.
@@ -2348,7 +2547,7 @@ impl JNIEnv {
     ///
     /// Gets the field id of a non-static field
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetFieldID
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetFieldID>
     ///
     ///
     /// # Arguments
@@ -2369,9 +2568,13 @@ impl JNIEnv {
     /// It can also be safely shared with any thread or stored in a constant.
     ///
     /// # Throws Java Exception
-    /// * NoSuchFieldError - field with the given name and sig doesnt exist in the class
-    /// * ExceptionInInitializerError - Exception occurs in initializer of the class
-    /// * OutOfMemoryError - if the jvm runs out of memory
+    /// * `NoSuchFieldError` - field with the given name and sig doesnt exist in the class
+    /// * `ExceptionInInitializerError` - Exception occurs in initializer of the class
+    /// * `OutOfMemoryError` - if the jvm runs out of memory
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -2380,7 +2583,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must a valid reference to a class that is not already garbage collected.
     /// `name` must be non-null and zero terminated utf-8.
@@ -2405,7 +2608,7 @@ impl JNIEnv {
     ///
     /// Returns a local reference from a field in an object.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -2420,6 +2623,10 @@ impl JNIEnv {
     /// # Returns
     /// A local reference to the fields value or null if the field is null
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2427,7 +2634,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2447,7 +2654,7 @@ impl JNIEnv {
     ///
     /// Returns a boolean field value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -2462,6 +2669,10 @@ impl JNIEnv {
     /// # Returns
     /// The boolean field value
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2469,7 +2680,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2489,7 +2700,7 @@ impl JNIEnv {
     ///
     /// Returns a byte field value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -2504,6 +2715,10 @@ impl JNIEnv {
     /// # Returns
     /// The byte field value
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2511,7 +2726,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2531,7 +2746,7 @@ impl JNIEnv {
     ///
     /// Returns a char field value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -2546,6 +2761,10 @@ impl JNIEnv {
     /// # Returns
     /// The char field value
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2553,7 +2772,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2573,7 +2792,7 @@ impl JNIEnv {
     ///
     /// Returns a short field value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -2588,6 +2807,10 @@ impl JNIEnv {
     /// # Returns
     /// The short field value
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2595,7 +2818,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2615,7 +2838,7 @@ impl JNIEnv {
     ///
     /// Returns a int field value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -2630,6 +2853,10 @@ impl JNIEnv {
     /// # Returns
     /// The int field value
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2637,7 +2864,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2657,7 +2884,7 @@ impl JNIEnv {
     ///
     /// Returns a int field value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -2672,6 +2899,10 @@ impl JNIEnv {
     /// # Returns
     /// The long field value
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2679,7 +2910,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2699,7 +2930,7 @@ impl JNIEnv {
     ///
     /// Returns a float field value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -2714,6 +2945,10 @@ impl JNIEnv {
     /// # Returns
     /// The float field value
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2721,7 +2956,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2741,7 +2976,7 @@ impl JNIEnv {
     ///
     /// Returns a double field value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -2756,6 +2991,10 @@ impl JNIEnv {
     /// # Returns
     /// The double field value
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2763,7 +3002,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2783,7 +3022,7 @@ impl JNIEnv {
     ///
     /// Sets a object field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -2799,6 +3038,10 @@ impl JNIEnv {
     ///     * must not be already garbage collected (if non-null)
     ///     * must be assignable to the field type (if non-null)
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2806,14 +3049,14 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
     /// `fieldID` must not be from a static field
     /// `fieldID` must refer to a field that is an object and not a primitive.
     /// `value` must be a valid reference to the object that is not already garbage collected or it must be null.
-    /// `value` must be assignable to the field type (i.e. if it's a String field setting to an ArrayList for example is UB)
+    /// `value` must be assignable to the field type (i.e. if it's a String field setting to an `ArrayList` for example is UB)
     ///
     pub unsafe fn SetObjectField(&self, obj: jobject, fieldID: jfieldID, value: jobject) {
         #[cfg(feature = "asserts")]
@@ -2823,13 +3066,13 @@ impl JNIEnv {
             self.check_field_type_object("SetObjectField", obj, fieldID, "object");
             self.check_ref_obj_permit_null("SetObjectField", value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jobject)>(104)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jobject)>(104)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a boolean field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -2842,6 +3085,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - the value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2849,7 +3096,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2863,13 +3110,13 @@ impl JNIEnv {
             self.check_no_exception("SetBooleanField");
             self.check_field_type_object("SetBooleanField", obj, fieldID, "boolean");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(105)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(105)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a byte field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -2882,6 +3129,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - the value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2889,7 +3140,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2903,13 +3154,13 @@ impl JNIEnv {
             self.check_no_exception("SetByteField");
             self.check_field_type_object("SetByteField", obj, fieldID, "byte");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jbyte)>(106)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jbyte)>(106)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a char field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -2922,6 +3173,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - the value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2929,7 +3184,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2943,13 +3198,13 @@ impl JNIEnv {
             self.check_no_exception("SetCharField");
             self.check_field_type_object("SetCharField", obj, fieldID, "char");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jchar)>(107)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jchar)>(107)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a short field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -2962,6 +3217,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - the value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -2969,7 +3228,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -2983,13 +3242,13 @@ impl JNIEnv {
             self.check_no_exception("SetShortField");
             self.check_field_type_object("SetShortField", obj, fieldID, "short");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jshort)>(108)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jshort)>(108)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a int field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -3002,6 +3261,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - the value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3009,7 +3272,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -3023,13 +3286,13 @@ impl JNIEnv {
             self.check_no_exception("SetIntField");
             self.check_field_type_object("SetIntField", obj, fieldID, "int");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jint)>(109)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jint)>(109)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a long field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -3042,6 +3305,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - the value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3049,7 +3316,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -3063,13 +3330,13 @@ impl JNIEnv {
             self.check_no_exception("SetLongField");
             self.check_field_type_object("SetLongField", obj, fieldID, "long");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jlong)>(110)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jlong)>(110)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a float field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -3082,6 +3349,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - the value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3089,7 +3360,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -3103,13 +3374,13 @@ impl JNIEnv {
             self.check_no_exception("SetFloatField");
             self.check_field_type_object("SetFloatField", obj, fieldID, "float");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jfloat)>(111)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jfloat)>(111)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a double field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -3122,6 +3393,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - the value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3129,7 +3404,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the object that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -3143,13 +3418,13 @@ impl JNIEnv {
             self.check_no_exception("SetDoubleField");
             self.check_field_type_object("SetDoubleField", obj, fieldID, "double");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(112)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(112)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Gets the method id of a non-static method
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetMethodID
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetMethodID>
     ///
     ///
     /// # Arguments
@@ -3170,9 +3445,13 @@ impl JNIEnv {
     /// It can also be safely shared with any thread or stored in a constant.
     ///
     /// # Throws Java Exception
-    /// * NoSuchMethodError - method with the given name and sig doesn't exist in the class
-    /// * ExceptionInInitializerError - Exception occurs in initializer of the class
-    /// * OutOfMemoryError - if the jvm runs out of memory
+    /// * `NoSuchMethodError` - method with the given name and sig doesn't exist in the class
+    /// * `ExceptionInInitializerError` - Exception occurs in initializer of the class
+    /// * `OutOfMemoryError` - if the jvm runs out of memory
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -3181,7 +3460,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must a valid reference to a class that is not already garbage collected.
     /// `name` must be non-null and zero terminated utf-8.
@@ -3206,7 +3485,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that returns void
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3226,6 +3505,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3233,7 +3516,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return void
@@ -3248,13 +3531,13 @@ impl JNIEnv {
             self.check_no_exception("CallVoidMethodA");
             self.check_return_type_object("CallVoidMethodA", obj, methodID, "void");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype)>(63)(self.vtable, obj, methodID, args)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype)>(63)(self.vtable, obj, methodID, args);
     }
 
     ///
     /// Calls a non-static java method that has 0 arguments and returns void
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3272,6 +3555,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3279,7 +3566,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have no parameters
@@ -3291,13 +3578,13 @@ impl JNIEnv {
             self.check_no_exception("CallVoidMethod");
             self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(61)(self.vtable, obj, methodID)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(61)(self.vtable, obj, methodID);
     }
 
     ///
     /// Calls a non-static java method that has 1 arguments and returns void
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3315,6 +3602,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3322,7 +3613,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 1 arguments
@@ -3335,13 +3626,13 @@ impl JNIEnv {
             self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
             self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg1, 0, 1);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1);
     }
 
     ///
     /// Calls a non-static java method that has 2 arguments and returns void
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3359,6 +3650,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3366,7 +3661,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 2 arguments
@@ -3380,13 +3675,13 @@ impl JNIEnv {
             self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg1, 0, 2);
             self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg2, 1, 2);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2);
     }
 
     ///
     /// Calls a non-static java method that has 3 arguments and returns void
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3404,6 +3699,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3411,7 +3710,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 3 arguments
@@ -3426,13 +3725,13 @@ impl JNIEnv {
             self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg2, 1, 3);
             self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg3, 2, 3);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2, arg3)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2, arg3);
     }
 
     ///
     /// Calls a non-static java method that returns an object
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3455,6 +3754,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3462,7 +3765,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return an object
@@ -3483,7 +3786,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 0 arguments and returns an object
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3504,6 +3807,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3511,7 +3818,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have no parameters
@@ -3529,7 +3836,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 1 arguments and returns an object
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3550,6 +3857,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3557,7 +3868,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 1 arguments
@@ -3576,7 +3887,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 2 arguments and returns an object
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3597,6 +3908,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3604,7 +3919,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 2 arguments
@@ -3624,7 +3939,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 3 arguments and returns an object
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3645,6 +3960,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3652,7 +3971,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 3 arguments
@@ -3673,7 +3992,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that returns a boolean
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3696,6 +4015,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3703,7 +4026,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a boolean
@@ -3724,7 +4047,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 0 arguments and returns boolean
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3745,6 +4068,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3752,7 +4079,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have no parameters
@@ -3770,7 +4097,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 1 arguments and returns boolean
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3791,6 +4118,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3798,7 +4129,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 1 parameter
@@ -3818,7 +4149,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 2 arguments and returns boolean
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3839,6 +4170,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3846,7 +4181,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 2 parameter
@@ -3867,7 +4202,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 3 arguments and returns boolean
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3888,6 +4223,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3895,7 +4234,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 3 parameter
@@ -3917,7 +4256,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that returns a byte
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3940,6 +4279,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3947,7 +4290,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a byte
@@ -3968,7 +4311,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 0 arguments and returns byte
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -3989,6 +4332,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -3996,7 +4343,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have no parameters
@@ -4014,7 +4361,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 1 arguments and returns byte
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4035,6 +4382,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4042,7 +4393,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 1 parameter
@@ -4062,7 +4413,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 2 arguments and returns byte
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4083,6 +4434,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4090,7 +4445,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 2 parameter
@@ -4111,7 +4466,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 3 arguments and returns byte
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4132,6 +4487,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4139,7 +4498,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 3 parameter
@@ -4161,7 +4520,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that returns a char
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4184,6 +4543,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4191,7 +4554,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a char
@@ -4212,7 +4575,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 0 arguments and returns char
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4233,6 +4596,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4240,7 +4607,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have no parameters
@@ -4258,7 +4625,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 1 arguments and returns char
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4279,6 +4646,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4286,7 +4657,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 1 parameter
@@ -4306,7 +4677,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 2 arguments and returns char
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4327,6 +4698,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4334,7 +4709,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 2 parameter
@@ -4355,7 +4730,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 3 arguments and returns char
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4376,6 +4751,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4383,7 +4762,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 3 parameter
@@ -4405,7 +4784,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that returns a short
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4428,6 +4807,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4435,7 +4818,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a short
@@ -4456,7 +4839,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 0 arguments and returns short
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4477,6 +4860,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4484,7 +4871,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have no parameters
@@ -4502,7 +4889,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 1 arguments and returns short
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4523,6 +4910,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4530,7 +4921,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 1 parameter
@@ -4550,7 +4941,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 2 arguments and returns short
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4571,6 +4962,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4578,7 +4973,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 2 parameter
@@ -4599,7 +4994,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 3 arguments and returns short
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4620,6 +5015,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4627,7 +5026,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 3 parameter
@@ -4649,7 +5048,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that returns a int
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4672,6 +5071,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4679,7 +5082,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a int
@@ -4700,7 +5103,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 0 arguments and returns int
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4721,6 +5124,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4728,7 +5135,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have no parameters
@@ -4746,7 +5153,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 1 arguments and returns int
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4767,6 +5174,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4774,7 +5185,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 1 parameter
@@ -4794,7 +5205,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 2 arguments and returns int
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4815,6 +5226,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4822,7 +5237,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 2 parameter
@@ -4843,7 +5258,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 3 arguments and returns int
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4864,6 +5279,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4871,7 +5290,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 3 parameter
@@ -4893,7 +5312,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that returns a long
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4916,6 +5335,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4923,7 +5346,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a long
@@ -4944,7 +5367,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 0 arguments and returns long
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -4965,6 +5388,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -4972,7 +5399,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have no parameters
@@ -4990,7 +5417,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 1 arguments and returns long
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5011,6 +5438,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5018,7 +5449,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 1 parameter
@@ -5038,7 +5469,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 2 arguments and returns long
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5059,6 +5490,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5066,7 +5501,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 2 parameter
@@ -5087,7 +5522,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 3 arguments and returns long
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5108,6 +5543,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5115,7 +5554,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 3 parameter
@@ -5137,7 +5576,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that returns a float
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5160,6 +5599,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5167,7 +5610,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a float
@@ -5188,7 +5631,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 0 arguments and returns float
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5209,6 +5652,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5216,7 +5663,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have no parameters
@@ -5234,7 +5681,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 1 arguments and returns float
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5255,6 +5702,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5262,7 +5713,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 1 parameter
@@ -5282,7 +5733,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 2 arguments and returns float
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5303,6 +5754,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5310,7 +5765,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 2 parameter
@@ -5331,7 +5786,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 3 arguments and returns float
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5352,6 +5807,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5359,7 +5818,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 3 parameter
@@ -5381,7 +5840,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that returns a double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5404,6 +5863,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5411,7 +5874,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a double
@@ -5432,7 +5895,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 0 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5453,6 +5916,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5460,7 +5927,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have no parameters
@@ -5478,7 +5945,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 1 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5499,6 +5966,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5506,7 +5977,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 1 parameter
@@ -5526,7 +5997,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 2 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5547,6 +6018,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5554,7 +6029,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 2 parameter
@@ -5575,7 +6050,7 @@ impl JNIEnv {
     ///
     /// Calls a non-static java method that has 3 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Call_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5596,6 +6071,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5603,7 +6082,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 3 parameter
@@ -5629,7 +6108,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5649,6 +6128,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5656,7 +6139,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return void
@@ -5672,7 +6155,7 @@ impl JNIEnv {
             self.check_return_type_object("CallNonvirtualVoidMethodA", obj, methodID, "void");
             self.check_is_class("CallNonvirtualVoidMethodA", class);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype)>(93)(self.vtable, obj, class, methodID, args)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype)>(93)(self.vtable, obj, class, methodID, args);
     }
 
     ///
@@ -5682,7 +6165,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5700,6 +6183,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5707,7 +6194,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have no parameters
@@ -5720,7 +6207,7 @@ impl JNIEnv {
             self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
             self.check_is_class("CallNonvirtualVoidMethod", class);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID)>(91)(self.vtable, obj, class, methodID)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID)>(91)(self.vtable, obj, class, methodID);
     }
 
     ///
@@ -5730,7 +6217,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5748,6 +6235,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5755,7 +6246,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 1 argument
@@ -5769,7 +6260,7 @@ impl JNIEnv {
             self.check_is_class("CallNonvirtualVoidMethod", class);
             self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg1, 0, 1);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1);
     }
 
     ///
@@ -5779,7 +6270,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5797,6 +6288,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5804,7 +6299,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 2 arguments
@@ -5819,7 +6314,7 @@ impl JNIEnv {
             self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg1, 0, 2);
             self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg2, 1, 2);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2);
     }
 
     ///
@@ -5829,7 +6324,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5847,6 +6342,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5854,7 +6353,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 3 arguments
@@ -5870,7 +6369,7 @@ impl JNIEnv {
             self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg2, 1, 3);
             self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg3, 2, 3);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2, arg3);
     }
 
     ///
@@ -5880,7 +6379,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5903,6 +6402,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5910,7 +6413,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return an object
@@ -5936,7 +6439,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -5957,6 +6460,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -5964,7 +6471,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have no parameters
@@ -5987,7 +6494,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6008,6 +6515,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6015,7 +6526,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 1 arguments
@@ -6039,7 +6550,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6060,6 +6571,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6067,7 +6582,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 2 arguments
@@ -6092,7 +6607,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6113,6 +6628,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6120,7 +6639,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 3 arguments
@@ -6146,7 +6665,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6169,6 +6688,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6176,7 +6699,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a boolean
@@ -6202,7 +6725,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6223,6 +6746,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6230,7 +6757,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have no parameters
@@ -6253,7 +6780,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6274,6 +6801,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6281,7 +6812,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 1 arguments
@@ -6305,7 +6836,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6326,6 +6857,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6333,7 +6868,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 2 arguments
@@ -6358,7 +6893,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6379,6 +6914,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6386,7 +6925,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 3 arguments
@@ -6412,7 +6951,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6435,6 +6974,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6442,7 +6985,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a byte
@@ -6468,7 +7011,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6489,6 +7032,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6496,7 +7043,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 0 arguments
@@ -6519,7 +7066,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6540,6 +7087,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6547,7 +7098,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 1 arguments
@@ -6571,7 +7122,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6592,6 +7143,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6599,7 +7154,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 2 arguments
@@ -6624,7 +7179,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6645,6 +7200,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6652,7 +7211,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 3 arguments
@@ -6678,7 +7237,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6701,6 +7260,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6708,7 +7271,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a char
@@ -6734,7 +7297,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6755,6 +7318,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6762,7 +7329,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 0 arguments
@@ -6785,7 +7352,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6806,6 +7373,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6813,7 +7384,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 1 arguments
@@ -6837,7 +7408,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6858,6 +7429,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6865,7 +7440,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 2 arguments
@@ -6890,7 +7465,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6911,6 +7486,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6918,7 +7497,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 3 arguments
@@ -6944,7 +7523,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -6967,6 +7546,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -6974,7 +7557,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a short
@@ -7000,7 +7583,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7021,6 +7604,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7028,7 +7615,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 0 arguments
@@ -7051,7 +7638,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7072,6 +7659,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7079,7 +7670,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 1 arguments
@@ -7103,7 +7694,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7124,6 +7715,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7131,7 +7726,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 2 arguments
@@ -7156,7 +7751,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7177,6 +7772,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7184,7 +7783,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 3 arguments
@@ -7210,7 +7809,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7233,6 +7832,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7240,7 +7843,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a int
@@ -7266,7 +7869,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7287,6 +7890,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7294,7 +7901,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 0 arguments
@@ -7317,7 +7924,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7338,6 +7945,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7345,7 +7956,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 1 arguments
@@ -7369,7 +7980,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7390,6 +8001,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7397,7 +8012,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 2 arguments
@@ -7422,7 +8037,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7443,6 +8058,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7450,7 +8069,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 3 arguments
@@ -7476,7 +8095,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7499,6 +8118,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7506,7 +8129,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a long
@@ -7532,7 +8155,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7553,6 +8176,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7560,7 +8187,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 0 arguments
@@ -7583,7 +8210,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7604,6 +8231,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7611,7 +8242,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 1 arguments
@@ -7635,7 +8266,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7656,6 +8287,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7663,7 +8298,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 2 arguments
@@ -7688,7 +8323,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7709,6 +8344,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7716,7 +8355,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 3 arguments
@@ -7742,7 +8381,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7765,6 +8404,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7772,7 +8415,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a float
@@ -7798,7 +8441,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7819,6 +8462,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7826,7 +8473,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 0 arguments
@@ -7849,7 +8496,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7870,6 +8517,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7877,7 +8528,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 1 arguments
@@ -7901,7 +8552,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7922,6 +8573,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7929,7 +8584,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 2 arguments
@@ -7954,7 +8609,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -7975,6 +8630,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -7982,7 +8641,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 3 arguments
@@ -8008,7 +8667,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -8031,6 +8690,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8038,7 +8701,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj` and return a double
@@ -8064,7 +8727,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -8085,6 +8748,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8092,7 +8759,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 0 arguments
@@ -8115,7 +8782,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -8136,6 +8803,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8143,7 +8814,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 1 arguments
@@ -8167,7 +8838,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -8188,6 +8859,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8195,7 +8870,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 2 arguments
@@ -8220,7 +8895,7 @@ impl JNIEnv {
     ///
     /// This is roughly equivalent to calling "super.someMethod(...)" in java
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallNonvirtual_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -8241,6 +8916,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8248,7 +8927,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 3 arguments
@@ -8270,7 +8949,7 @@ impl JNIEnv {
     ///
     /// Gets the field id of a static field
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStaticFieldID
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStaticFieldID>
     ///
     ///
     /// # Arguments
@@ -8291,9 +8970,13 @@ impl JNIEnv {
     /// It can also be safely shared with any thread or stored in a constant.
     ///
     /// # Throws Java Exception
-    /// * NoSuchFieldError - field with the given name and sig doesn't exist in the class
-    /// * ExceptionInInitializerError - Exception occurs in initializer of the class
-    /// * OutOfMemoryError - if the jvm runs out of memory
+    /// * `NoSuchFieldError` - field with the given name and sig doesn't exist in the class
+    /// * `ExceptionInInitializerError` - Exception occurs in initializer of the class
+    /// * `OutOfMemoryError` - if the jvm runs out of memory
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -8302,7 +8985,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must a valid reference to a class that is not already garbage collected.
     /// `name` must be non-null and zero terminated utf-8.
@@ -8327,7 +9010,7 @@ impl JNIEnv {
     ///
     /// Returns a local reference from a static field.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -8342,6 +9025,10 @@ impl JNIEnv {
     /// # Returns
     /// A local reference to the fields value or null if the field is null
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8349,7 +9036,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to a class that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field located in `obj` class and not some other unrelated class
@@ -8369,7 +9056,7 @@ impl JNIEnv {
     ///
     /// Returns a boolean from a static field.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -8384,6 +9071,10 @@ impl JNIEnv {
     /// # Returns
     /// A local reference to the fields value or null if the field is null
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8391,7 +9082,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to a class that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8411,7 +9102,7 @@ impl JNIEnv {
     ///
     /// Returns a byte from a static field.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -8426,6 +9117,10 @@ impl JNIEnv {
     /// # Returns
     /// A local reference to the fields value or null if the field is null
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8433,7 +9128,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to a class that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8453,7 +9148,7 @@ impl JNIEnv {
     ///
     /// Returns a char from a static field.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -8468,6 +9163,10 @@ impl JNIEnv {
     /// # Returns
     /// A local reference to the fields value or null if the field is null
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8475,7 +9174,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to a class that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8495,7 +9194,7 @@ impl JNIEnv {
     ///
     /// Returns a short from a static field.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -8510,6 +9209,10 @@ impl JNIEnv {
     /// # Returns
     /// A local reference to the fields value or null if the field is null
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8517,7 +9220,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to a class that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8537,7 +9240,7 @@ impl JNIEnv {
     ///
     /// Returns a int from a static field.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -8552,6 +9255,10 @@ impl JNIEnv {
     /// # Returns
     /// A local reference to the fields value or null if the field is null
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8559,7 +9266,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to a class that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8579,7 +9286,7 @@ impl JNIEnv {
     ///
     /// Returns a long from a static field.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -8594,6 +9301,10 @@ impl JNIEnv {
     /// # Returns
     /// A local reference to the fields value or null if the field is null
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8601,7 +9312,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to a class that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8621,7 +9332,7 @@ impl JNIEnv {
     ///
     /// Returns a float from a static field.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -8636,6 +9347,10 @@ impl JNIEnv {
     /// # Returns
     /// A local reference to the fields value or null if the field is null
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8643,7 +9358,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to a class that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8663,7 +9378,7 @@ impl JNIEnv {
     ///
     /// Returns a double from a static field.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStatic_type_Field_routines>
     ///
     ///
     /// # Arguments
@@ -8678,6 +9393,10 @@ impl JNIEnv {
     /// # Returns
     /// A local reference to the fields value or null if the field is null
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8685,7 +9404,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid reference to a class that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8705,7 +9424,7 @@ impl JNIEnv {
     ///
     /// Sets a static object field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -8721,6 +9440,10 @@ impl JNIEnv {
     ///     * must not be already garbage collected (if non-null)
     ///     * must be assignable to the field type (if non-null)
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8728,14 +9451,14 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
     /// `fieldID` must be from a static field
     /// `fieldID` must refer to a field that is an object and not a primitive.
     /// `value` must be a valid reference to the object that is not already garbage collected or it must be null.
-    /// `value` must be assignable to the field type (i.e. if it's a String field setting to an ArrayList for example is UB)
+    /// `value` must be assignable to the field type (i.e. if it's a String field setting to an `ArrayList` for example is UB)
     ///
     pub unsafe fn SetStaticObjectField(&self, obj: jclass, fieldID: jfieldID, value: jobject) {
         #[cfg(feature = "asserts")]
@@ -8744,13 +9467,13 @@ impl JNIEnv {
             self.check_no_exception("SetStaticObjectField");
             self.check_field_type_static("SetStaticObjectField", obj, fieldID, "object");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jobject)>(154)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jobject)>(154)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a static boolean field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -8763,6 +9486,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - that value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8770,7 +9497,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8784,13 +9511,13 @@ impl JNIEnv {
             self.check_no_exception("SetStaticBooleanField");
             self.check_field_type_static("SetStaticBooleanField", obj, fieldID, "boolean");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(155)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(155)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a static byte field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -8803,6 +9530,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - that value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8810,7 +9541,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8824,13 +9555,13 @@ impl JNIEnv {
             self.check_no_exception("SetStaticByteField");
             self.check_field_type_static("SetStaticByteField", obj, fieldID, "byte");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jbyte)>(156)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jbyte)>(156)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a static char field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -8843,6 +9574,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - that value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8850,7 +9585,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8864,13 +9599,13 @@ impl JNIEnv {
             self.check_no_exception("SetStaticCharField");
             self.check_field_type_static("SetStaticCharField", obj, fieldID, "char");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jchar)>(157)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jchar)>(157)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a static short field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -8883,6 +9618,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - that value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8890,7 +9629,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8904,13 +9643,13 @@ impl JNIEnv {
             self.check_no_exception("SetStaticShortField");
             self.check_field_type_static("SetStaticShortField", obj, fieldID, "short");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jshort)>(158)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jshort)>(158)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a static int field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -8923,6 +9662,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - that value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8930,7 +9673,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8944,13 +9687,13 @@ impl JNIEnv {
             self.check_no_exception("SetStaticIntField");
             self.check_field_type_static("SetStaticIntField", obj, fieldID, "int");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jint)>(159)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jint)>(159)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a static long field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -8963,6 +9706,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - that value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -8970,7 +9717,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -8984,13 +9731,13 @@ impl JNIEnv {
             self.check_no_exception("SetStaticLongField");
             self.check_field_type_static("SetStaticLongField", obj, fieldID, "long");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jlong)>(160)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jlong)>(160)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a static float field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -9003,6 +9750,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - that value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9010,7 +9761,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -9024,13 +9775,13 @@ impl JNIEnv {
             self.check_no_exception("SetStaticFloatField");
             self.check_field_type_static("SetStaticFloatField", obj, fieldID, "float");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jfloat)>(161)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jfloat)>(161)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Sets a static double field to a given value
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#SetStatic_type_Field_routines>
     ///
     /// # Arguments
     /// * `obj` - reference to the object the field is in
@@ -9043,6 +9794,10 @@ impl JNIEnv {
     ///     * must reside in the object `obj`
     /// * `value` - that value to set
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9050,7 +9805,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must be a valid reference to the class the field is in that is not already garbage collected.
     /// `fieldID` must be a fieldID of a field in `obj` and not some other unrelated class
@@ -9064,13 +9819,13 @@ impl JNIEnv {
             self.check_no_exception("SetStaticDoubleField");
             self.check_field_type_static("SetStaticDoubleField", obj, fieldID, "double");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(162)(self.vtable, obj, fieldID, value)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(162)(self.vtable, obj, fieldID, value);
     }
 
     ///
     /// Gets the method id of a static method
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetMethodID
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetMethodID>
     ///
     ///
     /// # Arguments
@@ -9091,9 +9846,13 @@ impl JNIEnv {
     /// It can also be safely shared with any thread or stored in a constant.
     ///
     /// # Throws Java Exception
-    /// * NoSuchMethodError - method with the given name and sig doesn't exist in the class
-    /// * ExceptionInInitializerError - Exception occurs in initializer of the class
-    /// * OutOfMemoryError - if the jvm runs out of memory
+    /// * `NoSuchMethodError` - method with the given name and sig doesn't exist in the class
+    /// * `ExceptionInInitializerError` - Exception occurs in initializer of the class
+    /// * `OutOfMemoryError` - if the jvm runs out of memory
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -9102,7 +9861,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must a valid reference to a class that is not already garbage collected.
     /// `name` must be non-null and zero terminated utf-8.
@@ -9128,7 +9887,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that returns void
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9148,6 +9907,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9155,7 +9918,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj` class and return void
@@ -9170,13 +9933,13 @@ impl JNIEnv {
             self.check_no_exception("CallStaticVoidMethodA");
             self.check_return_type_static("CallStaticVoidMethodA", obj, methodID, "void");
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype)>(143)(self.vtable, obj, methodID, args)
+        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype)>(143)(self.vtable, obj, methodID, args);
     }
 
     ///
     /// Calls a static java method that has 0 arguments and returns void
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9194,6 +9957,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9201,7 +9968,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 0 arguments
@@ -9213,13 +9980,13 @@ impl JNIEnv {
             self.check_no_exception("CallStaticVoidMethod");
             self.check_return_type_object("CallStaticVoidMethod", obj, methodID, "void");
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, obj, methodID)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, obj, methodID);
     }
 
     ///
     /// Calls a static java method that has 1 arguments and returns void
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9237,6 +10004,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9244,7 +10015,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 1 arguments
@@ -9257,13 +10028,13 @@ impl JNIEnv {
             self.check_return_type_object("CallStaticVoidMethod", obj, methodID, "void");
             self.check_parameter_types_static("CallStaticVoidMethod", obj, methodID, arg1, 0, 1);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1);
     }
 
     ///
     /// Calls a static java method that has 2 arguments and returns void
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9281,6 +10052,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9288,7 +10063,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 2 arguments
@@ -9302,13 +10077,13 @@ impl JNIEnv {
             self.check_parameter_types_static("CallStaticVoidMethod", obj, methodID, arg1, 0, 2);
             self.check_parameter_types_static("CallStaticVoidMethod", obj, methodID, arg2, 1, 2);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1, arg2)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1, arg2);
     }
 
     ///
     /// Calls a static java method that has 3 arguments and returns void
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9326,6 +10101,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9333,7 +10112,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 3 arguments
@@ -9348,13 +10127,13 @@ impl JNIEnv {
             self.check_parameter_types_static("CallStaticVoidMethod", obj, methodID, arg2, 1, 3);
             self.check_parameter_types_static("CallStaticVoidMethod", obj, methodID, arg3, 2, 3);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1, arg2, arg3)
+        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, obj, methodID, arg1, arg2, arg3);
     }
 
     ///
     /// Calls a static java method that returns an object
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9377,6 +10156,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9384,7 +10167,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj` class and return an object
@@ -9405,7 +10188,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 0 arguments and returns an object
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9426,6 +10209,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9433,7 +10220,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 0 arguments
@@ -9451,7 +10238,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 1 arguments and returns an object
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9472,6 +10259,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9479,7 +10270,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 1 arguments
@@ -9498,7 +10289,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 2 arguments and returns an object
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9519,6 +10310,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9526,7 +10321,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 2 arguments
@@ -9546,7 +10341,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 3 arguments and returns an object
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9567,6 +10362,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9574,7 +10373,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 3 arguments
@@ -9595,7 +10394,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that returns a boolean
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9618,6 +10417,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9625,7 +10428,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj` class and return a boolean
@@ -9646,7 +10449,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 0 arguments and returns boolean
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9667,6 +10470,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9674,7 +10481,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 0 arguments
@@ -9692,7 +10499,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 1 arguments and returns boolean
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9713,6 +10520,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9720,7 +10531,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 1 arguments
@@ -9739,7 +10550,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 2 arguments and returns boolean
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9760,6 +10571,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9767,7 +10582,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 2 arguments
@@ -9787,7 +10602,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 3 arguments and returns boolean
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9808,6 +10623,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9815,7 +10634,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 3 arguments
@@ -9836,7 +10655,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that returns a byte
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9859,6 +10678,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9866,7 +10689,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj` class and return a byte
@@ -9887,7 +10710,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 0 arguments and returns byte
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9908,6 +10731,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9915,7 +10742,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 0 arguments
@@ -9933,7 +10760,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 1 arguments and returns byte
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -9954,6 +10781,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -9961,7 +10792,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 1 arguments
@@ -9980,7 +10811,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 2 arguments and returns byte
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10001,6 +10832,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10008,7 +10843,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 2 arguments
@@ -10028,7 +10863,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 3 arguments and returns byte
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10049,6 +10884,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10056,7 +10895,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 3 arguments
@@ -10077,7 +10916,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that returns a char
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10100,6 +10939,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10107,7 +10950,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj` class and return a char
@@ -10128,7 +10971,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 0 arguments and returns char
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10149,6 +10992,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10156,7 +11003,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 0 arguments
@@ -10174,7 +11021,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 1 arguments and returns char
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10195,6 +11042,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10202,7 +11053,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 1 arguments
@@ -10221,7 +11072,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 2 arguments and returns char
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10242,6 +11093,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10249,7 +11104,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 2 arguments
@@ -10269,7 +11124,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 3 arguments and returns char
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10290,6 +11145,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10297,7 +11156,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 3 arguments
@@ -10318,7 +11177,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that returns a short
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10341,6 +11200,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10348,7 +11211,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj` class and return a short
@@ -10369,7 +11232,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 0 arguments and returns short
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10390,6 +11253,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10397,7 +11264,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 0 arguments
@@ -10415,7 +11282,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 1 arguments and returns short
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10436,6 +11303,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10443,7 +11314,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 1 arguments
@@ -10462,7 +11333,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 2 arguments and returns short
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10483,6 +11354,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10490,7 +11365,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 2 arguments
@@ -10510,7 +11385,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 3 arguments and returns short
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10531,6 +11406,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10538,7 +11417,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 3 arguments
@@ -10559,7 +11438,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that returns a int
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10582,6 +11461,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10589,7 +11472,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj` class and return a int
@@ -10610,7 +11493,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 0 arguments and returns int
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10631,6 +11514,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10638,7 +11525,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 0 arguments
@@ -10656,7 +11543,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 1 arguments and returns int
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10677,6 +11564,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10684,7 +11575,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 1 arguments
@@ -10703,7 +11594,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 2 arguments and returns int
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10724,6 +11615,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10731,7 +11626,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 2 arguments
@@ -10751,7 +11646,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 3 arguments and returns int
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10772,6 +11667,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10779,7 +11678,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 3 arguments
@@ -10800,7 +11699,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that returns a long
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10823,6 +11722,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10830,7 +11733,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj` class and return a long
@@ -10851,7 +11754,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 0 arguments and returns long
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10872,6 +11775,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10879,7 +11786,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 0 arguments
@@ -10897,7 +11804,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 1 arguments and returns long
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10918,6 +11825,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10925,7 +11836,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 1 arguments
@@ -10944,7 +11855,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 2 arguments and returns long
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -10965,6 +11876,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -10972,7 +11887,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 2 arguments
@@ -10992,7 +11907,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 3 arguments and returns long
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -11013,6 +11928,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11020,7 +11939,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 3 arguments
@@ -11041,7 +11960,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that returns a float
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -11064,6 +11983,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11071,7 +11994,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj` class and return a float
@@ -11092,7 +12015,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 0 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -11113,6 +12036,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11120,7 +12047,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 0 arguments
@@ -11138,7 +12065,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 1 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -11159,6 +12086,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11166,7 +12097,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 1 arguments
@@ -11185,7 +12116,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 2 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -11206,6 +12137,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11213,7 +12148,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 2 arguments
@@ -11233,7 +12168,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 3 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -11254,6 +12189,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11261,7 +12200,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 3 arguments
@@ -11282,7 +12221,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that returns a double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -11305,6 +12244,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11312,7 +12255,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj` class and return a double
@@ -11333,7 +12276,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 0 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -11354,6 +12297,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11361,7 +12308,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 0 arguments
@@ -11379,7 +12326,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 1 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -11400,6 +12347,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11407,7 +12358,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 1 arguments
@@ -11426,7 +12377,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 2 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -11447,6 +12398,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11454,7 +12409,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 2 arguments
@@ -11474,7 +12429,7 @@ impl JNIEnv {
     ///
     /// Calls a static java method that has 3 arguments and returns double
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#CallStatic_type_Method_routines>
     ///
     ///
     /// # Arguments
@@ -11495,6 +12450,10 @@ impl JNIEnv {
     /// # Throws Java Exception
     /// * Whatever the method threw
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11502,7 +12461,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 3 arguments
@@ -11523,7 +12482,7 @@ impl JNIEnv {
     ///
     /// Create a new String form a jchar array.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewString
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewString>
     ///
     ///
     /// # Arguments
@@ -11535,7 +12494,11 @@ impl JNIEnv {
     /// A local reference to the newly created String or null on error
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm ran out of memory allocating the String
+    /// * `OutOfMemoryError` - if the jvm ran out of memory allocating the String
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -11544,11 +12507,12 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `unicodeChars` must not be 0.
     /// `unicodeChars` must be equal or larger than `len` suggests.
     ///
+    #[must_use]
     pub unsafe fn NewString(&self, unicodeChars: *const jchar, len: jsize) -> jstring {
         #[cfg(feature = "asserts")]
         {
@@ -11562,9 +12526,9 @@ impl JNIEnv {
 
     ///
     /// Returns the string length in jchar's. This is neither the amount of bytes in utf-8 encoding nor the amount of characters.
-    /// 3 and 4 byte utf-8 characters take 2 jchars to encode. This is equivalent to calling String.length() in java.
+    /// 3 and 4 byte utf-8 characters take 2 jchars to encode. This is equivalent to calling `String.length()` in java.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringLength
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringLength>
     ///
     /// # Arguments
     /// * `string`
@@ -11575,6 +12539,10 @@ impl JNIEnv {
     /// # Returns
     /// the amount of jchar's in the String
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11582,7 +12550,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `string` must be a valid reference that is not yet garbage collected and refer to a String.
     ///
@@ -11602,7 +12570,7 @@ impl JNIEnv {
     ///
     /// Note: This fn will almost always to return a copy of the data for newer JVM's.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringChars
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringChars>
     ///
     /// # Arguments
     /// * `string`
@@ -11615,6 +12583,10 @@ impl JNIEnv {
     /// # Returns
     /// a pointer to index 0 of a jchar array.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -11622,7 +12594,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `string` must be a valid reference that is not yet garbage collected and refer to a String.
     /// `isCopy` must be null or valid.
@@ -11639,28 +12611,32 @@ impl JNIEnv {
     }
 
     ///
-    /// Frees a char array returned by GetStringChars.
+    /// Frees a char array returned by `GetStringChars`.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseStringChars
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseStringChars>
     ///
     /// # Arguments
     /// * `string`
     ///     * must not be null
     ///     * must refer to a string
     ///     * must not be already garbage collected
-    /// * `chars` - the pointer returned by GetStringChars
+    /// * `chars` - the pointer returned by `GetStringChars`
     ///     * must not be null
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `string` must be a valid reference that is not yet garbage collected and refer to a String.
     /// `chars` must not be null.
-    /// `chars` must be the result of a call to GetStringChars of the String `string`
+    /// `chars` must be the result of a call to `GetStringChars` of the String `string`
     ///
     pub unsafe fn ReleaseStringChars(&self, string: jstring, chars: *const jchar) {
         #[cfg(feature = "asserts")]
@@ -11670,13 +12646,13 @@ impl JNIEnv {
             assert!(!chars.is_null(), "ReleaseStringChars chars must not be null");
             self.check_if_arg_is_string("ReleaseStringChars", string);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(166)(self.vtable, string, chars)
+        self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(166)(self.vtable, string, chars);
     }
 
     ///
     /// Create a new String form a utf-8 zero terminated c string.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewString
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewString>
     ///
     ///
     /// # Arguments
@@ -11687,7 +12663,11 @@ impl JNIEnv {
     /// A local reference to the newly created String or null on error
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm ran out of memory allocating the String
+    /// * `OutOfMemoryError` - if the jvm ran out of memory allocating the String
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -11696,7 +12676,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `bytes` must not be null.
     /// `bytes` must be zero terminated.
@@ -11714,15 +12694,15 @@ impl JNIEnv {
     }
 
     ///
-    /// Returns the length of a String in bytes if it were to be used with GetStringUTFChars.
+    /// Returns the length of a String in bytes if it were to be used with `GetStringUTFChars`.
     ///
     /// Note: Usage of this function should be carefully evaluated. For most jvms (especially for JVMS older than Java 17)
-    /// it is faster to just call GetStringUTFChars and use a function equivalent to the c function strlen() on its return value.
+    /// it is faster to just call `GetStringUTFChars` and use a function equivalent to the c function `strlen()` on its return value.
     /// Some newer jvm's may, depending on how the vm was started, know this value for most strings,
     /// and therefore it is faster to call this fn than to do
-    /// the approach above if you do not also need the UTFChars themselves.
+    /// the approach above if you do not also need the `UTFChars` themselves.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFLength
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFLength>
     ///
     ///
     /// # Arguments
@@ -11732,7 +12712,11 @@ impl JNIEnv {
     ///     * must not be already garbage collected
     ///
     /// # Returns
-    /// The amount of bytes the array returned by GetStringUTFChars would have for this string.
+    /// The amount of bytes the array returned by `GetStringUTFChars` would have for this string.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -11741,7 +12725,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
@@ -11761,7 +12745,7 @@ impl JNIEnv {
     /// Returns the 0 terminated utf-8 representation of the String.
     /// The returned string can be used with the "rust" `CStr` struct from the `std::ffi` module.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFChars
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFChars>
     ///
     ///
     /// # Arguments
@@ -11776,7 +12760,11 @@ impl JNIEnv {
     /// A pointer to the zero terminated utf-8 string or null on error.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm ran out of memory allocating the utf-8 string
+    /// * `OutOfMemoryError` - if the jvm ran out of memory allocating the utf-8 string
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -11785,7 +12773,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
@@ -11801,13 +12789,17 @@ impl JNIEnv {
     }
 
     ///
-    /// Convenience method that calls GetStringUTFChars, copies the result
-    /// into a rust String and then calls ReleaseStringUTFChars.
+    /// Convenience method that calls `GetStringUTFChars`, copies the result
+    /// into a rust String and then calls `ReleaseStringUTFChars`.
     ///
-    /// This function calls ReleaseStringUTFChars in all error cases where it has to be called!
+    /// This function calls `ReleaseStringUTFChars` in all error cases where it has to be called!
     ///
-    /// If GetStringUTFChars fails then None is returned and ExceptionCheck should be performed.
+    /// If `GetStringUTFChars` fails then None is returned and `ExceptionCheck` should be performed.
     /// If parsing the String as utf-8 fails (it shouldn't) then None is returned.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -11816,7 +12808,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
@@ -11847,27 +12839,31 @@ impl JNIEnv {
     }
 
     ///
-    /// Frees the utf-8 string returned by GetStringUTFChars.
-    /// After this method is called the pointer returned by GetStringUTFChars becomes invalid
+    /// Frees the utf-8 string returned by `GetStringUTFChars`.
+    /// After this method is called the pointer returned by `GetStringUTFChars` becomes invalid
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFChars
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFChars>
     ///
     ///
     /// # Arguments
-    /// * `string` - the string refercence used in GetStringUTFChars
+    /// * `string` - the string refercence used in `GetStringUTFChars`
     ///     * must not be null
     ///     * must refer to a string
     ///     * must not be already garbage collected
-    /// * `utf` - the raw utf8 data returned by GetStringUTFChars
+    /// * `utf` - the raw utf8 data returned by `GetStringUTFChars`
     ///     * must not be null
-    ///     * must be the exact return value of GetStringUTFChars
+    ///     * must be the exact return value of `GetStringUTFChars`
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
@@ -11880,17 +12876,17 @@ impl JNIEnv {
             self.check_if_arg_is_string("ReleaseStringUTFChars", string);
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const c_char)>(170)(self.vtable, string, utf)
+        self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const c_char)>(170)(self.vtable, string, utf);
     }
 
     ///
     /// Copies a part of the string into a provided jchar buffer
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringRegion
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringRegion>
     ///
     ///
     /// # Arguments
-    /// * `string` - the string reference used in GetStringUTFChars
+    /// * `string` - the string reference used in `GetStringUTFChars`
     ///     * must not be null
     ///     * must refer to a string
     ///     * must not be already garbage collected
@@ -11900,8 +12896,12 @@ impl JNIEnv {
     ///     * must not be null
     ///
     /// # Throws Java Exception
-    /// * StringIndexOutOfBoundsException - if start or start + len is out of bounds
+    /// * `StringIndexOutOfBoundsException` - if start or start + len is out of bounds
     ///     * The state of the output buffer is undefined if this exception is thrown.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -11910,7 +12910,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     /// `buffer` must be valid
@@ -11928,17 +12928,17 @@ impl JNIEnv {
             self.check_if_arg_is_string("GetStringRegion", string);
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, jsize, jsize, *mut jchar)>(220)(self.vtable, string, start, len, buffer)
+        self.jni::<extern "system" fn(JNIEnvVTable, jstring, jsize, jsize, *mut jchar)>(220)(self.vtable, string, start, len, buffer);
     }
 
     ///
     /// Copies a part of the string into a provided jchar buffer
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringRegion
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringRegion>
     ///
     ///
     /// # Arguments
-    /// * `string` - the string reference used in GetStringUTFChars
+    /// * `string` - the string reference used in `GetStringUTFChars`
     ///     * must not be null
     ///     * must refer to a string
     ///     * must not be already garbage collected
@@ -11946,8 +12946,12 @@ impl JNIEnv {
     /// * `buffer` - the target buffer where the jchar's should be copied to
     ///
     /// # Throws Java Exception
-    /// * StringIndexOutOfBoundsException - if start or start + buffer.len() is out of bounds
+    /// * `StringIndexOutOfBoundsException` - if start or start + `buffer.len()` is out of bounds
     ///     * The state of the output buffer is undefined if this exception is thrown.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -11956,17 +12960,17 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
     pub unsafe fn GetStringRegion_into_slice(&self, string: jstring, start: jsize, buffer: &mut [jchar]) {
-        self.GetStringRegion(string, start, buffer.len() as jsize, buffer.as_mut_ptr())
+        self.GetStringRegion(string, start, jsize::try_from(buffer.len()).expect("buf.len() > jsize::MAX"), buffer.as_mut_ptr());
     }
 
     ///
-    /// Copies a part of the string into a provided c_char buffer
-    /// This fn always appends a '0' byte to the output c_char buffer!
+    /// Copies a part of the string into a provided `c_char` buffer
+    /// This fn always appends a '0' byte to the output `c_char` buffer!
     ///
     /// This fn is not recommended for use. It is prone for out of bounds problems because
     /// the size of the buffer cannot be predicted easily because the `len` parameter is the amount of jchar's
@@ -11979,11 +12983,11 @@ impl JNIEnv {
     /// This fn may be usefull on newer jvm's if you need to copy from the start of the string as that should be reasonably efficient,
     /// and you can predict the buffer sizes with certaining because you know the requrested characters are only ascii for example.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFRegion
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetStringUTFRegion>
     ///
     ///
     /// # Arguments
-    /// * `string` - the string reference used in GetStringUTFChars
+    /// * `string` - the string reference used in `GetStringUTFChars`
     ///     * must not be null
     ///     * must refer to a string
     ///     * must not be already garbage collected
@@ -11992,8 +12996,12 @@ impl JNIEnv {
     /// * `buffer` - the target buffer where the jchar's should be copied to as utf-8
     ///
     /// # Throws Java Exception
-    /// * StringIndexOutOfBoundsException - if start or start + len is out of bounds
+    /// * `StringIndexOutOfBoundsException` - if start or start + len is out of bounds
     ///     * The state of the output buffer is undefined if this exception is thrown.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12002,7 +13010,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     /// `buffer` must be valid
@@ -12017,7 +13025,7 @@ impl JNIEnv {
             self.check_if_arg_is_string("GetStringUTFRegion", string);
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, jsize, jsize, *mut c_char)>(221)(self.vtable, string, start, len, buffer)
+        self.jni::<extern "system" fn(JNIEnvVTable, jstring, jsize, jsize, *mut c_char)>(221)(self.vtable, string, start, len, buffer);
     }
 
     #[cfg(feature = "asserts")]
@@ -12029,13 +13037,13 @@ impl JNIEnv {
 
     ///
     /// Obtains a critical pointer into a primitive java String.
-    /// This pointer must be released by calling ReleaseStringCritical.
+    /// This pointer must be released by calling `ReleaseStringCritical`.
     /// No other JNI functions can be called in the current thread.
-    /// The only exception being multiple consecutive calls to GetStringCritical & GetPrimitiveArrayCritical to obtain multiple critical
+    /// The only exception being multiple consecutive calls to `GetStringCritical` & `GetPrimitiveArrayCritical` to obtain multiple critical
     /// pointers at the same time.
     ///
     /// This method will return NULL to indicate error.
-    /// The JVM will most likely throw an Exception, probably an OOMError.
+    /// The JVM will most likely throw an Exception, probably an `OOMError`.
     /// If you obtain multiple critical pointers, you MUST release all successfully obtained critical pointers
     /// before being able to check for the exception.
     ///
@@ -12059,6 +13067,10 @@ impl JNIEnv {
     ///
     /// # Returns
     /// A pointer to the jchar array of the string.
+    ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Writing to the returned `*const jchar` in any way is UB.
@@ -12102,9 +13114,13 @@ impl JNIEnv {
     /// This fn ends a critical string section.
     /// After the call ends the underlying jchar array may be freed, moved by the jvm or garbage collected.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// `string` must be non-null and valid
-    /// `cstring` must be non-null and the result of a GetStringCritical call
+    /// `cstring` must be non-null and the result of a `GetStringCritical` call
     ///
     pub unsafe fn ReleaseStringCritical(&self, string: jstring, cstring: *const jchar) {
         #[cfg(feature = "asserts")]
@@ -12126,13 +13142,13 @@ impl JNIEnv {
             });
         }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(225)(self.vtable, string, cstring)
+        self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(225)(self.vtable, string, cstring);
     }
 
     ///
     /// Returns the size of an array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetArrayLength
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetArrayLength>
     ///
     ///
     /// # Arguments
@@ -12143,6 +13159,10 @@ impl JNIEnv {
     /// # Returns
     /// the size of the array in elements
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
@@ -12150,7 +13170,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
@@ -12169,7 +13189,7 @@ impl JNIEnv {
     ///
     /// Creates a new array of Objects
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObjectArray
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewObjectArray>
     ///
     /// # Arguments
     /// * `len` - capcity of the new array
@@ -12188,7 +13208,10 @@ impl JNIEnv {
     /// A reference to the new array or null on failure
     ///
     /// # Throws Java Exception
-    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    /// `OutOfMemoryError` - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12197,11 +13220,11 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `elementClass` must not be null, must refer to a class and not already be garbage collected.
     /// `len` must not be negative
-    /// `initialElement` must be null or an instance of the class referred to by `elementClass and not already be garbage collected.
+    /// `initialElement` must be null or an instance of the class referred to by `elementClass` and not already be garbage collected.
     ///
     pub unsafe fn NewObjectArray(&self, len: jsize, elementClass: jclass, initialElement: jobject) -> jobjectArray {
         #[cfg(feature = "asserts")]
@@ -12209,7 +13232,7 @@ impl JNIEnv {
             self.check_not_critical("NewObjectArray");
             self.check_no_exception("NewObjectArray");
             assert!(!elementClass.is_null(), "NewObjectArray elementClass must not be null");
-            assert!(len >= 0, "NewObjectArray len mot not be negative {}", len);
+            assert!(len >= 0, "NewObjectArray len mot not be negative {len}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jsize, jclass, jobject) -> jobjectArray>(172)(self.vtable, len, elementClass, initialElement)
@@ -12218,7 +13241,7 @@ impl JNIEnv {
     ///
     /// Returns a local reference to a single element in the given object array.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement>
     ///
     /// # Arguments
     /// * `array` - the object array
@@ -12231,7 +13254,10 @@ impl JNIEnv {
     /// A local reference to the element at the index in the array or null if the element was null or an error occured.
     ///
     /// # Throws Java Exception
-    /// * ArrayIndexOutOfBoundsException - if the index is out of bounds
+    /// * `ArrayIndexOutOfBoundsException` - if the index is out of bounds
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12240,7 +13266,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
@@ -12258,7 +13284,7 @@ impl JNIEnv {
     ///
     /// Set a single element in a object array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetObjectArrayElement>
     ///
     /// # Arguments
     /// * `array` - the object array
@@ -12272,7 +13298,10 @@ impl JNIEnv {
     ///     * must not be already garbage collected
     ///
     /// # Throws Java Exception
-    /// * ArrayIndexOutOfBoundsException - if the index is out of bounds
+    /// * `ArrayIndexOutOfBoundsException` - if the index is out of bounds
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12281,7 +13310,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     /// `value` must be null or an instance of the type contained inside the array and not already be garbage collected.
@@ -12301,7 +13330,7 @@ impl JNIEnv {
     ///
     /// Creates a new boolean array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewBooleanArray>
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12312,7 +13341,10 @@ impl JNIEnv {
     /// A reference to the new array or null on failure
     ///
     /// # Throws Java Exception
-    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    /// `OutOfMemoryError` - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12321,16 +13353,17 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `size` must not be negative
     ///
+    #[must_use]
     pub unsafe fn NewBooleanArray(&self, size: jsize) -> jbooleanArray {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewBooleanArray");
             self.check_no_exception("NewBooleanArray");
-            assert!(size >= 0, "NewBooleanArray size must not be negative {}", size);
+            assert!(size >= 0, "NewBooleanArray size must not be negative {size}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jobject>(175)(self.vtable, size)
@@ -12339,7 +13372,7 @@ impl JNIEnv {
     ///
     /// Creates a new byte array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewByteArray
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewByteArray>
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12350,7 +13383,10 @@ impl JNIEnv {
     /// A reference to the new array or null on failure
     ///
     /// # Throws Java Exception
-    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    /// `OutOfMemoryError` - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12359,16 +13395,17 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `size` must not be negative
     ///
+    #[must_use]
     pub unsafe fn NewByteArray(&self, size: jsize) -> jbyteArray {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewByteArray");
             self.check_no_exception("NewByteArray");
-            assert!(size >= 0, "NewByteArray size must not be negative {}", size);
+            assert!(size >= 0, "NewByteArray size must not be negative {size}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jbyteArray>(176)(self.vtable, size)
@@ -12377,7 +13414,7 @@ impl JNIEnv {
     ///
     /// Creates a new char array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewCharArray
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewCharArray>
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12388,7 +13425,10 @@ impl JNIEnv {
     /// A reference to the new array or null on failure
     ///
     /// # Throws Java Exception
-    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    /// `OutOfMemoryError` - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12397,16 +13437,17 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `size` must not be negative
     ///
+    #[must_use]
     pub unsafe fn NewCharArray(&self, size: jsize) -> jcharArray {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewCharArray");
             self.check_no_exception("NewCharArray");
-            assert!(size >= 0, "NewCharArray size must not be negative {}", size);
+            assert!(size >= 0, "NewCharArray size must not be negative {size}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jcharArray>(177)(self.vtable, size)
@@ -12415,7 +13456,7 @@ impl JNIEnv {
     ///
     /// Creates a new short array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewShortArray
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewShortArray>
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12426,7 +13467,10 @@ impl JNIEnv {
     /// A reference to the new array or null on failure
     ///
     /// # Throws Java Exception
-    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    /// `OutOfMemoryError` - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12435,16 +13479,17 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `size` must not be negative
     ///
+    #[must_use]
     pub unsafe fn NewShortArray(&self, size: jsize) -> jshortArray {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewShortArray");
             self.check_no_exception("NewShortArray");
-            assert!(size >= 0, "NewShortArray size must not be negative {}", size);
+            assert!(size >= 0, "NewShortArray size must not be negative {size}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jshortArray>(178)(self.vtable, size)
@@ -12453,7 +13498,7 @@ impl JNIEnv {
     ///
     /// Creates a new int array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewIntArray
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewIntArray>
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12464,7 +13509,10 @@ impl JNIEnv {
     /// A reference to the new array or null on failure
     ///
     /// # Throws Java Exception
-    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    /// `OutOfMemoryError` - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12473,16 +13521,17 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `size` must not be negative
     ///
+    #[must_use]
     pub unsafe fn NewIntArray(&self, size: jsize) -> jintArray {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewIntArray");
             self.check_no_exception("NewIntArray");
-            assert!(size >= 0, "NewIntArray size must not be negative {}", size);
+            assert!(size >= 0, "NewIntArray size must not be negative {size}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jintArray>(179)(self.vtable, size)
@@ -12491,7 +13540,7 @@ impl JNIEnv {
     ///
     /// Creates a new long array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewLongArray
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewLongArray>
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12502,7 +13551,10 @@ impl JNIEnv {
     /// A reference to the new array or null on failure
     ///
     /// # Throws Java Exception
-    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    /// `OutOfMemoryError` - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12511,16 +13563,17 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `size` must not be negative
     ///
+    #[must_use]
     pub unsafe fn NewLongArray(&self, size: jsize) -> jlongArray {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewLongArray");
             self.check_no_exception("NewLongArray");
-            assert!(size >= 0, "NewLongArray size must not be negative {}", size);
+            assert!(size >= 0, "NewLongArray size must not be negative {size}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jlongArray>(180)(self.vtable, size)
@@ -12529,7 +13582,7 @@ impl JNIEnv {
     ///
     /// Creates a new float array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewFloatArray
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewFloatArray>
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12540,7 +13593,10 @@ impl JNIEnv {
     /// A reference to the new array or null on failure
     ///
     /// # Throws Java Exception
-    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    /// `OutOfMemoryError` - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12549,16 +13605,17 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `size` must not be negative
     ///
+    #[must_use]
     pub unsafe fn NewFloatArray(&self, size: jsize) -> jfloatArray {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewFloatArray");
             self.check_no_exception("NewFloatArray");
-            assert!(size >= 0, "NewFloatArray size must not be negative {}", size);
+            assert!(size >= 0, "NewFloatArray size must not be negative {size}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jfloatArray>(181)(self.vtable, size)
@@ -12567,7 +13624,7 @@ impl JNIEnv {
     ///
     /// Creates a new double array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewDoubleArray
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewDoubleArray>
     ///
     /// # Arguments
     /// * `size` - capacity of the new array
@@ -12578,7 +13635,10 @@ impl JNIEnv {
     /// A reference to the new array or null on failure
     ///
     /// # Throws Java Exception
-    /// OutOfMemoryError - if the jvm runs out of memory allocating the array.
+    /// `OutOfMemoryError` - if the jvm runs out of memory allocating the array.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12587,16 +13647,17 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `size` must not be negative
     ///
+    #[must_use]
     pub unsafe fn NewDoubleArray(&self, size: jsize) -> jdoubleArray {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("NewDoubleArray");
             self.check_no_exception("NewDoubleArray");
-            assert!(size >= 0, "NewDoubleArray size must not be negative {}", size);
+            assert!(size >= 0, "NewDoubleArray size must not be negative {size}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jdoubleArray>(182)(self.vtable, size)
@@ -12605,7 +13666,7 @@ impl JNIEnv {
     ///
     /// Get the boolean content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetBooleanArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetBooleanArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12619,7 +13680,10 @@ impl JNIEnv {
     /// A pointer to the elements or null if an error occured.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm ran out of memory.
+    /// * `OutOfMemoryError` - if the jvm ran out of memory.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12628,7 +13692,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
@@ -12646,7 +13710,7 @@ impl JNIEnv {
     ///
     /// Get the byte content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetByteArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetByteArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12660,7 +13724,10 @@ impl JNIEnv {
     /// A pointer to the elements or null if an error occured.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm ran out of memory.
+    /// * `OutOfMemoryError` - if the jvm ran out of memory.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12669,7 +13736,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
@@ -12687,7 +13754,7 @@ impl JNIEnv {
     ///
     /// Get the char content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetCharArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetCharArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12701,7 +13768,10 @@ impl JNIEnv {
     /// A pointer to the elements or null if an error occured.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm ran out of memory.
+    /// * `OutOfMemoryError` - if the jvm ran out of memory.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12710,7 +13780,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
@@ -12728,7 +13798,7 @@ impl JNIEnv {
     ///
     /// Get the short content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetShortArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetShortArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12742,7 +13812,10 @@ impl JNIEnv {
     /// A pointer to the elements or null if an error occured.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm ran out of memory.
+    /// * `OutOfMemoryError` - if the jvm ran out of memory.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12751,7 +13824,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
@@ -12769,7 +13842,7 @@ impl JNIEnv {
     ///
     /// Get the int content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetIntArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetIntArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12783,7 +13856,10 @@ impl JNIEnv {
     /// A pointer to the elements or null if an error occured.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm ran out of memory.
+    /// * `OutOfMemoryError` - if the jvm ran out of memory.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12792,7 +13868,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
@@ -12810,7 +13886,7 @@ impl JNIEnv {
     ///
     /// Get the long content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetLongArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetLongArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12824,7 +13900,10 @@ impl JNIEnv {
     /// A pointer to the elements or null if an error occured.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm ran out of memory.
+    /// * `OutOfMemoryError` - if the jvm ran out of memory.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12833,7 +13912,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
@@ -12851,7 +13930,7 @@ impl JNIEnv {
     ///
     /// Get the float content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetFloatArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetFloatArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12865,7 +13944,10 @@ impl JNIEnv {
     /// A pointer to the elements or null if an error occured.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm ran out of memory.
+    /// * `OutOfMemoryError` - if the jvm ran out of memory.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12874,7 +13956,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
@@ -12892,7 +13974,7 @@ impl JNIEnv {
     ///
     /// Get the double content inside the array
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetDoubleArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetDoubleArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12906,7 +13988,10 @@ impl JNIEnv {
     /// A pointer to the elements or null if an error occured.
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm ran out of memory.
+    /// * `OutOfMemoryError` - if the jvm ran out of memory.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
@@ -12915,7 +14000,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
@@ -12933,7 +14018,7 @@ impl JNIEnv {
     ///
     /// Releases the boolean array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseBooleanArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseBooleanArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12944,18 +14029,20 @@ impl JNIEnv {
     ///     * must not be null
     /// * `mode`
     ///     * must be one of the following constants:
-    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
-    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///         * `JNI_OK` - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_COMMIT` - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_ABORT` - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then `JNI_OK` and `JNI_ABORT` do the same.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     /// `elems` must be the buffer of the same `array` reference
@@ -12969,8 +14056,7 @@ impl JNIEnv {
             assert!(!elems.is_null(), "ReleaseBooleanArrayElements elems must not be null");
             assert!(
                 mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseBooleanArrayElements mode is invalid {}",
-                mode
+                "ReleaseBooleanArrayElements mode is invalid {mode}"
             );
         }
 
@@ -12980,7 +14066,7 @@ impl JNIEnv {
     ///
     /// Releases the byte array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseByteArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseByteArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -12991,18 +14077,20 @@ impl JNIEnv {
     ///     * must not be null
     /// * `mode`
     ///     * must be one of the following constants:
-    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
-    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///         * `JNI_OK` - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_COMMIT` - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_ABORT` - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then `JNI_OK` and `JNI_ABORT` do the same.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     /// `elems` must be the buffer of the same `array` reference
@@ -13014,11 +14102,7 @@ impl JNIEnv {
             self.check_not_critical("ReleaseByteArrayElements");
             assert!(!array.is_null(), "ReleaseByteArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseByteArrayElements elems must not be null");
-            assert!(
-                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseByteArrayElements mode is invalid {}",
-                mode
-            );
+            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseByteArrayElements mode is invalid {mode}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, *mut jbyte, jint)>(192)(self.vtable, array, elems, mode);
@@ -13027,7 +14111,7 @@ impl JNIEnv {
     ///
     /// Releases the char array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseCharArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseCharArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -13038,18 +14122,21 @@ impl JNIEnv {
     ///     * must not be null
     /// * `mode`
     ///     * must be one of the following constants:
-    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
-    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///         * `JNI_OK` - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_COMMIT` - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_ABORT` - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then `JNI_OK` and `JNI_ABORT` do the same.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     /// `elems` must be the buffer of the same `array` reference
@@ -13061,11 +14148,7 @@ impl JNIEnv {
             self.check_not_critical("ReleaseCharArrayElements");
             assert!(!array.is_null(), "ReleaseCharArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseCharArrayElements elems must not be null");
-            assert!(
-                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseCharArrayElements mode is invalid {}",
-                mode
-            );
+            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseCharArrayElements mode is invalid {mode}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, *mut jchar, jint)>(193)(self.vtable, array, elems, mode);
@@ -13074,7 +14157,7 @@ impl JNIEnv {
     ///
     /// Releases the short array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseShortArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseShortArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -13085,18 +14168,21 @@ impl JNIEnv {
     ///     * must not be null
     /// * `mode`
     ///     * must be one of the following constants:
-    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
-    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///         * `JNI_OK` - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_COMMIT` - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_ABORT` - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then `JNI_OK` and `JNI_ABORT` do the same.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     /// `elems` must be the buffer of the same `array` reference
@@ -13110,8 +14196,7 @@ impl JNIEnv {
             assert!(!elems.is_null(), "ReleaseShortArrayElements elems must not be null");
             assert!(
                 mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseShortArrayElements mode is invalid {}",
-                mode
+                "ReleaseShortArrayElements mode is invalid {mode}"
             );
         }
 
@@ -13121,7 +14206,7 @@ impl JNIEnv {
     ///
     /// Releases the int array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseIntArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseIntArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -13132,18 +14217,21 @@ impl JNIEnv {
     ///     * must not be null
     /// * `mode`
     ///     * must be one of the following constants:
-    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
-    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///         * `JNI_OK` - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_COMMIT` - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_ABORT` - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then `JNI_OK` and `JNI_ABORT` do the same.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     /// `elems` must be the buffer of the same `array` reference
@@ -13155,11 +14243,7 @@ impl JNIEnv {
             self.check_not_critical("ReleaseIntArrayElements");
             assert!(!array.is_null(), "ReleaseIntArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseIntArrayElements elems must not be null");
-            assert!(
-                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseIntArrayElements mode is invalid {}",
-                mode
-            );
+            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseIntArrayElements mode is invalid {mode}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jintArray, *mut jint, jint)>(195)(self.vtable, array, elems, mode);
@@ -13168,7 +14252,7 @@ impl JNIEnv {
     ///
     /// Releases the long array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseLongArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseLongArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -13179,18 +14263,21 @@ impl JNIEnv {
     ///     * must not be null
     /// * `mode`
     ///     * must be one of the following constants:
-    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
-    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///         * `JNI_OK` - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_COMMIT` - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_ABORT` - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then `JNI_OK` and `JNI_ABORT` do the same.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     /// `elems` must be the buffer of the same `array` reference
@@ -13202,11 +14289,7 @@ impl JNIEnv {
             self.check_not_critical("ReleaseLongArrayElements");
             assert!(!array.is_null(), "ReleaseLongArrayElements jarray must not be null");
             assert!(!elems.is_null(), "ReleaseLongArrayElements elems must not be null");
-            assert!(
-                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseLongArrayElements mode is invalid {}",
-                mode
-            );
+            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseLongArrayElements mode is invalid {mode}");
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, *mut jlong, jint)>(196)(self.vtable, array, elems, mode);
@@ -13215,7 +14298,7 @@ impl JNIEnv {
     ///
     /// Releases the float array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseFloatArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseFloatArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -13226,18 +14309,21 @@ impl JNIEnv {
     ///     * must not be null
     /// * `mode`
     ///     * must be one of the following constants:
-    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
-    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///         * `JNI_OK` - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_COMMIT` - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_ABORT` - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then `JNI_OK` and `JNI_ABORT` do the same.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     /// `elems` must be the buffer of the same `array` reference
@@ -13251,8 +14337,7 @@ impl JNIEnv {
             assert!(!elems.is_null(), "ReleaseFloatArrayElements elems must not be null");
             assert!(
                 mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseFloatArrayElements mode is invalid {}",
-                mode
+                "ReleaseFloatArrayElements mode is invalid {mode}"
             );
         }
 
@@ -13262,7 +14347,7 @@ impl JNIEnv {
     ///
     /// Releases the double array elements back to the jvm
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseDoubleArrayElements
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#ReleaseDoubleArrayElements>
     ///
     /// # Arguments
     /// * `array` - the array
@@ -13273,18 +14358,21 @@ impl JNIEnv {
     ///     * must not be null
     /// * `mode`
     ///     * must be one of the following constants:
-    ///         * JNI_OK - release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_COMMIT - do not release the array, copy back the contents into the internal buffer if it was a copy
-    ///         * JNI_ABORT - release the array, do not copy back the contents into the internal buffer if it was a copy
-    ///         * Note: if data was not a copy then JNI_OK and JNI_ABORT do the same.
+    ///         * `JNI_OK` - release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_COMMIT` - do not release the array, copy back the contents into the internal buffer if it was a copy
+    ///         * `JNI_ABORT` - release the array, do not copy back the contents into the internal buffer if it was a copy
+    ///         * Note: if data was not a copy then `JNI_OK` and `JNI_ABORT` do the same.
     ///
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     ///
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     /// `elems` must be the buffer of the same `array` reference
@@ -13298,8 +14386,7 @@ impl JNIEnv {
             assert!(!elems.is_null(), "ReleaseDoubleArrayElements elems must not be null");
             assert!(
                 mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseDoubleArrayElements mode is invalid {}",
-                mode
+                "ReleaseDoubleArrayElements mode is invalid {mode}"
             );
         }
 
@@ -13309,7 +14396,7 @@ impl JNIEnv {
     ///
     /// Copies data from the jbooleanArray `array` starting from the given `start` index into the memory pointed to by `buf`.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java jbooleanArray
@@ -13325,13 +14412,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jbooleanArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity to store `len` bytes.
@@ -13369,7 +14459,7 @@ impl JNIEnv {
     ///
     /// Copies data from the jbyteArray `array` starting from the given `start` index into the memory pointed to by `buf`.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java jbyteArray
@@ -13385,13 +14475,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity to store `len` bytes.
@@ -13444,13 +14537,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     ///
@@ -13475,7 +14571,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetByteArrayRegion_into_slice(&self, array: jbyteArray, start: jsize, buf: &mut [jbyte]) {
-        self.GetByteArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
+        self.GetByteArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
     }
 
     ///
@@ -13494,13 +14590,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     ///
@@ -13525,7 +14624,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetByteArrayRegion_from_slice(&self, array: jbyteArray, start: jsize, buf: &[jbyte]) {
-        self.SetByteArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+        self.SetByteArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
     }
 
     ///
@@ -13544,13 +14643,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     ///
@@ -13575,7 +14677,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetBooleanArrayRegion_from_slice(&self, array: jbyteArray, start: jsize, buf: &[jboolean]) {
-        self.SetBooleanArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+        self.SetBooleanArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
     }
 
     ///
@@ -13602,13 +14704,16 @@ impl JNIEnv {
     ///
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     ///
@@ -13626,18 +14731,18 @@ impl JNIEnv {
     ///
     pub unsafe fn GetByteArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<jbyte> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if len < 0 {
-            return Vec::new();
+        if let Ok(len) = usize::try_from(len) {
+            let mut data = vec![0i8; len];
+            self.GetByteArrayRegion_into_slice(array, start, data.as_mut_slice());
+            return data;
         }
-        let mut data = vec![0i8; len as usize];
-        self.GetByteArrayRegion_into_slice(array, start, data.as_mut_slice());
-        data
+        Vec::new()
     }
 
     ///
     /// Copies data from the jcharArray `array` starting from the given `start` index into the memory pointed to by `buf`.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java jcharArray
@@ -13653,13 +14758,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jcharArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jchar's.
@@ -13713,13 +14821,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jcharArray.
     ///
@@ -13744,7 +14855,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetCharArrayRegion_into_slice(&self, array: jcharArray, start: jsize, buf: &mut [jchar]) {
-        self.GetCharArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
+        self.GetCharArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
     }
 
     ///
@@ -13763,13 +14874,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jcharArray.
     ///
@@ -13794,7 +14908,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetCharArrayRegion_from_slice(&self, array: jcharArray, start: jsize, buf: &[jchar]) {
-        self.SetCharArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+        self.SetCharArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
     }
 
     ///
@@ -13821,13 +14935,16 @@ impl JNIEnv {
     ///
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     ///
@@ -13845,18 +14962,18 @@ impl JNIEnv {
     ///
     pub unsafe fn GetCharArrayRegion_as_vec(&self, array: jcharArray, start: jsize, len: Option<jsize>) -> Vec<jchar> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if len < 0 {
-            return Vec::new();
+        if let Ok(len) = usize::try_from(len) {
+            let mut data = vec![0u16; len];
+            self.GetCharArrayRegion_into_slice(array, start, data.as_mut_slice());
+            return data;
         }
-        let mut data = vec![0u16; len as usize];
-        self.GetCharArrayRegion_into_slice(array, start, data.as_mut_slice());
-        data
+        Vec::new()
     }
 
     ///
     /// Copies data from the jshortArray `array` starting from the given `start` index into the memory pointed to by `buf`.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java jshortArray
@@ -13872,13 +14989,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jshortArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jshort's.
@@ -13932,13 +15052,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jshortArray.
     ///
@@ -13963,7 +15086,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetShortArrayRegion_into_slice(&self, array: jshortArray, start: jsize, buf: &mut [jshort]) {
-        self.GetShortArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
+        self.GetShortArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
     }
 
     ///
@@ -13982,13 +15105,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jshortArray.
     ///
@@ -14013,7 +15139,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetShortArrayRegion_from_slice(&self, array: jshortArray, start: jsize, buf: &[jshort]) {
-        self.SetShortArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+        self.SetShortArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
     }
 
     ///
@@ -14040,13 +15166,16 @@ impl JNIEnv {
     ///
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jshortArray.
     ///
@@ -14064,18 +15193,18 @@ impl JNIEnv {
     ///
     pub unsafe fn GetShortArrayRegion_as_vec(&self, array: jshortArray, start: jsize, len: Option<jsize>) -> Vec<jshort> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if len < 0 {
-            return Vec::new();
+        if let Ok(len) = usize::try_from(len) {
+            let mut data = vec![0i16; len];
+            self.GetShortArrayRegion_into_slice(array, start, data.as_mut_slice());
+            return data;
         }
-        let mut data = vec![0i16; len as usize];
-        self.GetShortArrayRegion_into_slice(array, start, data.as_mut_slice());
-        data
+        Vec::new()
     }
 
     ///
     /// Copies data from the jintArray `array` starting from the given `start` index into the memory pointed to by `buf`.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java jintArray
@@ -14091,13 +15220,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jintArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jint's.
@@ -14151,13 +15283,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jintArray.
     ///
@@ -14182,7 +15317,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetIntArrayRegion_into_slice(&self, array: jshortArray, start: jsize, buf: &mut [jint]) {
-        self.GetIntArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
+        self.GetIntArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
     }
 
     ///
@@ -14201,13 +15336,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jintArray.
     ///
@@ -14232,7 +15370,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetIntArrayRegion_from_slice(&self, array: jintArray, start: jsize, buf: &[jint]) {
-        self.SetIntArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+        self.SetIntArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
     }
 
     ///
@@ -14259,13 +15397,16 @@ impl JNIEnv {
     ///
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jintArray.
     ///
@@ -14283,18 +15424,18 @@ impl JNIEnv {
     ///
     pub unsafe fn GetIntArrayRegion_as_vec(&self, array: jintArray, start: jsize, len: Option<jsize>) -> Vec<jint> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if len < 0 {
-            return Vec::new();
+        if let Ok(len) = usize::try_from(len) {
+            let mut data = vec![0i32; len];
+            self.GetIntArrayRegion_into_slice(array, start, data.as_mut_slice());
+            return data;
         }
-        let mut data = vec![0i32; len as usize];
-        self.GetIntArrayRegion_into_slice(array, start, data.as_mut_slice());
-        data
+        Vec::new()
     }
 
     ///
     /// Copies data from the jlongArray `array` starting from the given `start` index into the memory pointed to by `buf`.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java jlongArray
@@ -14310,13 +15451,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jlongArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jlong's.
@@ -14370,13 +15514,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jlongArray.
     ///
@@ -14401,7 +15548,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetLongArrayRegion_into_slice(&self, array: jlongArray, start: jsize, buf: &mut [i64]) {
-        self.GetLongArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
+        self.GetLongArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
     }
 
     ///
@@ -14420,13 +15567,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jlongArray.
     ///
@@ -14451,7 +15601,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetLongArrayRegion_from_slice(&self, array: jlongArray, start: jsize, buf: &[jlong]) {
-        self.SetLongArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+        self.SetLongArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
     }
 
     ///
@@ -14478,13 +15628,16 @@ impl JNIEnv {
     ///
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jlongArray.
     ///
@@ -14502,18 +15655,18 @@ impl JNIEnv {
     ///
     pub unsafe fn GetLongArrayRegion_as_vec(&self, array: jlongArray, start: jsize, len: Option<jsize>) -> Vec<jlong> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if len < 0 {
-            return Vec::new();
+        if let Ok(len) = usize::try_from(len) {
+            let mut data = vec![0i64; len];
+            self.GetLongArrayRegion_into_slice(array, start, data.as_mut_slice());
+            return data;
         }
-        let mut data = vec![0i64; len as usize];
-        self.GetLongArrayRegion_into_slice(array, start, data.as_mut_slice());
-        data
+        Vec::new()
     }
 
     ///
     /// Copies data from the jfloatArray `array` starting from the given `start` index into the memory pointed to by `buf`.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java jfloatArray
@@ -14529,13 +15682,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jfloatArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jfloat's.
@@ -14589,13 +15745,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jfloatArray.
     ///
@@ -14620,7 +15779,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetFloatArrayRegion_into_slice(&self, array: jfloatArray, start: jsize, buf: &mut [jfloat]) {
-        self.GetFloatArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
+        self.GetFloatArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
     }
 
     ///
@@ -14639,13 +15798,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jfloatArray.
     ///
@@ -14670,7 +15832,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetFloatArrayRegion_from_slice(&self, array: jfloatArray, start: jsize, buf: &[jfloat]) {
-        self.SetFloatArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+        self.SetFloatArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
     }
 
     ///
@@ -14697,13 +15859,16 @@ impl JNIEnv {
     ///
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jfloatArray.
     ///
@@ -14721,18 +15886,18 @@ impl JNIEnv {
     ///
     pub unsafe fn GetFloatArrayRegion_as_vec(&self, array: jfloatArray, start: jsize, len: Option<jsize>) -> Vec<jfloat> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if len < 0 {
-            return Vec::new();
+        if let Ok(len) = usize::try_from(len) {
+            let mut data = vec![0f32; len];
+            self.GetFloatArrayRegion_into_slice(array, start, data.as_mut_slice());
+            return data;
         }
-        let mut data = vec![0f32; len as usize];
-        self.GetFloatArrayRegion_into_slice(array, start, data.as_mut_slice());
-        data
+        Vec::new()
     }
 
     ///
     /// Copies data from the jdoubleArray `array` starting from the given `start` index into the memory pointed to by `buf`.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java jdoubleArray
@@ -14748,13 +15913,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jdoubleArray.
     /// `buf` must be valid non-null pointer to memory with enough capacity and proper alignment to store `len` jdouble's.
@@ -14808,13 +15976,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jdoubleArray.
     ///
@@ -14839,7 +16010,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetDoubleArrayRegion_into_slice(&self, array: jdoubleArray, start: jsize, buf: &mut [jdouble]) {
-        self.GetDoubleArrayRegion(array, start, buf.len() as jsize, buf.as_mut_ptr());
+        self.GetDoubleArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
     }
 
     ///
@@ -14858,13 +16029,16 @@ impl JNIEnv {
     /// * Data partially written
     /// * No data written
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jfloatArray.
     ///
@@ -14889,7 +16063,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetDoubleArrayRegion_from_slice(&self, array: jdoubleArray, start: jsize, buf: &[jdouble]) {
-        self.SetDoubleArrayRegion(array, start, buf.len() as jsize, buf.as_ptr());
+        self.SetDoubleArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
     }
 
     ///
@@ -14916,13 +16090,16 @@ impl JNIEnv {
     ///
     /// It is only guaranteed that this function never returns uninitialized memory.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jdoubleArray.
     ///
@@ -14940,18 +16117,18 @@ impl JNIEnv {
     ///
     pub unsafe fn GetDoubleArrayRegion_as_vec(&self, array: jdoubleArray, start: jsize, len: Option<jsize>) -> Vec<jdouble> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if len < 0 {
-            return Vec::new();
+        if let Ok(len) = usize::try_from(len) {
+            let mut data = vec![0f64; len];
+            self.GetDoubleArrayRegion_into_slice(array, start, data.as_mut_slice());
+            return data;
         }
-        let mut data = vec![0f64; len as usize];
-        self.GetDoubleArrayRegion_into_slice(array, start, data.as_mut_slice());
-        data
+        Vec::new()
     }
 
     ///
     /// Sets a boolean array region from a buffer
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java array.
@@ -14968,13 +16145,16 @@ impl JNIEnv {
     /// The state of the array is implementation specific if the fn throws an exception.
     /// It may have partially copied some data or copied no data.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jbooleanArray.
     /// `buf` must be at least `len` elements in size
@@ -14994,7 +16174,7 @@ impl JNIEnv {
     ///
     /// Sets a byte array region from a buffer
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java array.
@@ -15011,13 +16191,16 @@ impl JNIEnv {
     /// The state of the array is implementation specific if the fn throws an exception.
     /// It may have partially copied some data or copied no data.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jbyteArray.
     /// `buf` must be at least `len` elements in size
@@ -15037,7 +16220,7 @@ impl JNIEnv {
     ///
     /// Sets a char array region from a buffer
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java array.
@@ -15054,13 +16237,16 @@ impl JNIEnv {
     /// The state of the array is implementation specific if the fn throws an exception.
     /// It may have partially copied some data or copied no data.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jcharArray.
     /// `buf` must be at least `len` elements in size
@@ -15081,7 +16267,7 @@ impl JNIEnv {
     ///
     /// Sets a short array region from a buffer
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java array.
@@ -15098,13 +16284,16 @@ impl JNIEnv {
     /// The state of the array is implementation specific if the fn throws an exception.
     /// It may have partially copied some data or copied no data.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jshortArray.
     /// `buf` must be at least `len` elements in size
@@ -15125,7 +16314,7 @@ impl JNIEnv {
     ///
     /// Sets a int array region from a buffer
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java array.
@@ -15142,13 +16331,16 @@ impl JNIEnv {
     /// The state of the array is implementation specific if the fn throws an exception.
     /// It may have partially copied some data or copied no data.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jintArray.
     /// `buf` must be at least `len` elements in size
@@ -15169,7 +16361,7 @@ impl JNIEnv {
     ///
     /// Sets a long array region from a buffer
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java array.
@@ -15186,13 +16378,16 @@ impl JNIEnv {
     /// The state of the array is implementation specific if the fn throws an exception.
     /// It may have partially copied some data or copied no data.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jlongArray.
     /// `buf` must be at least `len` elements in size
@@ -15213,7 +16408,7 @@ impl JNIEnv {
     ///
     /// Sets a float array region from a buffer
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java array.
@@ -15230,13 +16425,16 @@ impl JNIEnv {
     /// The state of the array is implementation specific if the fn throws an exception.
     /// It may have partially copied some data or copied no data.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jfloatArray.
     /// `buf` must be at least `len` elements in size
@@ -15257,7 +16455,7 @@ impl JNIEnv {
     ///
     /// Sets a double array region from a buffer
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Set_PrimitiveType_ArrayRegion_routines>
     ///
     /// # Arguments
     /// * `array` - handle to a Java array.
@@ -15274,13 +16472,16 @@ impl JNIEnv {
     /// The state of the array is implementation specific if the fn throws an exception.
     /// It may have partially copied some data or copied no data.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `array` must be a valid non-null reference to a jdoubleArray.
     /// `buf` must be at least `len` elements in size
@@ -15307,13 +16508,13 @@ impl JNIEnv {
 
     ///
     /// Obtains a critical pointer into a primitive java array.
-    /// This pointer must be released by calling ReleasePrimitiveArrayCritical.
+    /// This pointer must be released by calling `ReleasePrimitiveArrayCritical`.
     /// No other JNI functions can be called in the current thread.
-    /// The only exception being multiple consecutive calls to GetPrimitiveArrayCritical & GetStringCritical to obtain multiple critical
+    /// The only exception being multiple consecutive calls to `GetPrimitiveArrayCritical` & `GetStringCritical` to obtain multiple critical
     /// pointers at the same time.
     ///
     /// This method will return NULL to indicate error.
-    /// The JVM will most likely throw an Exception, probably an OOMError.
+    /// The JVM will most likely throw an Exception, probably an `OOMError`.
     /// If you obtain multiple critical pointers, you MUST release all successfully obtained critical pointers
     /// before being able to check for the exception.
     ///
@@ -15333,10 +16534,13 @@ impl JNIEnv {
     ///
     /// I recommend against using this method for almost every use case as using either Set/Get array region or direct NIO buffers
     /// is a better choice. One use case I can think of where this method is a valid choice
-    /// is performing pixel manipulations on the int[]/byte[] inside a large existing BufferedImage.
+    /// is performing pixel manipulations on the int[]/byte[] inside a large existing `BufferedImage`.
     ///
     /// # Returns
     /// returns null on error otherwise returns a pointer into the data and begins a critical section.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// `array` must be valid non null reference to a array that is not already garbage collected
@@ -15375,12 +16579,15 @@ impl JNIEnv {
     }
 
     ///
-    /// Releases a critical array obtains in GetPrimitiveArrayCritical
+    /// Releases a critical array obtains in `GetPrimitiveArrayCritical`
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// `array` must be valid non null reference to a array that is not already garbage collected
-    /// `carray` must be the result of a GetPrimitiveArrayCritical call with the same `array`
-    /// `mode` must be one of JNI_OK, JNI_COMMIT or JNI_ABORT constant values.
+    /// `carray` must be the result of a `GetPrimitiveArrayCritical` call with the same `array`
+    /// `mode` must be one of `JNI_OK`, `JNI_COMMIT` or `JNI_ABORT` constant values.
     ///
     pub unsafe fn ReleasePrimitiveArrayCritical(&self, array: jarray, carray: *mut c_void, mode: jint) {
         #[cfg(feature = "asserts")]
@@ -15389,8 +16596,7 @@ impl JNIEnv {
             assert!(!carray.is_null(), "ReleasePrimitiveArrayCritical carray must not be null");
             assert!(
                 mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleasePrimitiveArrayCritical mode is invalid {}",
-                mode
+                "ReleasePrimitiveArrayCritical mode is invalid {mode}"
             );
             Self::CRITICAL_POINTERS.with(|set| {
                 let mut rm = set.borrow_mut();
@@ -15421,25 +16627,29 @@ impl JNIEnv {
     ///     * must not be null
     /// * `methods` - the native method function pointers
     ///
+    /// # Panics
+    /// if more than `jsize::MAX` native methods are supposed to be registered.
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must be a valid non-null reference to a class.
     /// `methods` all elements and their function pointers must be non null and valid.
     ///
     pub unsafe fn RegisterNatives_from_slice(&self, clazz: jclass, methods: &[JNINativeMethod]) -> jint {
-        self.RegisterNatives(clazz, methods.as_ptr(), methods.len() as jint)
+        self.RegisterNatives(clazz, methods.as_ptr(), jint::try_from(methods.len()).expect("More than jsize::MAX methods"))
     }
 
     ///
     /// Registers native methods to a java class with native methods
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#RegisterNatives
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#RegisterNatives>
     ///
     /// # Arguments
     /// * `clazz`
@@ -15447,8 +16657,11 @@ impl JNIEnv {
     ///     * must not be already garbage collected
     /// * `methods` - the native method function pointers
     ///     * must not be null
-    /// * `size` - amount of JNINativeMethod's in `methods`
+    /// * `size` - amount of `JNINativeMethod`'s in `methods`
     ///     * must not be negative
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15456,7 +16669,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must be a valid non-null reference to a class.
     /// `methods` all elements and their function pointers must be non null and valid.
@@ -15469,12 +16682,12 @@ impl JNIEnv {
             self.check_no_exception("RegisterNatives");
             assert!(!clazz.is_null(), "RegisterNatives class must not be null");
             assert!(size > 0, "RegisterNatives size must be greater than 0");
-            let sl = std::slice::from_raw_parts(methods, size as usize);
-            for s in 0..sl.len() {
-                let cur = &sl[s];
-                assert!(!cur.name.is_null(), "RegisterNatives JNINativeMethod[{}],name is null", s);
-                assert!(!cur.signature.is_null(), "RegisterNatives JNINativeMethod[{}].signature is null", s);
-                assert!(!cur.fnPtr.is_null(), "RegisterNatives JNINativeMethod[{}].fnPtr is null", s);
+            if let Ok(size) = usize::try_from(size) {
+                for (idx, cur) in std::slice::from_raw_parts(methods, size).iter().enumerate() {
+                    assert!(!cur.name.is_null(), "RegisterNatives JNINativeMethod[{idx}],name is null");
+                    assert!(!cur.signature.is_null(), "RegisterNatives JNINativeMethod[{idx}].signature is null");
+                    assert!(!cur.fnPtr.is_null(), "RegisterNatives JNINativeMethod[{idx}].fnPtr is null");
+                }
             }
         }
 
@@ -15484,12 +16697,15 @@ impl JNIEnv {
     ///
     /// Unregisters all native bindings from a java class.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#UnregisterNatives
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#UnregisterNatives>
     ///
     /// # Arguments
     /// * `clazz`
     ///     * must not be null
     ///     * must not be already garbage collected
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15497,7 +16713,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `clazz` must be a valid non-null reference to a class.
     /// `methods` all elements and their function pointers must be non null and valid.
@@ -15520,15 +16736,18 @@ impl JNIEnv {
     /// on the object or other native threads to block when trying to enter a monitor.
     /// This fn will block until all other threads have either left their synchronized block or monitor sections.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#MonitorEnter
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#MonitorEnter>
     ///
     /// # Returns
-    /// JNI_OK on success
+    /// `JNI_OK` on success
     ///
     /// # Arguments
     /// * `obj`
     ///     * must not be null
     ///     * must not be already garbage collected
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15536,7 +16755,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `jobject` must be a valid non-null reference that is not yet garbage collected.
     ///
@@ -15552,10 +16771,10 @@ impl JNIEnv {
     }
 
     ///
-    /// Leaves a monitor entered by MonitorEnter
+    /// Leaves a monitor entered by `MonitorEnter`
     /// This fn cannot be used to "leave" synchronized blocks entered into by java code.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#MonitorExit
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#MonitorExit>
     ///
     /// # Arguments
     /// * `obj`
@@ -15563,10 +16782,13 @@ impl JNIEnv {
     ///     * must not be already garbage collected
     ///
     /// # Returns
-    /// JNI_OK on success
+    /// `JNI_OK` on success
     ///
     /// # Throws Java Exception
-    /// * IllegalMonitorStateException - if the current thread does not own the monitor
+    /// * `IllegalMonitorStateException` - if the current thread does not own the monitor
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15574,7 +16796,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `jobject` must be a valid non-null reference that is not yet garbage collected.
     ///
@@ -15589,11 +16811,11 @@ impl JNIEnv {
     }
 
     ///
-    /// Creates a new nio direct ByteBuffer that is backed by some native memory provided to by the pointer.
-    /// When garbage collection collects that ByteBuffer it will not perform any operation on the backed memory.
-    /// The caller has to ensure that the pointer remains valid for the entire existance of the ByteBuffer
+    /// Creates a new nio direct `ByteBuffer` that is backed by some native memory provided to by the pointer.
+    /// When garbage collection collects that `ByteBuffer` it will not perform any operation on the backed memory.
+    /// The caller has to ensure that the pointer remains valid for the entire existance of the `ByteBuffer`
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewDirectByteBuffer
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewDirectByteBuffer>
     ///
     /// # Arguments
     /// * `address`
@@ -15603,7 +16825,10 @@ impl JNIEnv {
     ///     * must be positive
     ///
     /// # Returns
-    /// A local reference to the newly created ByteBuffer
+    /// A local reference to the newly created `ByteBuffer`
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15611,7 +16836,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `address` must be a valid non-null.
     /// `capacity` must be positive, the memory pointed to by `address` must have at least this amount of bytes in space.
@@ -15622,11 +16847,10 @@ impl JNIEnv {
             self.check_not_critical("NewDirectByteBuffer");
             self.check_no_exception("NewDirectByteBuffer");
             assert!(!address.is_null(), "NewDirectByteBuffer address must not be null");
-            assert!(capacity >= 0, "NewDirectByteBuffer capacity must not be negative {}", capacity);
+            assert!(capacity >= 0, "NewDirectByteBuffer capacity must not be negative {capacity}");
             assert!(
-                capacity <= jint::MAX as jlong,
-                "NewDirectByteBuffer capacity is too big, its larger than Integer.MAX_VALUE {}",
-                capacity
+                capacity <= jlong::from(jint::MAX),
+                "NewDirectByteBuffer capacity is too big, its larger than Integer.MAX_VALUE {capacity}"
             );
         }
 
@@ -15636,7 +16860,7 @@ impl JNIEnv {
     ///
     /// Gets the memory address that backs a direct nio buffer.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetDirectBufferAddress
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetDirectBufferAddress>
     ///
     /// # Arguments
     /// * `buf`
@@ -15649,6 +16873,8 @@ impl JNIEnv {
     /// # Returns
     /// The backing pointer or -1 on error
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15656,7 +16882,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `buf` must be a valid non-null reference to a object and not be garbage collected.
     ///
@@ -15673,7 +16899,7 @@ impl JNIEnv {
     ///
     /// Gets the capacity of a direct nio buffer.
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetDirectBufferCapacity
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetDirectBufferCapacity>
     ///
     /// # Arguments
     /// * `buf`
@@ -15686,6 +16912,8 @@ impl JNIEnv {
     /// # Returns
     /// The capacity or -1 on error
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15693,7 +16921,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `buf` must be a valid non-null reference to a object and not be garbage collected.
     ///
@@ -15710,7 +16938,7 @@ impl JNIEnv {
     ///
     /// Converts a reflection Method to a jmethodID
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedMethod
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedMethod>
     ///
     /// # Arguments
     /// * `method`
@@ -15722,6 +16950,8 @@ impl JNIEnv {
     /// # Returns
     /// the jmethodID that refers to the same method.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15729,7 +16959,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `method` must be a valid non-null reference to a java.lang.reflect.Method or java.lang.reflect.Constructor and not be garbage collected.
     ///
@@ -15746,7 +16976,7 @@ impl JNIEnv {
     ///
     /// Converts a jmethodID into a reflection Method
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedField
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedField>
     ///
     /// # Arguments
     /// * `cls` - the class the method is in
@@ -15762,7 +16992,10 @@ impl JNIEnv {
     /// a local reference that refers to the same method as the jmethodID or null on erro
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm runs out of memory.
+    /// * `OutOfMemoryError` - if the jvm runs out of memory.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15770,7 +17003,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `cls` must be a valid non-null reference to a Class and not be garbage collected.
     /// `jmethodID` must refer to a method in `cls` and must be either static or not static depending on the `isStatic` flag.
@@ -15789,7 +17022,7 @@ impl JNIEnv {
     ///
     /// Converts a reflection Field to a jfieldID
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedField
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedField>
     ///
     /// # Arguments
     /// * `field`
@@ -15801,6 +17034,8 @@ impl JNIEnv {
     /// # Returns
     /// the jfieldID that refers to the same field.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15808,7 +17043,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `field` must be a valid non-null reference to a java.lang.reflect.Field and not be garbage collected.
     ///
@@ -15825,7 +17060,7 @@ impl JNIEnv {
     ///
     /// Converts a jfieldID into a reflection Field
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedField
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#FromReflectedField>
     ///
     /// # Arguments
     /// * `cls` - the class the method is in
@@ -15841,7 +17076,10 @@ impl JNIEnv {
     /// a local reference that refers to the same field as the jfieldID or null on erro
     ///
     /// # Throws Java Exception
-    /// * OutOfMemoryError - if the jvm runs out of memory.
+    /// * `OutOfMemoryError` - if the jvm runs out of memory.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15849,7 +17087,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `cls` must be a valid non-null reference to a Class and not be garbage collected.
     /// `jfieldID` must refer to a field in `cls` and must be either static or not static depending on the `isStatic` flag.
@@ -15866,15 +17104,21 @@ impl JNIEnv {
     }
 
     ///
-    /// Returns the JavaVM assosicated with this JNIEnv
+    /// Returns the `JavaVM` assosicated with this `JNIEnv`
     ///
-    /// https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetJavaVM
+    /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetJavaVM>
     ///
     /// # Panics
-    /// if the JVM does not return an error but refuses to set the JavaVM pointer.
+    /// if the JVM does not return an error but refuses to set the `JavaVM` pointer.
     ///
     /// # Returns
-    /// the JavaVM "object" or an error code.
+    /// the `JavaVM` "object" or an error code.
+    ///
+    /// # Errors
+    /// JNI implementation specific error constants like `JNI_EINVAL`
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -15882,7 +17126,7 @@ impl JNIEnv {
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     pub unsafe fn GetJavaVM(&self) -> Result<JavaVM, jint> {
         #[cfg(feature = "asserts")]
@@ -15895,16 +17139,14 @@ impl JNIEnv {
         if res != 0 {
             return Err(res);
         }
-        if r.is_null() {
-            panic!("GetJavaVM returned 0 but did not set JVM pointer");
-        }
+        assert!(!r.is_null(), "GetJavaVM returned 0 but did not set JVM pointer");
         Ok(JavaVM { functions: r })
     }
 
     ///
     /// Returns the module of the given class.
     ///
-    /// https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html#getmodule
+    /// <https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html#getmodule>
     ///
     /// # Arguments
     /// * `cls`
@@ -15915,13 +17157,16 @@ impl JNIEnv {
     /// # Returns
     /// a local reference to the module object.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// The JVM must be at least Java 9
     ///
@@ -15941,7 +17186,7 @@ impl JNIEnv {
     ///
     /// Returns the module of the given class.
     ///
-    /// https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html#isvirtualthread
+    /// <https://docs.oracle.com/en/java/javase/21/docs/specs/jni/functions.html#isvirtualthread>
     ///
     /// # Arguments
     /// * `thread`
@@ -15952,13 +17197,16 @@ impl JNIEnv {
     /// # Returns
     /// true if the thread is virtual, false if not.
     ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
     /// # Safety
     /// Current thread must not be detached from JNI.
     ///
     /// Current thread must not be currently throwing an exception.
     ///
     /// Current thread does not hold a critical reference.
-    /// * https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// The JVM must be at least Java 21
     ///
@@ -15974,57 +17222,50 @@ impl JNIEnv {
         self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jboolean>(234)(self.vtable, thread)
     }
 
+    /// Checks that we are not in a critical section currently.
     #[cfg(feature = "asserts")]
     unsafe fn check_not_critical(&self, context: &str) {
         Self::CRITICAL_POINTERS.with(|set| {
             let sz = set.borrow_mut().len();
-            if sz != 0 {
-                panic!(
-                    "{} cannot be called now, because there are {} critical pointers into primitive arrays that have not been released by the current thread.",
-                    context, sz
-                );
-            }
+            assert_eq!(
+                sz, 0,
+                "{context} cannot be called now, because there are {sz} critical pointers into primitive arrays that have not been released by the current thread."
+            );
         });
         Self::CRITICAL_STRINGS.with(|set| {
             let sz = set.borrow_mut().len();
-            if sz != 0 {
-                panic!(
-                    "{} cannot be called now, because there are {} critical pointers into strings that have not been released by the current thread.",
-                    context, sz
-                );
-            }
+            assert_eq!(
+                sz, 0,
+                "{context} cannot be called now, because there are {sz} critical pointers into strings that have not been released by the current thread."
+            );
         });
+
+        _ = self;
     }
 
+    /// Checks that obj is an array of any type
     #[cfg(feature = "asserts")]
     unsafe fn check_is_array(&self, obj: jobject, context: &str) {
-        if obj.is_null() {
-            panic!("{} cannot check if arg is array because arg is null", context);
-        }
+        assert!(!obj.is_null(), "{context} cannot check if arg is array because arg is null");
         let cl = self.GetObjectClass(obj);
-        if cl.is_null() {
-            panic!("{} arg.getClass() is null?", context);
-        }
+        assert!(!cl.is_null(), "{context} arg.getClass() is null?");
         let clazz = self.GetObjectClass(cl);
-        if clazz.is_null() {
-            panic!("{} Class#getClass() is null?", context);
-        }
+        assert!(!clazz.is_null(), "{context} Class#getClass() is null?");
 
         let is_array = self.GetMethodID(clazz, "isArray", "()Z");
         let r = self.CallBooleanMethod0(cl, is_array);
         if self.ExceptionCheck() {
             self.ExceptionDescribe();
-            panic!("{} Class#isArray() is throws?", context);
+            panic!("{context} Class#isArray() is throws?");
         }
 
-        if !r {
-            panic!("{} arg is not an array", context);
-        }
+        assert!(r, "{context} arg is not an array");
 
         self.DeleteLocalRef(cl);
         self.DeleteLocalRef(clazz);
     }
 
+    /// Checks that no exception is currently thrown
     #[cfg(feature = "asserts")]
     unsafe fn check_no_exception(&self, context: &str) {
         if !self.ExceptionCheck() {
@@ -16032,9 +17273,10 @@ impl JNIEnv {
         }
 
         self.ExceptionDescribe();
-        panic!("{} exception is thrown and not handled", context);
+        panic!("{context} exception is thrown and not handled");
     }
 
+    /// Checks if the object is a valid reference or null
     #[cfg(feature = "asserts")]
     unsafe fn check_ref_obj_permit_null(&self, context: &str, obj: jobject) {
         if obj.is_null() {
@@ -16046,15 +17288,13 @@ impl JNIEnv {
             return;
         }
 
-        match self.GetObjectRefType(obj) {
-            jobjectRefType::JNIInvalidRefType => panic!("{} ref is invalid", context),
-            _ => {}
-        }
+        assert_ne!(self.GetObjectRefType(obj), jobjectRefType::JNIInvalidRefType, "{context} ref is invalid");
     }
 
+    /// Checks if the object is a valid non-null reference
     #[cfg(feature = "asserts")]
     unsafe fn check_ref_obj(&self, context: &str, obj: jobject) {
-        assert!(!obj.is_null(), "{} ref is null", context);
+        assert!(!obj.is_null(), "{context} ref is null");
 
         if self.ExceptionCheck() {
             //We cannot do this check currently...
@@ -16064,15 +17304,15 @@ impl JNIEnv {
         let cl = self.FindClass("java/lang/System");
         assert!(!cl.is_null(), "java/lang/System not found?");
 
-        let cname = CString::new("gc").unwrap();
-        let csig = CString::new("()V").unwrap();
+        let cname = CString::new("gc").unwrap_unchecked();
+        let csig = CString::new("()V").unwrap_unchecked();
         //GetStaticMethodID
         let gc_method = self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(113)(self.vtable, cl, cname.as_ptr(), csig.as_ptr());
 
         assert!(!gc_method.is_null(), "java/lang/System#gc() not found?");
 
         match self.GetObjectRefType(obj) {
-            jobjectRefType::JNIInvalidRefType => panic!("{} ref is invalid", context),
+            jobjectRefType::JNIInvalidRefType => panic!("{context} ref is invalid"),
             jobjectRefType::JNIWeakGlobalRefType => {
                 //This bad practice, but sadly sometimes valid.
                 //I.e. caller holds a strong reference and "knows" the weak ref cannot be GC'ed during the call.
@@ -16080,7 +17320,7 @@ impl JNIEnv {
                 //This is just best effort really since we have absolutely NO clue when the GC will run.
                 //CallStaticVoidMethod
                 self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, obj, gc_method);
-                assert!(!self.IsSameObject(obj, null_mut()), "{} weak reference that has already been garbage collected", context);
+                assert!(!self.IsSameObject(obj, null_mut()), "{context} weak reference that has already been garbage collected");
             }
             _ => {}
         }
@@ -16088,55 +17328,57 @@ impl JNIEnv {
         self.DeleteLocalRef(cl);
     }
 
+    /// Checks if the class is a throwable
     #[cfg(feature = "asserts")]
     unsafe fn check_is_exception_class(&self, context: &str, obj: jclass) {
         self.check_is_class(context, obj);
         let throwable_cl = self.FindClass("java/lang/Throwable");
-        assert!(!throwable_cl.is_null(), "{} java/lang/Throwable not found???", context);
-        assert!(self.IsAssignableFrom(obj, throwable_cl), "{} class is not throwable", context);
+        assert!(!throwable_cl.is_null(), "{context} java/lang/Throwable not found???");
+        assert!(self.IsAssignableFrom(obj, throwable_cl), "{context} class is not throwable");
         self.DeleteLocalRef(throwable_cl);
     }
 
+    /// Checks if the class is not abstract
     #[cfg(feature = "asserts")]
     unsafe fn check_is_not_abstract(&self, context: &str, obj: jclass) {
         self.check_is_class(context, obj);
         let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
         let meth = self.GetMethodID(class_cl, "getModifiers", "()I");
-        assert!(!meth.is_null(), "{} java/lang/Class#getModifiers not found???", context);
+        assert!(!meth.is_null(), "{context} java/lang/Class#getModifiers not found???");
         let mods = self.CallIntMethod0(obj, meth);
         self.DeleteLocalRef(class_cl);
         if self.ExceptionCheck() {
             self.ExceptionDescribe();
-            panic!("{} java/lang/Class#getModifiers throws?", context);
+            panic!("{context} java/lang/Class#getModifiers throws?");
         }
 
         let mod_cl = self.FindClass("java/lang/reflect/Modifier");
-        assert!(!mod_cl.is_null(), "{} java/lang/reflect/Modifier not found???", context);
-        let mod_fl = self.GetStaticFieldID(mod_cl, "ABSTRACT", "I");
-        assert!(!mod_fl.is_null(), "{} java/lang/reflect/Modifier.ABSTRACT not found???", context);
-        let amod = self.GetStaticIntField(mod_cl, mod_fl);
+        assert!(!mod_cl.is_null(), "{context} java/lang/reflect/Modifier not found???");
+        let mod_field = self.GetStaticFieldID(mod_cl, "ABSTRACT", "I");
+        assert!(!mod_field.is_null(), "{context} java/lang/reflect/Modifier.ABSTRACT not found???");
+        let amod = self.GetStaticIntField(mod_cl, mod_field);
         self.DeleteLocalRef(mod_cl);
 
-        if mods & amod != 0 {
-            panic!("{} class is abstract", context);
-        }
+        assert_eq!(mods & amod, 0, "{context} class is abstract");
     }
 
+    /// Checks if obj is a class.
     #[cfg(feature = "asserts")]
     unsafe fn check_is_class(&self, context: &str, obj: jclass) {
-        assert!(!obj.is_null(), "{} class is null", context);
+        assert!(!obj.is_null(), "{context} class is null");
         self.check_ref_obj(context, obj);
 
         let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
         //GET OBJECT CLASS
         let tcl = self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(31)(self.vtable, obj);
-        assert!(self.IsSameObject(tcl, class_cl), "{} not a class!", context);
+        assert!(self.IsSameObject(tcl, class_cl), "{context} not a class!");
         self.DeleteLocalRef(tcl);
         self.DeleteLocalRef(class_cl);
     }
 
+    /// Checks if the `obj` is a classloader or null
     #[cfg(feature = "asserts")]
     unsafe fn check_is_classloader_or_null(&self, context: &str, obj: jobject) {
         if obj.is_null() {
@@ -16144,12 +17386,13 @@ impl JNIEnv {
         }
         self.check_ref_obj(context, obj);
         let classloader_cl = self.FindClass("java/lang/ClassLoader");
-        assert!(!classloader_cl.is_null(), "{} java/lang/ClassLoader not found", context);
-        assert!(self.IsInstanceOf(obj, classloader_cl), "{} argument is not a valid instanceof ClassLoader", context);
+        assert!(!classloader_cl.is_null(), "{context} java/lang/ClassLoader not found");
+        assert!(self.IsInstanceOf(obj, classloader_cl), "{context} argument is not a valid instanceof ClassLoader");
 
         self.DeleteLocalRef(classloader_cl);
     }
 
+    /// Checks if the argument refers toa string
     #[cfg(feature = "asserts")]
     unsafe fn check_if_arg_is_string(&self, src: &str, jobject: jobject) {
         if jobject.is_null() {
@@ -16157,40 +17400,41 @@ impl JNIEnv {
         }
 
         let clazz = self.GetObjectClass(jobject);
-        assert!(!clazz.is_null(), "{} string.class is null?", src);
+        assert!(!clazz.is_null(), "{src} string.class is null?");
         let str_class = self.FindClass("java/lang/String");
-        assert!(!str_class.is_null(), "{} java/lang/String not found?", src);
-        assert!(self.IsSameObject(clazz, str_class), "{} Non string passed to GetStringCritical", src);
+        assert!(!str_class.is_null(), "{src} java/lang/String not found?");
+        assert!(self.IsSameObject(clazz, str_class), "{src} Non string passed to GetStringCritical");
         self.DeleteLocalRef(clazz);
         self.DeleteLocalRef(str_class);
     }
 
+    /// Checks if the field type of a static field matches
     #[cfg(feature = "asserts")]
     unsafe fn check_field_type_static(&self, context: &str, obj: jclass, fieldID: jfieldID, ty: &str) {
         self.check_is_class(context, obj);
-        assert!(!fieldID.is_null(), "{} fieldID is null", context);
+        assert!(!fieldID.is_null(), "{context} fieldID is null");
         let f = self.ToReflectedField(obj, fieldID, true);
-        assert!(!f.is_null(), "{} -> ToReflectedField returned null", context);
+        assert!(!f.is_null(), "{context} -> ToReflectedField returned null");
         let field_cl = self.FindClass("java/lang/reflect/Field");
-        assert!(!f.is_null(), "{} java/lang/reflect/Method not found???", context);
+        assert!(!f.is_null(), "{context} java/lang/reflect/Method not found???");
         let field_rtyp = self.GetMethodID(field_cl, "getType", "()Ljava/lang/Class;");
-        assert!(!field_rtyp.is_null(), "{} java/lang/reflect/Field#getType not found???", context);
+        assert!(!field_rtyp.is_null(), "{context} java/lang/reflect/Field#getType not found???");
         //CallObjectMethodA
         let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, f, field_rtyp, null());
-        assert!(!rtc.is_null(), "{} java/lang/reflect/Field#getType returned null???", context);
+        assert!(!rtc.is_null(), "{context} java/lang/reflect/Field#getType returned null???");
         self.DeleteLocalRef(field_cl);
         self.DeleteLocalRef(f);
         let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
         let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
+        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
-        assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
+        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
         self.DeleteLocalRef(rtc);
         let the_name = self
             .GetStringUTFChars_as_string(name_str)
-            .expect(format!("{} failed to get/parse classname???", context).as_str());
+            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
         if the_name.as_str().eq(ty) {
@@ -16200,7 +17444,7 @@ impl JNIEnv {
         if ty.eq("object") {
             match the_name.as_str() {
                 "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
-                    panic!("{} type of field is {} but expected object", context, the_name);
+                    panic!("{context} type of field is {the_name} but expected object");
                 }
                 _ => {
                     return;
@@ -16208,19 +17452,20 @@ impl JNIEnv {
             }
         }
 
-        panic!("{} type of field is {} but expected {}", context, the_name, ty);
+        panic!("{context} type of field is {the_name} but expected {ty}");
     }
 
+    /// Checks if the return type of a static method matches
     #[cfg(feature = "asserts")]
     unsafe fn check_return_type_static(&self, context: &str, obj: jclass, methodID: jmethodID, ty: &str) {
         self.check_is_class(context, obj);
-        assert!(!methodID.is_null(), "{} methodID is null", context);
+        assert!(!methodID.is_null(), "{context} methodID is null");
         let m = self.ToReflectedMethod(obj, methodID, true);
-        assert!(!m.is_null(), "{} -> ToReflectedMethod returned null", context);
+        assert!(!m.is_null(), "{context} -> ToReflectedMethod returned null");
         let meth_cl = self.FindClass("java/lang/reflect/Method");
-        assert!(!m.is_null(), "{} java/lang/reflect/Method not found???", context);
+        assert!(!m.is_null(), "{context} java/lang/reflect/Method not found???");
         let meth_rtyp = self.GetMethodID(meth_cl, "getReturnType", "()Ljava/lang/Class;");
-        assert!(!meth_rtyp.is_null(), "{} java/lang/reflect/Method#getReturnType not found???", context);
+        assert!(!meth_rtyp.is_null(), "{context} java/lang/reflect/Method#getReturnType not found???");
         //CallObjectMethodA
         let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, m, meth_rtyp, null());
         self.DeleteLocalRef(meth_cl);
@@ -16230,19 +17475,19 @@ impl JNIEnv {
                 return;
             }
 
-            panic!("{} return type of method is void but expected {}", context, ty);
+            panic!("{context} return type of method is void but expected {ty}");
         }
         let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
         let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
+        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
-        assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
+        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
         self.DeleteLocalRef(rtc);
         let the_name = self
             .GetStringUTFChars_as_string(name_str)
-            .expect(format!("{} failed to get/parse classname???", context).as_str());
+            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
         if the_name.as_str().eq(ty) {
@@ -16252,7 +17497,7 @@ impl JNIEnv {
         if ty.eq("object") {
             match the_name.as_str() {
                 "void" | "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
-                    panic!("{} return type of method is {} but expected object", context, the_name);
+                    panic!("{context} return type of method is {the_name} but expected object");
                 }
                 _ => {
                     return;
@@ -16260,75 +17505,69 @@ impl JNIEnv {
             }
         }
 
-        panic!("{} return type of method is {} but expected {}", context, the_name, ty);
+        panic!("{context} return type of method is {the_name} but expected {ty}");
     }
 
+    /// Checks if the parameter types for a static fn match
     #[cfg(feature = "asserts")]
     unsafe fn check_parameter_types_static<T: JType>(&self, context: &str, clazz: jclass, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
         self.check_is_class(context, clazz);
-        assert!(!methodID.is_null(), "{} methodID is null", context);
+        assert!(!methodID.is_null(), "{context} methodID is null");
         let java_method = self.ToReflectedMethod(clazz, methodID, true);
-        assert!(!java_method.is_null(), "{} -> ToReflectedMethod returned null", context);
+        assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
         let meth_cl = self.FindClass("java/lang/reflect/Method");
-        assert!(!java_method.is_null(), "{} java/lang/reflect/Method not found???", context);
+        assert!(!java_method.is_null(), "{context} java/lang/reflect/Method not found???");
         let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
-        assert!(!meth_params.is_null(), "{} java/lang/reflect/Method#getParameterTypes not found???", context);
+        assert!(!meth_params.is_null(), "{context} java/lang/reflect/Method#getParameterTypes not found???");
 
         //CallObjectMethodA
         let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
         self.DeleteLocalRef(meth_cl);
         self.DeleteLocalRef(java_method);
-        assert!(!parameter_array.is_null(), "{} java/lang/reflect/Method#getParameterTypes return null???", context);
+        assert!(!parameter_array.is_null(), "{context} java/lang/reflect/Method#getParameterTypes return null???");
         let parameter_count = self.GetArrayLength(parameter_array);
-        assert_eq!(parameter_count, count, "{} wrong number of method parameters", context);
+        assert_eq!(parameter_count, count, "{context} wrong number of method parameters");
         let param1_class = self.GetObjectArrayElement(parameter_array, idx);
-        assert!(!param1_class.is_null(), "{} java/lang/reflect/Method#getParameterTypes[{}] is null???", context, idx);
+        assert!(!param1_class.is_null(), "{context} java/lang/reflect/Method#getParameterTypes[{idx}] is null???");
         self.DeleteLocalRef(parameter_array);
 
         let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
         let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
+        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
         let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
-        assert!(!class_is_primitive.is_null(), "{} java/lang/Class#isPrimitive not found???", context);
+        assert!(!class_is_primitive.is_null(), "{context} java/lang/Class#isPrimitive not found???");
 
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
-        assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
+        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
         //CallBooleanMethodA
         let param1_is_primitive =
             self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
 
         let the_name = self
             .GetStringUTFChars_as_string(name_str)
-            .expect(format!("{} failed to get/parse classname???", context).as_str());
+            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
 
         match T::jtype_id() {
-            'Z' => assert_eq!("boolean", the_name, "{} param{} wrong type. Method has {} but passed boolean", context, idx, the_name),
-            'B' => assert_eq!("byte", the_name, "{} param{} wrong type. Method has {} but passed byte", context, idx, the_name),
-            'S' => assert_eq!("short", the_name, "{} param{} wrong type. Method has {} but passed short", context, idx, the_name),
-            'C' => assert_eq!("char", the_name, "{} param{} wrong type. Method has {} but passed char", context, idx, the_name),
-            'I' => assert_eq!("int", the_name, "{} param{} wrong type. Method has {} but passed int", context, idx, the_name),
-            'J' => assert_eq!("long", the_name, "{} param{} wrong type. Method has {} but passed long", context, idx, the_name),
-            'F' => assert_eq!("float", the_name, "{} param{} wrong type. Method has {} but passed float", context, idx, the_name),
-            'D' => assert_eq!("double", the_name, "{} param{} wrong type. Method has {} but passed double", context, idx, the_name),
+            'Z' => assert_eq!("boolean", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed boolean"),
+            'B' => assert_eq!("byte", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed byte"),
+            'S' => assert_eq!("short", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed short"),
+            'C' => assert_eq!("char", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed char"),
+            'I' => assert_eq!("int", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed int"),
+            'J' => assert_eq!("long", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed long"),
+            'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
+            'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
             'L' => {
-                assert!(
-                    !param1_is_primitive,
-                    "{} param{} wrong type. Method has {} but passed an object or null",
-                    context, idx, the_name
-                );
+                assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
                 let jt: jtype = param1.into();
                 let obj = jt.object;
                 if !obj.is_null() {
                     assert!(
                         self.IsInstanceOf(obj, param1_class),
-                        "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof",
-                        context,
-                        idx,
-                        the_name
+                        "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
                     );
                 }
             }
@@ -16338,73 +17577,67 @@ impl JNIEnv {
         self.DeleteLocalRef(param1_class);
     }
 
+    /// Checks if the parameter type matches the constructor
     #[cfg(feature = "asserts")]
     unsafe fn check_parameter_types_constructor<T: JType>(&self, context: &str, clazz: jclass, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
         self.check_ref_obj(context, clazz);
-        assert!(!clazz.is_null(), "{} obj.class is null??", context);
-        assert!(!methodID.is_null(), "{} methodID is null", context);
+        assert!(!clazz.is_null(), "{context} obj.class is null??");
+        assert!(!methodID.is_null(), "{context} methodID is null");
         let java_method = self.ToReflectedMethod(clazz, methodID, false);
-        assert!(!java_method.is_null(), "{} -> ToReflectedMethod returned null", context);
+        assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
         let meth_cl = self.FindClass("java/lang/reflect/Method");
-        assert!(!java_method.is_null(), "{} java/lang/reflect/Method not found???", context);
+        assert!(!java_method.is_null(), "{context} java/lang/reflect/Method not found???");
         let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
-        assert!(!meth_params.is_null(), "{} java/lang/reflect/Method#getParameterTypes not found???", context);
+        assert!(!meth_params.is_null(), "{context} java/lang/reflect/Method#getParameterTypes not found???");
 
         //CallObjectMethodA
         let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
         self.DeleteLocalRef(meth_cl);
         self.DeleteLocalRef(java_method);
-        assert!(!parameter_array.is_null(), "{} java/lang/reflect/Method#getParameterTypes return null???", context);
+        assert!(!parameter_array.is_null(), "{context} java/lang/reflect/Method#getParameterTypes return null???");
         let parameter_count = self.GetArrayLength(parameter_array);
-        assert_eq!(parameter_count, count, "{} wrong number of method parameters", context);
+        assert_eq!(parameter_count, count, "{context} wrong number of method parameters");
         let param1_class = self.GetObjectArrayElement(parameter_array, idx);
-        assert!(!param1_class.is_null(), "{} java/lang/reflect/Method#getParameterTypes[{}] is null???", context, idx);
+        assert!(!param1_class.is_null(), "{context} java/lang/reflect/Method#getParameterTypes[{idx}] is null???");
         self.DeleteLocalRef(parameter_array);
 
         let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
         let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
+        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
         let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
-        assert!(!class_is_primitive.is_null(), "{} java/lang/Class#isPrimitive not found???", context);
+        assert!(!class_is_primitive.is_null(), "{context} java/lang/Class#isPrimitive not found???");
 
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
-        assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
+        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
         //CallBooleanMethodA
         let param1_is_primitive =
             self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
 
         let the_name = self
             .GetStringUTFChars_as_string(name_str)
-            .expect(format!("{} failed to get/parse classname???", context).as_str());
+            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
 
         match T::jtype_id() {
-            'Z' => assert_eq!("boolean", the_name, "{} param{} wrong type. Method has {} but passed boolean", context, idx, the_name),
-            'B' => assert_eq!("byte", the_name, "{} param{} wrong type. Method has {} but passed byte", context, idx, the_name),
-            'S' => assert_eq!("short", the_name, "{} param{} wrong type. Method has {} but passed short", context, idx, the_name),
-            'C' => assert_eq!("char", the_name, "{} param{} wrong type. Method has {} but passed char", context, idx, the_name),
-            'I' => assert_eq!("int", the_name, "{} param{} wrong type. Method has {} but passed int", context, idx, the_name),
-            'J' => assert_eq!("long", the_name, "{} param{} wrong type. Method has {} but passed long", context, idx, the_name),
-            'F' => assert_eq!("float", the_name, "{} param{} wrong type. Method has {} but passed float", context, idx, the_name),
-            'D' => assert_eq!("double", the_name, "{} param{} wrong type. Method has {} but passed double", context, idx, the_name),
+            'Z' => assert_eq!("boolean", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed boolean"),
+            'B' => assert_eq!("byte", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed byte"),
+            'S' => assert_eq!("short", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed short"),
+            'C' => assert_eq!("char", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed char"),
+            'I' => assert_eq!("int", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed int"),
+            'J' => assert_eq!("long", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed long"),
+            'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
+            'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
             'L' => {
-                assert!(
-                    !param1_is_primitive,
-                    "{} param{} wrong type. Method has {} but passed an object or null",
-                    context, idx, the_name
-                );
+                assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
                 let jt: jtype = param1.into();
                 let obj = jt.object;
                 if !obj.is_null() {
                     assert!(
                         self.IsInstanceOf(obj, param1_class),
-                        "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof",
-                        context,
-                        idx,
-                        the_name
+                        "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
                     );
                 }
             }
@@ -16414,76 +17647,71 @@ impl JNIEnv {
         self.DeleteLocalRef(param1_class);
     }
 
+    /// checks if the method parameter matches the provided argument
     #[cfg(feature = "asserts")]
     unsafe fn check_parameter_types_object<T: JType>(&self, context: &str, obj: jobject, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
-        assert!(!obj.is_null(), "{} obj is null", context);
+        assert!(!obj.is_null(), "{context} obj is null");
         self.check_ref_obj(context, obj);
         let clazz = self.GetObjectClass(obj);
-        assert!(!clazz.is_null(), "{} obj.class is null??", context);
-        assert!(!methodID.is_null(), "{} methodID is null", context);
+        assert!(!clazz.is_null(), "{context} obj.class is null??");
+        assert!(!methodID.is_null(), "{context} methodID is null");
         let java_method = self.ToReflectedMethod(clazz, methodID, false);
-        assert!(!java_method.is_null(), "{} -> ToReflectedMethod returned null", context);
+        assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
         self.DeleteLocalRef(clazz);
         let meth_cl = self.FindClass("java/lang/reflect/Method");
-        assert!(!java_method.is_null(), "{} java/lang/reflect/Method not found???", context);
+        assert!(!java_method.is_null(), "{context} java/lang/reflect/Method not found???");
         let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
-        assert!(!meth_params.is_null(), "{} java/lang/reflect/Method#getParameterTypes not found???", context);
+        assert!(!meth_params.is_null(), "{context} java/lang/reflect/Method#getParameterTypes not found???");
 
         //CallObjectMethodA
         let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
         self.DeleteLocalRef(meth_cl);
         self.DeleteLocalRef(java_method);
-        assert!(!parameter_array.is_null(), "{} java/lang/reflect/Method#getParameterTypes return null???", context);
+        assert!(!parameter_array.is_null(), "{context} java/lang/reflect/Method#getParameterTypes return null???");
         let parameter_count = self.GetArrayLength(parameter_array);
-        assert_eq!(parameter_count, count, "{} wrong number of method parameters", context);
+        assert_eq!(parameter_count, count, "{context} wrong number of method parameters");
         let param1_class = self.GetObjectArrayElement(parameter_array, idx);
-        assert!(!param1_class.is_null(), "{} java/lang/reflect/Method#getParameterTypes[{}] is null???", context, idx);
+        assert!(!param1_class.is_null(), "{context} java/lang/reflect/Method#getParameterTypes[{idx}] is null???");
         self.DeleteLocalRef(parameter_array);
 
         let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
         let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
+        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
         let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
-        assert!(!class_is_primitive.is_null(), "{} java/lang/Class#isPrimitive not found???", context);
+        assert!(!class_is_primitive.is_null(), "{context} java/lang/Class#isPrimitive not found???");
 
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
-        assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
+        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
         //CallBooleanMethodA
         let param1_is_primitive =
             self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
 
         let the_name = self
             .GetStringUTFChars_as_string(name_str)
-            .expect(format!("{} failed to get/parse classname???", context).as_str());
+            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
+
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
 
         match T::jtype_id() {
-            'Z' => assert_eq!("boolean", the_name, "{} param{} wrong type. Method has {} but passed boolean", context, idx, the_name),
-            'B' => assert_eq!("byte", the_name, "{} param{} wrong type. Method has {} but passed byte", context, idx, the_name),
-            'S' => assert_eq!("short", the_name, "{} param{} wrong type. Method has {} but passed short", context, idx, the_name),
-            'C' => assert_eq!("char", the_name, "{} param{} wrong type. Method has {} but passed char", context, idx, the_name),
-            'I' => assert_eq!("int", the_name, "{} param{} wrong type. Method has {} but passed int", context, idx, the_name),
-            'J' => assert_eq!("long", the_name, "{} param{} wrong type. Method has {} but passed long", context, idx, the_name),
-            'F' => assert_eq!("float", the_name, "{} param{} wrong type. Method has {} but passed float", context, idx, the_name),
-            'D' => assert_eq!("double", the_name, "{} param{} wrong type. Method has {} but passed double", context, idx, the_name),
+            'Z' => assert_eq!("boolean", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed boolean"),
+            'B' => assert_eq!("byte", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed byte"),
+            'S' => assert_eq!("short", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed short"),
+            'C' => assert_eq!("char", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed char"),
+            'I' => assert_eq!("int", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed int"),
+            'J' => assert_eq!("long", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed long"),
+            'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
+            'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
             'L' => {
-                assert!(
-                    !param1_is_primitive,
-                    "{} param{} wrong type. Method has {} but passed an object or null",
-                    context, idx, the_name
-                );
+                assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
                 let jt: jtype = param1.into();
                 let obj = jt.object;
                 if !obj.is_null() {
                     assert!(
                         self.IsInstanceOf(obj, param1_class),
-                        "{} param{} wrong type. Method has {} but passed an object that is not null and not instanceof",
-                        context,
-                        idx,
-                        the_name
+                        "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
                     );
                 }
             }
@@ -16493,20 +17721,21 @@ impl JNIEnv {
         self.DeleteLocalRef(param1_class);
     }
 
+    /// Checks if the function returns an object
     #[cfg(feature = "asserts")]
     unsafe fn check_return_type_object(&self, context: &str, obj: jobject, methodID: jmethodID, ty: &str) {
-        assert!(!obj.is_null(), "{} obj is null", context);
+        assert!(!obj.is_null(), "{context} obj is null");
         self.check_ref_obj(context, obj);
         let clazz = self.GetObjectClass(obj);
-        assert!(!clazz.is_null(), "{} obj.class is null??", context);
-        assert!(!methodID.is_null(), "{} methodID is null", context);
+        assert!(!clazz.is_null(), "{context} obj.class is null??");
+        assert!(!methodID.is_null(), "{context} methodID is null");
         let m = self.ToReflectedMethod(clazz, methodID, false);
         self.DeleteLocalRef(clazz);
-        assert!(!m.is_null(), "{} -> ToReflectedMethod returned null", context);
+        assert!(!m.is_null(), "{context} -> ToReflectedMethod returned null");
         let meth_cl = self.FindClass("java/lang/reflect/Method");
-        assert!(!m.is_null(), "{} java/lang/reflect/Method not found???", context);
+        assert!(!m.is_null(), "{context} java/lang/reflect/Method not found???");
         let meth_rtyp = self.GetMethodID(meth_cl, "getReturnType", "()Ljava/lang/Class;");
-        assert!(!meth_rtyp.is_null(), "{} java/lang/reflect/Method#getReturnType not found???", context);
+        assert!(!meth_rtyp.is_null(), "{context} java/lang/reflect/Method#getReturnType not found???");
         //CallObjectMethodA
         let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, m, meth_rtyp, null());
         self.DeleteLocalRef(meth_cl);
@@ -16516,19 +17745,19 @@ impl JNIEnv {
                 return;
             }
 
-            panic!("{} return type of method is void but expected {}", context, ty);
+            panic!("{context} return type of method is void but expected {ty}");
         }
         let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
         let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
+        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
-        assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
+        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
         self.DeleteLocalRef(rtc);
         let the_name = self
             .GetStringUTFChars_as_string(name_str)
-            .expect(format!("{} failed to get/parse classname???", context).as_str());
+            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
         if the_name.as_str().eq(ty) {
@@ -16538,7 +17767,7 @@ impl JNIEnv {
         if ty.eq("object") {
             match the_name.as_str() {
                 "void" | "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
-                    panic!("{} return type of method is {} but expected object", context, the_name);
+                    panic!("{context} return type of method is {the_name} but expected object");
                 }
                 _ => {
                     return;
@@ -16546,37 +17775,38 @@ impl JNIEnv {
             }
         }
 
-        panic!("{} return type of method is {} but expected {}", context, the_name, ty);
+        panic!("{context} return type of method is {the_name} but expected {ty}");
     }
 
+    /// checks if the field type is any object.
     #[cfg(feature = "asserts")]
     unsafe fn check_field_type_object(&self, context: &str, obj: jclass, fieldID: jfieldID, ty: &str) {
-        assert!(!obj.is_null(), "{} obj is null", context);
+        assert!(!obj.is_null(), "{context} obj is null");
         let clazz = self.GetObjectClass(obj);
-        assert!(!clazz.is_null(), "{} obj.class is null??", context);
-        assert!(!fieldID.is_null(), "{} fieldID is null", context);
+        assert!(!clazz.is_null(), "{context} obj.class is null??");
+        assert!(!fieldID.is_null(), "{context} fieldID is null");
         let f = self.ToReflectedField(clazz, fieldID, false);
-        assert!(!f.is_null(), "{} -> ToReflectedField returned null", context);
+        assert!(!f.is_null(), "{context} -> ToReflectedField returned null");
         let field_cl = self.FindClass("java/lang/reflect/Field");
-        assert!(!f.is_null(), "{} java/lang/reflect/Method not found???", context);
+        assert!(!f.is_null(), "{context} java/lang/reflect/Method not found???");
         let field_rtyp = self.GetMethodID(field_cl, "getType", "()Ljava/lang/Class;");
-        assert!(!field_rtyp.is_null(), "{} java/lang/reflect/Field#getType not found???", context);
+        assert!(!field_rtyp.is_null(), "{context} java/lang/reflect/Field#getType not found???");
         //CallObjectMethodA
         let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, f, field_rtyp, null());
-        assert!(!rtc.is_null(), "{} java/lang/reflect/Field#getType returned null???", context);
+        assert!(!rtc.is_null(), "{context} java/lang/reflect/Field#getType returned null???");
         self.DeleteLocalRef(field_cl);
         self.DeleteLocalRef(f);
         let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{} java/lang/Class not found???", context);
+        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
         let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{} java/lang/Class#getName not found???", context);
+        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
         //CallObjectMethodA
         let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
-        assert!(!name_str.is_null(), "{} java/lang/Class#getName returned null??? Class has no name???", context);
+        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
         self.DeleteLocalRef(rtc);
         let the_name = self
             .GetStringUTFChars_as_string(name_str)
-            .expect(format!("{} failed to get/parse classname???", context).as_str());
+            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
         self.DeleteLocalRef(class_cl);
         self.DeleteLocalRef(name_str);
         if the_name.as_str().eq(ty) {
@@ -16586,7 +17816,7 @@ impl JNIEnv {
         if ty.eq("object") {
             match the_name.as_str() {
                 "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
-                    panic!("{} type of field is {} but expected object", context, the_name);
+                    panic!("{context} type of field is {the_name} but expected object");
                 }
                 _ => {
                     return;
@@ -16594,30 +17824,31 @@ impl JNIEnv {
             }
         }
 
-        panic!("{} type of field is {} but expected {}", context, the_name, ty);
+        panic!("{context} type of field is {the_name} but expected {ty}");
     }
 }
 
+/// type signature for the extern fn in the jvm
 type JNI_CreateJavaVM = extern "C" fn(*mut JNIInvPtr, *mut JNIEnv, *mut JavaVMInitArgs) -> jint;
+
+/// type signature for the extern fn in the jvm
 type JNI_GetCreatedJavaVMs = extern "C" fn(*mut JNIInvPtr, jsize, *mut jsize) -> jint;
 
+/// Data holder for the raw JVM function pointers.
 #[derive(Debug, Copy, Clone)]
 struct JNIDynamicLink {
+    /// raw function ptr to `JNI_CreateJavaVM`
     JNI_CreateJavaVM: SyncConstPtr<c_void>,
+    /// raw function ptr to `JNI_GetCreatedJavaVMs`
     JNI_GetCreatedJavaVMs: SyncConstPtr<c_void>,
 }
-unsafe impl Sync for JNIDynamicLink {}
-unsafe impl Send for JNIDynamicLink {}
 
 impl JNIDynamicLink {
+    /// Constructor with the two pointers
     pub fn new(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs: *const c_void) -> Self {
-        if JNI_GetCreatedJavaVMs.is_null() {
-            panic!("JNI_GetCreatedJavaVMs is null");
-        }
+        assert!(!JNI_GetCreatedJavaVMs.is_null(), "JNI_GetCreatedJavaVMs is null");
 
-        if JNI_CreateJavaVM.is_null() {
-            panic!("JNI_CreateJavaVM is null");
-        }
+        assert!(!JNI_CreateJavaVM.is_null(), "JNI_CreateJavaVM is null");
 
         unsafe {
             Self {
@@ -16627,19 +17858,25 @@ impl JNIDynamicLink {
         }
     }
 
+    /// Get the `JNI_GetCreatedJavaVMs` function pointer
     pub fn JNI_CreateJavaVM(&self) -> JNI_CreateJavaVM {
         unsafe { mem::transmute(self.JNI_CreateJavaVM.inner()) }
     }
+
+    /// Get the `JNI_GetCreatedJavaVMs` function pointer
     pub fn JNI_GetCreatedJavaVMs(&self) -> JNI_GetCreatedJavaVMs {
         unsafe { mem::transmute(self.JNI_GetCreatedJavaVMs.inner()) }
     }
 }
 
+/// State that contains the function pointers to the jvm.
 static LINK: OnceCell<JNIDynamicLink> = OnceCell::new();
 
 ///
 /// Call this function to initialize the dynamic linking to the jvm to use the provided function pointers to
-/// create the jvm. If this function is called more than once then it is a noop, since it is not possible to create
+/// create the jvm.
+///
+/// If this function is called more than once then it is a noop, since it is not possible to create
 /// more than one jvm per process.
 ///
 pub fn init_dynamic_link(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs: *const c_void) {
@@ -16647,7 +17884,7 @@ pub fn init_dynamic_link(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs:
 }
 
 ///
-/// Returns true if the jvm was loaded by either calling load_jvm_from_library or init_dynamic_link.
+/// Returns true if the jvm was loaded by either calling `load_jvm_from_library` or `init_dynamic_link`.
 ///
 pub fn is_jvm_loaded() -> bool {
     LINK.get().is_some()
@@ -16655,9 +17892,13 @@ pub fn is_jvm_loaded() -> bool {
 
 ///
 /// Convenience method to load the jvm from a path to libjvm.so or jvm.dll.
+///
 /// On success this method does NOT close the handle to the shared object.
 /// This is usually fine because unloading the jvm is not supported anyway.
-/// If you do not desire this then use init_dynamic_link.
+/// If you do not desire this then use `init_dynamic_link`.
+///
+/// # Errors
+/// if loading the library fails without crashing the process then a String describing the reason why is returned as an error.
 ///
 /// # Safety
 /// The Safety of this fn depends on the shared object that will be loaded as a result of this call.
@@ -16669,26 +17910,26 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
 
     LINK.get_or_try_init(|| {
         latch.store(true, Ordering::SeqCst);
-        let lib = libloading::Library::new(path).map_err(|e| format!("Failed to load jvm from {} reason: {}", path, e))?;
+        let lib = libloading::Library::new(path).map_err(|e| format!("Failed to load jvm from {path} reason: {e}"))?;
 
         let JNI_CreateJavaVM_ptr = lib
             .get::<JNI_CreateJavaVM>(b"JNI_CreateJavaVM\0")
-            .map_err(|e| format!("Failed to load jvm from {} reason: JNI_CreateJavaVM -> {}", path, e))?
+            .map_err(|e| format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> {e}"))?
             .try_as_raw_ptr()
-            .ok_or_else(|| format!("Failed to load jvm from {} reason: JNI_CreateJavaVM -> failed to get raw ptr", path))?;
+            .ok_or_else(|| format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> failed to get raw ptr"))?;
 
         if JNI_CreateJavaVM_ptr.is_null() {
-            return Err(format!("Failed to load jvm from {} reason: JNI_CreateJavaVM not found", path));
+            return Err(format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM not found"));
         }
 
         let JNI_GetCreatedJavaVMs_ptr = lib
             .get::<JNI_GetCreatedJavaVMs>(b"JNI_GetCreatedJavaVMs\0")
-            .map_err(|e| format!("Failed to load jvm from {} reason: JNI_GetCreatedJavaVMs -> {}", path, e))?
+            .map_err(|e| format!("Failed to load jvm from {path} reason: JNI_GetCreatedJavaVMs -> {e}"))?
             .try_as_raw_ptr()
-            .ok_or_else(|| format!("Failed to load jvm from {} reason: JNI_CreateJavaVM -> failed to get raw ptr", path))?;
+            .ok_or_else(|| format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> failed to get raw ptr"))?;
 
         if JNI_GetCreatedJavaVMs_ptr.is_null() {
-            return Err(format!("Failed to load jvm from {} reason: JNI_GetCreatedJavaVMs not found", path));
+            return Err(format!("Failed to load jvm from {path} reason: JNI_GetCreatedJavaVMs not found"));
         }
 
         //We are good to go!
@@ -16704,11 +17945,12 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
 }
 
 ///
-/// Convenience method to load the jvm from the JAVA_HOME environment variable
+/// Convenience method to load the jvm from the `JAVA_HOME` environment variable
 /// that is commonly set on Windows by End-User Java Setups,
 /// or on linux by distribution package installers.
 ///
-/// If JAVA_HOME is not set or doesn't point to a known layout of a JVM installation
+/// # Errors
+/// If `JAVA_HOME` is not set or doesn't point to a known layout of a JVM installation
 /// then this function returns an error.
 ///
 /// # Safety
@@ -16716,7 +17958,7 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
 ///
 #[cfg(feature = "loadjvm")]
 pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
-    //All (most) jvm layouts that I am aware of on windows+linux.
+    ///All (most) jvm layouts that I am aware of on windows+linux.
     const COMMON_LIBJVM_PATHS: &[&[&str]] = &[
         &["lib", "server", "libjvm.so"],                   //LINUX JAVA 11+
         &["jre", "lib", "amd64", "server", "libjvm.so"],   //LINUX JDK JAVA <= 8 amd64
@@ -16738,23 +17980,30 @@ pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
         }
 
         if buf.try_exists().unwrap_or(false) {
-            let full_path = buf.to_str().ok_or_else(|| format!("JAVA_HOME {} is invalid", java_home))?;
+            let full_path = buf.to_str().ok_or_else(|| format!("JAVA_HOME {java_home} is invalid"))?;
 
             return load_jvm_from_library(full_path);
         }
     }
 
-    Err(format!("JAVA_HOME {} is invalid", java_home))
+    Err(format!("JAVA_HOME {java_home} is invalid"))
 }
 
+/// Returns the static dynamic link or panic
+/// # Panics
+/// if the dynamic link was not initalized.
 fn get_link() -> &'static JNIDynamicLink {
     LINK.get().expect("jni_simple::init_dynamic_link not called")
 }
 
 ///
-/// Returns the created JavaVMs.
-/// This will only ever return 1 (or 0) JavaVM according to Oracle Documentation.
+/// Returns the created `JavaVMs`.
+/// This will only ever return 1 (or 0) `JavaVM` according to Oracle Documentation.
 ///
+/// # Errors
+/// JNI implementation specific error constants like `JNI_EINVAL`
+///
+/// # Panics
 /// Will panic if the JVM shared library has not been loaded yet.
 ///
 /// # Safety
@@ -16772,15 +18021,11 @@ pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
         return Err(res);
     }
 
-    if count < 0 {
-        panic!("JNI_GetCreatedJavaVMs did set count to < 0 : {}", count);
-    }
+    let count = usize::try_from(count).expect("JNI_GetCreatedJavaVMs did set count to < 0");
 
-    let mut result_vec: Vec<JavaVM> = Vec::with_capacity(count as usize);
-    for (i, env) in buf.into_iter().enumerate().take(count as usize) {
-        if env.is_null() {
-            panic!("JNI_GetCreatedJavaVMs VM #{} is null! count is {}", i, count);
-        }
+    let mut result_vec: Vec<JavaVM> = Vec::with_capacity(count);
+    for (i, env) in buf.into_iter().enumerate().take(count) {
+        assert!(!env.is_null(), "JNI_GetCreatedJavaVMs VM #{i} is null! count is {count}");
 
         result_vec.push(JavaVM { functions: env });
     }
@@ -16789,7 +18034,12 @@ pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
 }
 
 ///
-/// Directly calls JNI_CreateJavaVM with the provided arguments.
+/// Directly calls `JNI_CreateJavaVM` with the provided arguments.
+///
+/// # Errors
+/// JNI implementation specific error constants like `JNI_EINVAL`
+///
+/// # Panics
 /// Will panic if the JVM shared library has not been loaded yet.
 ///
 /// # Safety
@@ -16812,23 +18062,26 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
         return Err(res);
     }
 
-    if jvm.is_null() {
-        panic!("JNI_CreateJavaVM returned JNI_OK but the JavaVM pointer is null");
-    }
+    assert!(!jvm.is_null(), "JNI_CreateJavaVM returned JNI_OK but the JavaVM pointer is null");
 
-    if env.vtable.is_null() {
-        panic!("JNI_CreateJavaVM returned JNI_OK but the JNIEnv pointer is null");
-    }
+    assert!(!env.vtable.is_null(), "JNI_CreateJavaVM returned JNI_OK but the JNIEnv pointer is null");
 
     Ok((JavaVM { functions: jvm }, env))
 }
 
 ///
-/// Convenience function to call JNI_CreateJavaVM with a simple list of String arguments.
+/// Convenience function to call `JNI_CreateJavaVM` with a simple list of String arguments.
+///
 /// These arguments are almost identical to the command line arguments used to start the jvm with the java binary.
 /// Some options differ slightly. Consult the JNI Invocation API documentation for more information.
 ///
+/// # Errors
+/// JNI implementation specific error constants like `JNI_EINVAL`
+///
+/// # Panics
 /// Will panic if the JVM shared library has not been loaded yet.
+/// Will panic if more than `jsize::MAX` arguments are passed to the vm. (The JVM itself is likely to just die earlier)
+/// If any argument contains a 0 byte in the string.
 ///
 /// # Safety
 /// The Safety of this fn is implementation dependant.
@@ -16836,6 +18089,7 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
 /// Subsequent calls are undefined behaviour.
 ///
 pub unsafe fn JNI_CreateJavaVM_with_string_args(version: jint, arguments: &Vec<String>) -> Result<(JavaVM, JNIEnv), jint> {
+    /// inner helper struct to ensure that the `CStrings` are free'd in any case.
     struct DropGuard(*mut c_char);
     impl Drop for DropGuard {
         fn drop(&mut self) {
@@ -16848,7 +18102,7 @@ pub unsafe fn JNI_CreateJavaVM_with_string_args(version: jint, arguments: &Vec<S
     let mut vm_args: Vec<JavaVMOption> = Vec::with_capacity(arguments.len());
     let mut dealloc_list = Vec::with_capacity(arguments.len());
     for arg in arguments {
-        let jvm_arg = CString::new(arg.as_str()).unwrap().into_raw();
+        let jvm_arg = CString::new(arg.as_str()).expect("Argument contains 0 byte").into_raw();
         dealloc_list.push(DropGuard(jvm_arg));
 
         vm_args.push(JavaVMOption {
@@ -16859,7 +18113,7 @@ pub unsafe fn JNI_CreateJavaVM_with_string_args(version: jint, arguments: &Vec<S
 
     let mut args = JavaVMInitArgs {
         version,
-        nOptions: vm_args.len() as i32,
+        nOptions: i32::try_from(vm_args.len()).expect("Too many arguments"),
         options: vm_args.as_mut_ptr(),
         ignoreUnrecognized: 1,
     };
@@ -16870,6 +18124,9 @@ pub unsafe fn JNI_CreateJavaVM_with_string_args(version: jint, arguments: &Vec<S
 }
 
 impl JavaVM {
+    /// Helper fn to assist with casting of the internal vtable
+    /// # Safety
+    /// This fn is only safe if X matches whats in the vtable of index.
     #[inline]
     unsafe fn jnx<X>(&self, index: usize) -> X {
         unsafe { mem::transmute_copy(&(**self.functions.inner())[index]) }
@@ -16879,16 +18136,18 @@ impl JavaVM {
     /// Attaches the current thread to the JVM as a normal thread.
     /// If a thread name is provided then it will be used as the java name of the current thread.
     ///
+    /// # Errors
+    /// JNI implementation specific error constants like `JNI_EINVAL`
+    ///
     /// # Safety
-    /// This fn must not be called on a JavaVM object that has been destroyed or is in the process of being destroyed.
+    /// This fn must not be called on a `JavaVM` object that has been destroyed or is in the process of being destroyed.
     ///
     pub unsafe fn AttachCurrentThread_str(&self, version: jint, thread_name: Option<&str>, thread_group: jobject) -> Result<JNIEnv, jint> {
         if let Some(thread_name) = thread_name {
-            let cstr = CString::new(thread_name).unwrap();
-            let mut args = JavaVMAttachArgs::new(version, cstr.as_ptr(), thread_group);
-            let result = self.AttachCurrentThread(&mut args);
-            drop(cstr);
-            return result;
+            return thread_name.use_as_const_c_char(|thread_name| {
+                let mut args = JavaVMAttachArgs::new(version, thread_name, thread_group);
+                self.AttachCurrentThread(&mut args)
+            });
         }
 
         let mut args = JavaVMAttachArgs::new(version, null_mut(), thread_group);
@@ -16899,8 +18158,14 @@ impl JavaVM {
     /// Attaches the current thread to the JVM as a normal thread.
     /// If a thread name is provided then it will be used as the java name of the current thread.
     ///
+    /// # Errors
+    /// JNI implementation specific error constants like `JNI_EINVAL`
+    ///
+    /// # Panics
+    /// If the JVM does not return an error but also does not set the `JNIEnv` ptr.
+    ///
     /// # Safety
-    /// This fn must not be called on a JavaVM object that has been destroyed or is in the process of being destroyed.
+    /// This fn must not be called on a `JavaVM` object that has been destroyed or is in the process of being destroyed.
     ///
     pub unsafe fn AttachCurrentThread(&self, args: *mut JavaVMAttachArgs) -> Result<JNIEnv, jint> {
         #[cfg(feature = "asserts")]
@@ -16914,9 +18179,7 @@ impl JavaVM {
             return Err(result);
         }
 
-        if envptr.is_null() {
-            panic!("AttachCurrentThread returned JNI_OK but did not set the JNIEnv pointer!");
-        }
+        assert!(!envptr.is_null(), "AttachCurrentThread returned JNI_OK but did not set the JNIEnv pointer!");
 
         Ok(JNIEnv { vtable: envptr })
     }
@@ -16925,16 +18188,18 @@ impl JavaVM {
     /// Attaches the current thread to the JVM as a daemon thread.
     /// If a thread name is provided then it will be used as the java name of the current thread.
     ///
+    /// # Errors
+    /// JNI implementation specific error constants like `JNI_EINVAL`
+    ///
     /// # Safety
-    /// This fn must not be called on a JavaVM object that has been destroyed or is in the process of being destroyed.
+    /// This fn must not be called on a `JavaVM` object that has been destroyed or is in the process of being destroyed.
     ///
     pub unsafe fn AttachCurrentThreadAsDaemon_str(&self, version: jint, thread_name: Option<&str>, thread_group: jobject) -> Result<JNIEnv, jint> {
         if let Some(thread_name) = thread_name {
-            let cstr = CString::new(thread_name).unwrap();
-            let mut args = JavaVMAttachArgs::new(version, cstr.as_ptr(), thread_group);
-            let result = self.AttachCurrentThreadAsDaemon(&mut args);
-            drop(cstr);
-            return result;
+            return thread_name.use_as_const_c_char(|thread_name| {
+                let mut args = JavaVMAttachArgs::new(version, thread_name, thread_group);
+                self.AttachCurrentThreadAsDaemon(&mut args)
+            });
         }
 
         let mut args = JavaVMAttachArgs::new(version, null_mut(), thread_group);
@@ -16945,8 +18210,14 @@ impl JavaVM {
     /// Attaches the current thread to the JVM as a daemon thread.
     /// If a thread name is provided then it will be used as the java name of the current thread.
     ///
+    /// # Errors
+    /// JNI implementation specific error constants like `JNI_EINVAL`
+    ///
+    /// # Panics
+    /// If the JVM does not return an error but also does not set the `JNIEnv` ptr.
+    ///
     /// # Safety
-    /// This fn must not be called on a JavaVM object that has been destroyed or is in the process of being destroyed.
+    /// This fn must not be called on a `JavaVM` object that has been destroyed or is in the process of being destroyed.
     ///
     pub unsafe fn AttachCurrentThreadAsDaemon(&self, args: *mut JavaVMAttachArgs) -> Result<JNIEnv, jint> {
         #[cfg(feature = "asserts")]
@@ -16961,17 +18232,20 @@ impl JavaVM {
             return Err(result);
         }
 
-        if envptr.is_null() {
-            panic!("AttachCurrentThreadAsDaemon returned JNI_OK but did not set the JNIEnv pointer!");
-        }
+        assert!(!envptr.is_null(), "AttachCurrentThreadAsDaemon returned JNI_OK but did not set the JNIEnv pointer!");
 
         Ok(JNIEnv { vtable: envptr })
     }
 
     ///
-    /// Gets the JNIEnv for the current thread.
+    /// Gets the `JNIEnv` for the current thread.
     /// # Safety
-    /// This fn must not be called on a JavaVM object that has been destroyed or is in the process of being destroyed.
+    /// This fn must not be called on a `JavaVM` object that has been destroyed or is in the process of being destroyed.
+    /// # Panics
+    /// If the JVM does not return an error but also does not set the `JNIEnv` ptr.
+    ///
+    /// # Errors
+    /// JNI implementation specific error constants like `JNI_EINVAL`
     ///
     pub unsafe fn GetEnv(&self, jni_version: jint) -> Result<JNIEnv, jint> {
         let mut envptr: JNIEnvVTable = null_mut();
@@ -16982,21 +18256,20 @@ impl JavaVM {
             return Err(result);
         }
 
-        if envptr.is_null() {
-            panic!("GetEnv returned JNI_OK but did not set the JNIEnv pointer!");
-        }
+        assert!(!envptr.is_null(), "GetEnv returned JNI_OK but did not set the JNIEnv pointer!");
 
         Ok(JNIEnv { vtable: envptr })
     }
 
     ///
     /// Detaches the current thread from the jvm.
-    /// This should only be called on functions that were attached with AttachCurrentThread or AttachCurrentThreadAsDaemon.
+    /// This should only be called on functions that were attached with `AttachCurrentThread` or `AttachCurrentThreadAsDaemon`.
     ///
     /// # Safety
-    /// Detaches the current thread. The JNIEnv of the current thread is no longer valid after this call.
+    /// Detaches the current thread. The `JNIEnv` of the current thread is no longer valid after this call.
     /// Any further calls made using it will result in undefined behavior.
     ///
+    #[must_use]
     pub unsafe fn DetachCurrentThread(&self) -> jint {
         self.jnx::<extern "system" fn(JNIInvPtr) -> jint>(5)(self.functions)
     }
@@ -17009,15 +18282,15 @@ impl JavaVM {
     /// Careful consideration should be taken when this fn is called. As mentioned calling it from
     /// a JVM Thread will probably just block the calling thread forever. However, this fn also
     /// does stuff internally with the jvm, after/during its return the JVM can no longer be used in
-    /// any thread. Any existing JavaVM object will become invalid. Attempts to obtain a JNIEnv after
-    /// this fn returns by way of calling AttachThread will likely lead to undefined behavior.
+    /// any thread. Any existing `JavaVM` object will become invalid. Attempts to obtain a `JNIEnv` after
+    /// this fn returns by way of calling `AttachThread` will likely lead to undefined behavior.
     /// Shutting down a JVM is a "terminal" operation for any Hotspot implementation of the JVM.
     /// The current process will never be able to relaunch a hotspot JVM.
     ///
     /// This fn should therefore only be used if a rust thread needs to "wait" until the JVM is dead to then perform
-    /// some operations such a cleanup before eventually calling exit()
+    /// some operations such a cleanup before eventually calling `exit()`
     ///
-    /// Please note that this fn never returns if the JavaVM terminates abnormally (e.g. due to a crash),
+    /// Please note that this fn never returns if the `JavaVM` terminates abnormally (e.g. due to a crash),
     /// or someone calling Runtime.getRuntime().halt(...), because this just terminates the Process.
     /// Its usefulness to run shutdown code is therefore limited.
     ///
@@ -17029,7 +18302,7 @@ impl JavaVM {
 
 #[cfg(test)]
 #[test]
-fn test_sync() {
+const fn test_sync() {
     static_assertions::assert_impl_all!(JavaVM: Sync);
     static_assertions::assert_impl_all!(JavaVM: Send);
 

@@ -194,7 +194,7 @@ pub mod test {
             assert!(!ptr3.is_null());
             let result = std::panic::catch_unwind(|| {
                 //Should panic because not allowed when 3 crit ptr is not released
-                env.ExceptionCheck();
+                let _ = env.ExceptionCheck();
             });
 
             assert!(result.is_err(), "No panic occurred");
