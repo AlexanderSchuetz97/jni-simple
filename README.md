@@ -5,7 +5,7 @@ It does absolutely no magic around the JNI Calls and lets you just use them as y
 
 ## Examples
 ### Loading a JVM on from a shared object file or dll
-Note: this example assumes the loadjvm feature is enabled!
+Note: this example assumes the `loadjvm` feature is enabled!
 ```rust
 use jni_simple::{*};
 use std::ptr::null;
@@ -44,7 +44,8 @@ fn test() {
 }
 ```
 ### Writing a JNI shared library that implements a native method
-The complete version of this example can be found in the repository inside the example_project folder.
+The complete version of this example (including the java code) can be found in the repository inside the example_project folder.
+Note: this example assumes the `dynlink` feature is enabled!
 ```rust
 #![allow(non_snake_case)]
 
@@ -56,17 +57,8 @@ use std::thread;
 use std::time::Duration;
 use std::io::stdout;
 
-//Optional: Only needed if you need to spawn "rust" threads that need to interact with the JVM.
-extern "system" {
-    fn JNI_CreateJavaVM(invoker: *mut c_void, env: *mut c_void, initargs: *mut c_void) -> jint;
-    fn JNI_GetCreatedJavaVMs(array: *mut c_void, len: jsize, out: *mut jsize) -> jint;
-}
-
 #[no_mangle]
 pub unsafe extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
-    //Optional: Only needed if you need to spawn "rust" threads that need to interact with the JVM.
-    jni_simple::init_dynamic_link(JNI_CreateJavaVM as *mut c_void, JNI_GetCreatedJavaVMs as *mut c_void);
-
     //All error codes are jint, never JNI_OK. See JNI documentation for their meaning when you handle them.
     //This is a Result<JNIEnv, jint>.
     let env : JNIEnv = vm.GetEnv(JNI_VERSION_1_8).unwrap();
@@ -143,6 +135,8 @@ is loaded by `System.load` or `System.loadLibrary` then this is irrelevant.
 ## Features
 
 ### loadjvm
+This feature is not enabled by default!
+
 This feature provides functions to dynamically link the jvm using the `libloading` crate 
 from a string containing the absolute path to `libjvm.so` or `jvm.dll`.
 
@@ -153,7 +147,21 @@ Do that if you want to do dynamic linking yourself using `dlopen` or `LoadLibrar
 Note: This feature should not be used when writing a library that is loaded by `System.load` or `System.loadLibrary`. 
 It would just add a dependency that is not needed.
 
+### dynlink
+This feature is not enabled by default!
+
+If this feature is enabled it is assumed that the JVM can be found by the dynamic linker by itself.
+All functions that "load" the jvm become noop. This feature should be enabled when making
+a shared library that is loaded by the JVM using `System.load` or `System.loadLibrary` because
+in this case the linker is guaranteed to be able to find the JVM.
+
+Note: This feature should not be used when writing a jvm launcher application.
+
+Note: Enabling both `dynlink` and `loadjvm` makes no sense, it just adds the `libloading` crate as an unnecessary dependency
+
 ### asserts
+This feature is not enabled by default!
+
 This feature enables assertions in the code. This is useful for debugging and testing purposes.
 These checks will cause a big performance hit and should not be used in production builds.
 

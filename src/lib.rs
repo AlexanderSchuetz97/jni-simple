@@ -40,8 +40,9 @@ use std::path::PathBuf;
 use std::ptr::null;
 use std::ptr::null_mut;
 
-use once_cell::sync::OnceCell;
-use sync_ptr::{FromConstPtr, SyncConstPtr, SyncMutPtr};
+#[cfg(not(feature = "dynlink"))]
+use sync_ptr::{FromConstPtr, SyncConstPtr};
+use sync_ptr::{SyncMutPtr};
 
 pub const JNI_OK: jint = 0;
 
@@ -17828,13 +17829,30 @@ impl JNIEnv {
     }
 }
 
+
+/// Module that contains the dll/so imports from the JVM.
+/// This module should only be used when writing a library that is loaded by the JVM
+/// using `System.load` or `System.loadLibrary`
+#[cfg(feature = "dynlink")]
+mod dynlink {
+    use crate::{jint, jsize, JNIEnv, JNIInvPtr, JavaVMInitArgs};
+
+    extern "system" {
+        pub fn JNI_CreateJavaVM(invoker: *mut JNIInvPtr, env: *mut JNIEnv, initargs: *mut JavaVMInitArgs) -> jint;
+        pub fn JNI_GetCreatedJavaVMs(array: *mut JNIInvPtr, len: jsize, out: *mut jsize) -> jint;
+    }
+}
+
 /// type signature for the extern fn in the jvm
+#[cfg(not(feature = "dynlink"))]
 type JNI_CreateJavaVM = extern "C" fn(*mut JNIInvPtr, *mut JNIEnv, *mut JavaVMInitArgs) -> jint;
 
 /// type signature for the extern fn in the jvm
+#[cfg(not(feature = "dynlink"))]
 type JNI_GetCreatedJavaVMs = extern "C" fn(*mut JNIInvPtr, jsize, *mut jsize) -> jint;
 
 /// Data holder for the raw JVM function pointers.
+#[cfg(not(feature = "dynlink"))]
 #[derive(Debug, Copy, Clone)]
 struct JNIDynamicLink {
     /// raw function ptr to `JNI_CreateJavaVM`
@@ -17843,6 +17861,7 @@ struct JNIDynamicLink {
     JNI_GetCreatedJavaVMs: SyncConstPtr<c_void>,
 }
 
+#[cfg(not(feature = "dynlink"))]
 impl JNIDynamicLink {
     /// Constructor with the two pointers
     pub fn new(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs: *const c_void) -> Self {
@@ -17870,7 +17889,8 @@ impl JNIDynamicLink {
 }
 
 /// State that contains the function pointers to the jvm.
-static LINK: OnceCell<JNIDynamicLink> = OnceCell::new();
+#[cfg(not(feature = "dynlink"))]
+static LINK: once_cell::sync::OnceCell<JNIDynamicLink> = once_cell::sync::OnceCell::new();
 
 ///
 /// Call this function to initialize the dynamic linking to the jvm to use the provided function pointers to
@@ -17879,15 +17899,42 @@ static LINK: OnceCell<JNIDynamicLink> = OnceCell::new();
 /// If this function is called more than once then it is a noop, since it is not possible to create
 /// more than one jvm per process.
 ///
+#[cfg(not(feature = "dynlink"))]
 pub fn init_dynamic_link(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs: *const c_void) {
     _ = LINK.set(JNIDynamicLink::new(JNI_CreateJavaVM, JNI_GetCreatedJavaVMs));
 }
 
 ///
+/// Call this function to initialize the dynamic linking to the jvm to use the provided function pointers to
+/// create the jvm.
+///
+/// If this function is called more than once then it is a noop, since it is not possible to create
+/// more than one jvm per process.
+///
+#[cfg(feature = "dynlink")]
+pub fn init_dynamic_link(_: *const c_void, _: *const c_void) {
+    //NOOP, because the dynamic linker already must have preloaded the jvm for linking to succeed.
+}
+
+
+
+///
 /// Returns true if the jvm was loaded by either calling `load_jvm_from_library` or `init_dynamic_link`.
 ///
+#[cfg(not(feature = "dynlink"))]
+#[must_use]
 pub fn is_jvm_loaded() -> bool {
     LINK.get().is_some()
+}
+
+///
+/// Returns true if the jvm was loaded by either calling `load_jvm_from_library` or `init_dynamic_link`.
+///
+#[cfg(feature = "dynlink")]
+#[must_use]
+#[allow(clippy::missing_const_for_fn)]
+pub fn is_jvm_loaded() -> bool {
+    true
 }
 
 ///
@@ -17904,6 +17951,7 @@ pub fn is_jvm_loaded() -> bool {
 /// The Safety of this fn depends on the shared object that will be loaded as a result of this call.
 ///
 #[cfg(feature = "loadjvm")]
+#[cfg(not(feature = "dynlink"))]
 pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
     use std::sync::atomic::{AtomicBool, Ordering};
     let latch = AtomicBool::new(false);
@@ -17942,6 +17990,25 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+///
+/// Convenience method to load the jvm from a path to libjvm.so or jvm.dll.
+///
+/// On success this method does NOT close the handle to the shared object.
+/// This is usually fine because unloading the jvm is not supported anyway.
+/// If you do not desire this then use `init_dynamic_link`.
+///
+/// # Errors
+/// if loading the library fails without crashing the process then a String describing the reason why is returned as an error.
+///
+/// # Safety
+/// The Safety of this fn depends on the shared object that will be loaded as a result of this call.
+///
+#[cfg(feature = "loadjvm")]
+#[cfg(feature = "dynlink")]
+pub unsafe fn load_jvm_from_library(_: &str) -> Result<(), String> {
+    Err("JVM already loaded".to_string())
 }
 
 ///
@@ -17992,6 +18059,7 @@ pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
 /// Returns the static dynamic link or panic
 /// # Panics
 /// if the dynamic link was not initalized.
+#[cfg(not(feature = "dynlink"))]
 fn get_link() -> &'static JNIDynamicLink {
     LINK.get().expect("jni_simple::init_dynamic_link not called")
 }
@@ -18010,13 +18078,17 @@ fn get_link() -> &'static JNIDynamicLink {
 /// The Safety of this fn is implementation dependant.
 ///
 pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
-    let link = get_link();
+
+    #[cfg(not(feature = "dynlink"))]
+    let link = get_link().JNI_GetCreatedJavaVMs();
+    #[cfg(feature = "dynlink")]
+    let link = dynlink::JNI_GetCreatedJavaVMs;
 
     //NOTE: Oracle spec says this will only ever yield 1 JVM.
     //I will worry about this when it actually becomes a problem
     let mut buf: [JNIInvPtr; 64] = [SyncMutPtr::null(); 64];
     let mut count: jint = 0;
-    let res = link.JNI_GetCreatedJavaVMs()(buf.as_mut_ptr(), 64, &mut count);
+    let res = link(buf.as_mut_ptr(), 64, &mut count);
     if res != JNI_OK {
         return Err(res);
     }
@@ -18031,6 +18103,8 @@ pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
     }
 
     Ok(result_vec)
+
+
 }
 
 ///
@@ -18041,6 +18115,7 @@ pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
 ///
 /// # Panics
 /// Will panic if the JVM shared library has not been loaded yet.
+/// Will panic if the JVM shared library retruned unexpected values.
 ///
 /// # Safety
 /// The Safety of this fn is implementation dependant.
@@ -18052,12 +18127,16 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
     {
         assert!(!arguments.is_null(), "JNI_CreateJavaVM arguments must not be null");
     }
-    let link = get_link();
 
+    #[cfg(not(feature = "dynlink"))]
+    let link = get_link().JNI_CreateJavaVM();
+    #[cfg(feature = "dynlink")]
+    let link = dynlink::JNI_CreateJavaVM;
+    
     let mut jvm: JNIInvPtr = SyncMutPtr::null();
     let mut env: JNIEnv = JNIEnv { vtable: null_mut() };
 
-    let res = link.JNI_CreateJavaVM()(&mut jvm, &mut env, arguments);
+    let res = link(&mut jvm, &mut env, arguments);
     if res != JNI_OK {
         return Err(res);
     }
