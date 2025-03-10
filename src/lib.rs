@@ -40,9 +40,9 @@ use std::path::PathBuf;
 use std::ptr::null;
 use std::ptr::null_mut;
 
+use sync_ptr::SyncMutPtr;
 #[cfg(not(feature = "dynlink"))]
 use sync_ptr::{FromConstPtr, SyncConstPtr};
-use sync_ptr::{SyncMutPtr};
 
 pub const JNI_OK: jint = 0;
 
@@ -17829,7 +17829,6 @@ impl JNIEnv {
     }
 }
 
-
 /// Module that contains the dll/so imports from the JVM.
 /// This module should only be used when writing a library that is loaded by the JVM
 /// using `System.load` or `System.loadLibrary`
@@ -17912,11 +17911,10 @@ pub fn init_dynamic_link(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs:
 /// more than one jvm per process.
 ///
 #[cfg(feature = "dynlink")]
+#[allow(clippy::missing_const_for_fn)]
 pub fn init_dynamic_link(_: *const c_void, _: *const c_void) {
     //NOOP, because the dynamic linker already must have preloaded the jvm for linking to succeed.
 }
-
-
 
 ///
 /// Returns true if the jvm was loaded by either calling `load_jvm_from_library` or `init_dynamic_link`.
@@ -18078,7 +18076,6 @@ fn get_link() -> &'static JNIDynamicLink {
 /// The Safety of this fn is implementation dependant.
 ///
 pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
-
     #[cfg(not(feature = "dynlink"))]
     let link = get_link().JNI_GetCreatedJavaVMs();
     #[cfg(feature = "dynlink")]
@@ -18103,8 +18100,6 @@ pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
     }
 
     Ok(result_vec)
-
-
 }
 
 ///
@@ -18132,7 +18127,7 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
     let link = get_link().JNI_CreateJavaVM();
     #[cfg(feature = "dynlink")]
     let link = dynlink::JNI_CreateJavaVM;
-    
+
     let mut jvm: JNIInvPtr = SyncMutPtr::null();
     let mut env: JNIEnv = JNIEnv { vtable: null_mut() };
 

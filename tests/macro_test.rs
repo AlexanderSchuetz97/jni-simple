@@ -1,5 +1,9 @@
 use jni_simple::{jobject, jtype, jtypes};
 
+fn fake_jni_call(typ: *const jtype) {
+    assert_ne!(0usize, std::hint::black_box(typ) as usize)
+}
+
 #[test]
 fn test() {
     unsafe {
@@ -12,6 +16,6 @@ fn test() {
         assert_eq!(n[3].double(), 4f64);
         assert_eq!(n[4].object(), m);
 
-        assert_ne!(0usize, std::hint::black_box(jtypes!(1i32, 2i32, 3i32, 4f64, m)).as_ptr() as usize)
+        fake_jni_call(jtypes!(1i32, 2i32, 3i32, 4f64, m).as_ptr())
     }
 }
