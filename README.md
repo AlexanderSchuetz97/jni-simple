@@ -3,6 +3,9 @@
 This crate contains a simple dumb handwritten rust wrapper around the JNI (Java Native Interface) API.
 It does absolutely no magic around the JNI Calls and lets you just use them as you would in C.
 
+In addition to JNI, this crate also provides a similar simplistic wrapper for the JVMTI (Java VM Tool Interface) API.
+The JVMTI Api can be used to write, for example, a Java Agent (like a Java debugger) in Rust or perform similar deep instrumentation with the JVM.
+
 ## Examples
 ### Loading a JVM on from a shared object file or dll
 Note: this example assumes the `loadjvm` feature is enabled!
@@ -105,6 +108,45 @@ pub unsafe extern "system" fn Java_org_example_JNITest_test(env: JNIEnv, _class:
     });
 }
 ```
+### Writing a Java Agent (JVMTI)
+```toml
+crate-type = ["cdylib"]
+```
+
+```bash
+java -agentpath:absolute_path_to_your_compiled_agent.so.dll -jar myjar.jar
+```
+
+```rust
+use jni_simple::{*};
+
+use std::ffi::c_void;
+use jni_simple::*;
+
+#[unsafe(no_mangle)]
+extern "system" unsafe fn Agent_OnLoad(vm: JavaVM, _command_line_options: *const char, _: *mut c_void) -> i32 {
+  let Ok(jvmti) = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2) else {
+    eprintln!("Agent_OnLoad failed to get JVMTI_VERSION_1_2 environment");
+    return -1;
+  };
+
+  /// This is just an example, do whatever you want to do with JVMTI here.
+  let mut cap = jvmtiCapabilities::default();
+  let err = jvmti.GetPotentialCapabilities(&mut cap);
+  if err != JVMTI_ERROR_NONE {
+    eprintln!("Agent_OnLoad failed to get potential capabilities error {err}");
+    return -1;
+  }
+
+  if !cap.can_redefine_any_class() {
+    eprintln!("Agent_OnLoad error: JavaVM cannot redefine classes");
+    return -1;
+  }
+
+  //....
+  0
+}
+```
 
 ## Main goals of this crate
 
@@ -125,12 +167,13 @@ There are 2 ways to do this. The first is to statically link the JVM into the bi
 very cumbersome and poorly documented. The other is to provide the JVM on the linker path so ldd can find it, 
 but I have never seen this occur in the real world either.
 
-This crate is developed for the more common use case that the JVM is available somewhere on the system and leaves it up to the user of 
-the crate to write the necessary code to find and load the JVM. 
+This crate is developed for the more common use case that the JVM is available somewhere on the system. 
+It leaves it up to the user of the crate to write the necessary code to find and load the JVM. 
 
-This allows for maximum flexibility when writing a launcher app which for example may first download a JVM from the internet.
-As should be obvious, when writing a native library that does not launch the JVM itself and 
-is loaded by `System.load` or `System.loadLibrary` then this is irrelevant.
+This allows for maximum flexibility when writing a launcher app which, for example, 
+may first download and extract a JVM from the internet.
+As should be obvious, when writing a native library (cdylib) that does not launch the JVM itself and 
+is instead loaded by `System.load` or `System.loadLibrary` then this is irrelevant.
 
 ## Features
 
@@ -150,14 +193,17 @@ It would just add a dependency that is not needed.
 ### dynlink
 This feature is not enabled by default!
 
-If this feature is enabled it is assumed that the JVM can be found by the dynamic linker by itself.
-All functions that "load" the jvm become noop. This feature should be enabled when making
-a shared library that is loaded by the JVM using `System.load` or `System.loadLibrary` because
-in this case the linker is guaranteed to be able to find the JVM.
+If this feature is enabled, it is assumed that the symbols exported by the JVM can be found by the dynamic linker by itself.
+When this feature is enabled, all functions that "load" the jvm become a noop. 
+
+This feature should be enabled when making a shared library that is loaded by the JVM using `System.load`, `System.loadLibrary`, 
+or when writing a java agent that is loaded by specifying the `-agentlib` VM argument when starting the VM 
+either from the command line or the JNI Invoker interface. 
+In those cases, the dynamic linker is guaranteed to be able to find the symbols exported by the JVM.
 
 Note: This feature should not be used when writing a jvm launcher application.
 
-Note: Enabling both `dynlink` and `loadjvm` makes no sense, it just adds the `libloading` crate as an unnecessary dependency
+Note: Enabling both `dynlink` and `loadjvm` makes no sense, it just adds the `libloading` crate as an unnecessary dependency.
 
 ### asserts
 This feature is not enabled by default!
@@ -184,13 +230,20 @@ on what problem your troubleshooting. The assertions are generally much better a
 or invalid parameters than the JVM checks, while the JVM checks are able to catch missing exception checks or JVM Local Stack overflows better.
 
 The asserts are implemented using rust panics. 
-If you compile your project with unwinding panics the panics can be caught. 
+If you compile your project with unwinding panics, the panics can be caught. 
 It is not recommended to continue or try to "recover" from these panics as the 
-assertions do NOT perform cleanup actions when a panic occurs, so you will leak JVM locals or leave the JVM in an
-otherwise unrecoverable state. I recommend aborting the processes on such a panic as such a panic only occurs, 
+assertions do NOT perform cleanup actions when a panic occurs. 
+You will leak JVM locals or leave the JVM in an otherwise unrecoverable state if you continue. 
+I recommend aborting the processes on such a panic as such a panic only occurs  
 if the rust code had triggered UB in the JVM in the absence of the assertions.
 This can either be done by calling abort when "catching" the panic or compiling your rust code with panic=abort
 if you do not need to catch panics anywhere in your rust code.
+
+Info: There are no asserts present in the JVMTI implementation as JVMTI has more robust checking implemented 
+in the java vm itself, forgoing the need to do any checks ourselves. Most of the potential for UB in JVMTI is impossible
+to check anyway, because the API heavily relies on callbacks which are passed to JVMTI as raw function pointers.
+Checking those for validity is not really possible without changing the API at a higher level, which is not a goal of this crate.
+In addition to that, jvmti is not needed for most use cases, so I suspect that it will see little use.
 
 ## Further Info
 

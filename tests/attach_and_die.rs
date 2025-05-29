@@ -21,12 +21,12 @@ pub mod test {
 
             let vm_clone = vm.clone();
             std::thread::spawn(move || {
-                assert_eq!(JNI_EDETACHED, vm_clone.GetEnv(JNI_VERSION_1_8).unwrap_err());
+                assert_eq!(JNI_EDETACHED, vm_clone.GetEnv::<JNIEnv>(JNI_VERSION_1_8).unwrap_err());
                 let _env = vm_clone.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).unwrap();
-                assert!(vm_clone.GetEnv(JNI_VERSION_1_8).is_ok());
+                assert!(vm_clone.GetEnv::<JNIEnv>(JNI_VERSION_1_8).is_ok());
                 let _env = vm_clone.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).unwrap();
                 assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
-                assert_eq!(JNI_EDETACHED, vm_clone.GetEnv(JNI_VERSION_1_8).unwrap_err());
+                assert_eq!(JNI_EDETACHED, vm_clone.GetEnv::<JNIEnv>(JNI_VERSION_1_8).unwrap_err());
                 let env = vm_clone.AttachCurrentThread_str(JNI_VERSION_1_8, Some("HelloWorld"), null_mut()).unwrap();
                 let n = env.FindClass("java/lang/Thread");
                 let gt = env.GetStaticMethodID(n, "currentThread", "()Ljava/lang/Thread;");
@@ -55,7 +55,7 @@ pub mod test {
             std::thread::spawn(move || {
                 let guard = l2.0.lock().unwrap();
                 let _env = vm_clone.AttachCurrentThreadAsDaemon_str(JNI_VERSION_1_8, None, null_mut()).unwrap();
-                assert!(vm_clone.GetEnv(JNI_VERSION_1_8).is_ok());
+                assert!(vm_clone.GetEnv::<JNIEnv>(JNI_VERSION_1_8).is_ok());
                 l2.1.notify_all();
                 let _guard = l2.1.wait(guard).unwrap();
             });
