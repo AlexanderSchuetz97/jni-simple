@@ -32,9 +32,7 @@ pub fn test() {
 
         let ptr = shim_agent as usize;
 
-        let args: Vec<String> = vec![format!(
-            "-agentpath:~/RustroverProjects/jni-simple/jvmti_shim/target/debug/libjvmti_shim.so={ptr}"
-        )];
+        let args: Vec<String> = vec![format!("-agentpath:~/RustroverProjects/jni-simple/jvmti_shim/target/debug/libjvmti_shim.so={ptr}")];
         //let args: Vec<String> = vec![];
         let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
         let jvmti = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2).expect("failed to get JVMTI environment");

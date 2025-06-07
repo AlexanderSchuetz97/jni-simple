@@ -267,23 +267,19 @@ mod private {
     #[test]
     pub fn testSealedUseCString() {
         use std::ffi::{CStr, OsString};
-        use std::process::abort;
-        use std::panic;
 
         unsafe {
             assert!([].use_as_const_c_char(|ptr| CStr::from_ptr(ptr).to_bytes() == []));
             assert!([0u8].use_as_const_c_char(|ptr| CStr::from_ptr(ptr).to_bytes() == []));
             assert!("".use_as_const_c_char(|ptr| CStr::from_ptr(ptr).to_bytes() == []));
-            assert!("abc".use_as_const_c_char(|ptr| CStr::from_ptr(ptr).to_bytes() == [b'a',b'b',b'c']));
-            assert!([b'a',b'b',0,b'c'].use_as_const_c_char(|ptr| CStr::from_ptr(ptr).to_bytes() == [b'a',b'b']));
-            assert!("abc\0".use_as_const_c_char(|ptr| CStr::from_ptr(ptr).to_bytes() == [b'a',b'b',b'c']));
-            assert!(OsString::from("abc").use_as_const_c_char(|ptr| CStr::from_ptr(ptr).to_bytes() == [b'a',b'b',b'c']));
+            assert!("abc".use_as_const_c_char(|ptr| CStr::from_ptr(ptr).to_bytes() == [b'a', b'b', b'c']));
+            assert!([b'a', b'b', 0, b'c'].use_as_const_c_char(|ptr| CStr::from_ptr(ptr).to_bytes() == [b'a', b'b']));
+            assert!("abc\0".use_as_const_c_char(|ptr| CStr::from_ptr(ptr).to_bytes() == [b'a', b'b', b'c']));
+            assert!(OsString::from("abc").use_as_const_c_char(|ptr| CStr::from_ptr(ptr).to_bytes() == [b'a', b'b', b'c']));
 
             #[cfg(feature = "asserts")]
             {
-                let r = panic::catch_unwind(|| {
-                    [0b1011_1111, b'A', b'B'].as_slice().use_as_const_c_char(|_| abort())
-                });
+                let r = std::panic::catch_unwind(|| [0b1011_1111, b'A', b'B'].as_slice().use_as_const_c_char(|_| std::process::abort()));
                 assert!(r.is_err());
             }
         }
@@ -1311,6 +1307,7 @@ pub type jvmtiStringPrimitiveValueCallback =
     extern "system" fn(class_tag: jlong, size: jlong, tag_ptr: *mut jlong, value: *const jchar, value_length: jint, user_data: *mut c_void) -> jint;
 
 pub type jvmtiReservedCallback = extern "system" fn() -> jint;
+
 #[repr(C)]
 #[derive(Debug, Clone, Default)]
 pub struct jvmtiHeapCallbacks {
@@ -1331,6 +1328,75 @@ pub struct jvmtiHeapCallbacks {
     pub reserved14: Option<jvmtiReservedCallback>,
     pub reserved15: Option<jvmtiReservedCallback>,
 }
+
+#[derive(Debug, Default, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Hash)]
+#[repr(C)]
+pub enum jvmtiIterationControl {
+    #[default]
+    JVMTI_ITERATION_ABORT = 0,
+    JVMTI_ITERATION_CONTINUE = 1,
+    JVMTI_ITERATION_IGNORE = 2,
+}
+
+/// jvmtiHeapRootKind cant enum this because we are called with it, making addition in a future version of JVMTI UB in rust.
+
+pub type jvmtiHeapRootKind = c_int;
+pub const JVMTI_HEAP_ROOT_JNI_GLOBAL: jvmtiHeapRootKind = 1;
+pub const JVMTI_HEAP_ROOT_SYSTEM_CLASS: jvmtiHeapRootKind = 2;
+pub const JVMTI_HEAP_ROOT_MONITOR: jvmtiHeapRootKind = 3;
+pub const JVMTI_HEAP_ROOT_STACK_LOCAL: jvmtiHeapRootKind = 4;
+pub const JVMTI_HEAP_ROOT_JNI_LOCAL: jvmtiHeapRootKind = 5;
+pub const JVMTI_HEAP_ROOT_THREAD: jvmtiHeapRootKind = 6;
+pub const JVMTI_HEAP_ROOT_OTHER: jvmtiHeapRootKind = 7;
+
+/// jvmtiHeapRootKind cant enum this because we are called with it, making addition in a future version of JVMTI UB in rust.
+pub type jvmtiObjectReferenceKind = c_int;
+
+pub const JVMTI_REFERENCE_CLASS: jvmtiObjectReferenceKind = 1;
+pub const JVMTI_REFERENCE_FIELD: jvmtiObjectReferenceKind = 2;
+pub const JVMTI_REFERENCE_ARRAY_ELEMENT: jvmtiObjectReferenceKind = 3;
+pub const JVMTI_REFERENCE_CLASS_LOADER: jvmtiObjectReferenceKind = 4;
+pub const JVMTI_REFERENCE_SIGNERS: jvmtiObjectReferenceKind = 5;
+pub const JVMTI_REFERENCE_PROTECTION_DOMAIN: jvmtiObjectReferenceKind = 6;
+pub const JVMTI_REFERENCE_INTERFACE: jvmtiObjectReferenceKind = 7;
+pub const JVMTI_REFERENCE_STATIC_FIELD: jvmtiObjectReferenceKind = 8;
+pub const JVMTI_REFERENCE_CONSTANT_POOL: jvmtiObjectReferenceKind = 9;
+
+#[derive(Debug, Default, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Hash)]
+#[repr(C)]
+pub enum jvmtiHeapObjectFilter {
+    JVMTI_HEAP_OBJECT_TAGGED = 1,
+    JVMTI_HEAP_OBJECT_UNTAGGED = 2,
+    #[default]
+    JVMTI_HEAP_OBJECT_EITHER = 3,
+}
+
+pub type jvmtiHeapObjectCallback = extern "system" fn(class_tag: jlong, size: jlong, tag_ptr: *mut jlong, user_data: *mut c_void) -> jvmtiIterationControl;
+
+pub type jvmtiHeapRootCallback =
+    extern "system" fn(root_kind: jvmtiHeapRootKind, class_tag: jlong, size: jlong, tag_ptr: *mut jlong, user_data: *mut c_void) -> jvmtiIterationControl;
+
+pub type jvmtiStackReferenceCallback = extern "system" fn(
+    root_kind: jvmtiHeapRootKind,
+    class_tag: jlong,
+    size: jlong,
+    tag_ptr: *mut jlong,
+    thread_tag: jlong,
+    depth: jint,
+    method: jmethodID,
+    slot: jint,
+    user_data: *mut c_void,
+) -> jvmtiIterationControl;
+
+pub type jvmtiObjectReferenceCallback = extern "system" fn(
+    reference_kind: jvmtiObjectReferenceKind,
+    class_tag: jlong,
+    size: jlong,
+    tag_ptr: *mut jlong,
+    referrer_tag: jlong,
+    referrer_index: jint,
+    user_data: *mut c_void,
+) -> jvmtiIterationControl;
 
 impl From<jvmtiHeapIterationCallback> for jvmtiHeapCallbacks {
     fn from(value: jvmtiHeapIterationCallback) -> Self {
@@ -1629,7 +1695,313 @@ impl JVMTIEnv {
         object_result_ptr: *mut *mut jobject,
         tag_result_ptr: *mut *mut jlong,
     ) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jlong, *mut jint, *mut *mut jobject, *mut *mut jlong) -> jvmtiError>(106)(self.vtable, tag_count, tags, count_ptr, object_result_ptr, tag_result_ptr)
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jlong, *mut jint, *mut *mut jobject, *mut *mut jlong) -> jvmtiError>(113)(
+            self.vtable,
+            tag_count,
+            tags,
+            count_ptr,
+            object_result_ptr,
+            tag_result_ptr,
+        )
+    }
+
+    pub unsafe fn ForceGarbageCollection(&self) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable) -> jvmtiError>(107)(self.vtable)
+    }
+
+    #[deprecated(
+        note = "This function was introduced in the original JVM TI version 1.0. It has been superseded in JVM TI version 1.2 (Java SE 6) and will be changed to return an error in a future release."
+    )]
+    pub unsafe fn IterateOverObjectsReachableFromObject(&self, object: jobject, object_reference_callback: jvmtiObjectReferenceCallback, user_data: *const c_void) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jvmtiObjectReferenceCallback, *const c_void) -> jvmtiError>(108)(
+            self.vtable,
+            object,
+            object_reference_callback,
+            user_data,
+        )
+    }
+
+    #[deprecated(
+        note = "This function was introduced in the original JVM TI version 1.0. It has been superseded in JVM TI version 1.2 (Java SE 6) and will be changed to return an error in a future release."
+    )]
+    pub unsafe fn IterateOverReachableObjects(
+        &self,
+        heap_root_callback: Option<jvmtiHeapRootCallback>,
+        stack_ref_callback: Option<jvmtiStackReferenceCallback>,
+        object_ref_callback: Option<jvmtiObjectReferenceCallback>,
+        user_data: *const c_void,
+    ) -> jvmtiError {
+        self.jvmti::<extern "system" fn(
+            JVMTIEnvVTable,
+            Option<jvmtiHeapRootCallback>,
+            Option<jvmtiStackReferenceCallback>,
+            Option<jvmtiObjectReferenceCallback>,
+            *const c_void,
+        ) -> jvmtiError>(109)(self.vtable, heap_root_callback, stack_ref_callback, object_ref_callback, user_data)
+    }
+
+    #[deprecated(
+        note = "This function was introduced in the original JVM TI version 1.0. It has been superseded in JVM TI version 1.2 (Java SE 6) and will be changed to return an error in a future release."
+    )]
+    pub unsafe fn IterateOverHeap(&self, object_filter: jvmtiHeapObjectFilter, heap_object_callback: jvmtiHeapObjectCallback, user_data: *const c_void) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiHeapObjectFilter, jvmtiHeapObjectCallback, *const c_void) -> jvmtiError>(110)(
+            self.vtable,
+            object_filter,
+            heap_object_callback,
+            user_data,
+        )
+    }
+
+    #[deprecated(
+        note = "This function was introduced in the original JVM TI version 1.0. It has been superseded in JVM TI version 1.2 (Java SE 6) and will be changed to return an error in a future release."
+    )]
+    pub unsafe fn IterateOverInstancesOfClass(&self, klass: jclass, object_filter: jvmtiHeapObjectFilter, heap_object_callback: jvmtiHeapObjectCallback, user_data: *const c_void) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jvmtiHeapObjectFilter, jvmtiHeapObjectCallback, *const c_void) -> jvmtiError>(111)(
+            self.vtable,
+            klass,
+            object_filter,
+            heap_object_callback,
+            user_data,
+        )
+    }
+
+    pub unsafe fn GetLocalObject(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jobject) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jobject) -> jvmtiError>(20)(
+            self.vtable,
+            thread,
+            depth,
+            slot,
+            value_ptr,
+        )
+    }
+
+    pub unsafe fn GetLocalInstance(&self, thread: jthread, depth: jint, value_ptr: *mut jobject) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, *mut jobject) -> jvmtiError>(154)(
+            self.vtable,
+            thread,
+            depth,
+            value_ptr,
+        )
+    }
+
+    pub unsafe fn GetLocalInt(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jint) -> jvmtiError>(21)(
+            self.vtable,
+            thread,
+            depth,
+            slot,
+            value_ptr,
+        )
+    }
+
+    pub unsafe fn GetLocalLong(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jlong) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jlong) -> jvmtiError>(22)(
+            self.vtable,
+            thread,
+            depth,
+            slot,
+            value_ptr,
+        )
+    }
+
+    pub unsafe fn GetLocalFloat(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jfloat) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jfloat) -> jvmtiError>(23)(
+            self.vtable,
+            thread,
+            depth,
+            slot,
+            value_ptr,
+        )
+    }
+
+    pub unsafe fn GetLocalDouble(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jdouble) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jdouble) -> jvmtiError>(24)(
+            self.vtable,
+            thread,
+            depth,
+            slot,
+            value_ptr,
+        )
+    }
+
+    pub unsafe fn SetLocalObject(&self, thread: jthread, depth: jint, slot: jint, value: jobject) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jobject) -> jvmtiError>(25)(
+            self.vtable,
+            thread,
+            depth,
+            slot,
+            value,
+        )
+    }
+
+    pub unsafe fn SetLocalInt(&self, thread: jthread, depth: jint, slot: jint, value: jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jint) -> jvmtiError>(26)(
+            self.vtable,
+            thread,
+            depth,
+            slot,
+            value,
+        )
+    }
+
+    pub unsafe fn SetLocalLong(&self, thread: jthread, depth: jint, slot: jint, value: jlong) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jlong) -> jvmtiError>(27)(
+            self.vtable,
+            thread,
+            depth,
+            slot,
+            value,
+        )
+    }
+
+    pub unsafe fn SetLocalFloat(&self, thread: jthread, depth: jint, slot: jint, value: jfloat) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jfloat) -> jvmtiError>(28)(
+            self.vtable,
+            thread,
+            depth,
+            slot,
+            value,
+        )
+    }
+
+    pub unsafe fn SetLocalDouble(&self, thread: jthread, depth: jint, slot: jint, value: jdouble) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jdouble) -> jvmtiError>(29)(
+            self.vtable,
+            thread,
+            depth,
+            slot,
+            value,
+        )
+    }
+
+    pub unsafe fn SetBreakpoint(&self, method: jmethodID, location: jlocation) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, jlocation) -> jvmtiError>(37)(
+            self.vtable,
+            method,
+            location
+        )
+    }
+
+    pub unsafe fn ClearBreakpoint(&self, method: jmethodID, location: jlocation) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, jlocation) -> jvmtiError>(37)(
+            self.vtable,
+            method,
+            location
+        )
+    }
+
+    pub unsafe fn SetFieldAccessWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(40)(
+            self.vtable,
+            klass,
+            field
+        )
+    }
+
+    pub unsafe fn ClearFieldAccessWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(41)(
+            self.vtable,
+            klass,
+            field
+        )
+    }
+
+    pub unsafe fn SetFieldModificationWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(42)(
+            self.vtable,
+            klass,
+            field
+        )
+    }
+
+    pub unsafe fn ClearFieldModificationWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(43)(
+            self.vtable,
+            klass,
+            field
+        )
+    }
+
+    pub unsafe fn GetAllModules(&self, module_count_ptr: *mut jint, modules_ptr: *mut *mut jobject) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jobject) -> jvmtiError>(2)(
+            self.vtable,
+            module_count_ptr,
+            modules_ptr
+        )
+    }
+
+    pub unsafe fn GetNamedModule(&self, class_loader: jobject, package_name: impl UseCString, module_ptr: *mut jobject) -> jvmtiError {
+        package_name.use_as_const_c_char(|package_name| {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, *mut jobject) -> jvmtiError>(39)(
+                self.vtable,
+                class_loader,
+                package_name,
+                module_ptr
+            )
+        })
+    }
+
+    pub unsafe fn AddModuleReads(&self, module: jobject, to_module: jobject) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jobject) -> jvmtiError>(93)(
+            self.vtable,
+            module,
+            to_module,
+        )
+    }
+
+    pub unsafe fn AddModuleExports(&self, module: jobject, pkg_name: impl UseCString, to_module: jobject) -> jvmtiError {
+        pkg_name.use_as_const_c_char(|pkg_name| {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(94)(
+                self.vtable,
+                module,
+                pkg_name,
+                to_module,
+            )
+        })
+    }
+
+    pub unsafe fn AddModuleOpens(&self, module: jobject, pkg_name: impl UseCString, to_module: jobject) -> jvmtiError {
+        pkg_name.use_as_const_c_char(|pkg_name| {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(95)(
+                self.vtable,
+                module,
+                pkg_name,
+                to_module,
+            )
+        })
+    }
+
+    pub unsafe fn AddModuleUses(&self, module: jobject, service: jclass) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass) -> jvmtiError>(96)(
+            self.vtable,
+            module,
+            service,
+        )
+    }
+
+    pub unsafe fn AddModuleProvides(&self, module: jobject, service: jclass, impl_class: jclass) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass, jclass) -> jvmtiError>(97)(
+            self.vtable,
+            module,
+            service,
+            impl_class,
+        )
+    }
+
+    pub unsafe fn IsModifiableModule(&self, module: jobject, is_modifiable_module_ptr: *mut jboolean) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jboolean) -> jvmtiError>(98)(
+            self.vtable,
+            module,
+            is_modifiable_module_ptr
+        )
+    }
+
+    pub unsafe fn GetLoadedClasses(&self, count_ptr: *mut jint, classes_ptr: *mut *mut jclass) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jclass) -> jvmtiError>(77)(
+            self.vtable,
+            count_ptr,
+            classes_ptr
+        )
     }
 }
 
@@ -1717,9 +2089,7 @@ impl JavaVMAttachArgs {
 /// Using non utf-8 binary data in the u8 slices/Vec will not be checked for validity before being converted into a *const `c_char`!
 /// - Doing this on with any call to JNI will result in undefined behavior.
 ///
-pub trait UseCString: private::SealedUseCString {
-
-}
+pub trait UseCString: private::SealedUseCString {}
 
 impl UseCString for &str {}
 
@@ -1786,14 +2156,17 @@ impl private::SealedUseCString for *const i8 {
                     if self.add(size).read_volatile() == 0 {
                         break;
                     }
-                    size+=1;
+                    size += 1;
                 }
             }
 
             unsafe {
                 let to_check: &[u8] = std::slice::from_raw_parts(self.cast(), size);
                 if let Err(_) = std::str::from_utf8(to_check) {
-                    panic!("use_as_const_c_char called on a non utf-8 *const i8. string was only checked until first 0 byte or end of string. data={:?}", to_check);
+                    panic!(
+                        "use_as_const_c_char called on a non utf-8 *const i8. string was only checked until first 0 byte or end of string. data={:?}",
+                        to_check
+                    );
                 }
             }
         }
@@ -1819,14 +2192,17 @@ impl private::SealedUseCString for *const u8 {
                     if self.add(size).read_volatile() == 0 {
                         break;
                     }
-                    size+=1;
+                    size += 1;
                 }
             }
 
             unsafe {
                 let to_check = std::slice::from_raw_parts(self, size);
                 if let Err(_) = std::str::from_utf8(to_check) {
-                    panic!("use_as_const_c_char called on a non utf-8 *const u8. string was only checked until first 0 byte or end of string. data={:?}", to_check);
+                    panic!(
+                        "use_as_const_c_char called on a non utf-8 *const u8. string was only checked until first 0 byte or end of string. data={:?}",
+                        to_check
+                    );
                 }
             }
         }
@@ -1885,7 +2261,10 @@ impl private::SealedUseCString for Vec<u8> {
             let len = self.iter().position(|r| *r == 0).unwrap_or(self.len());
             let to_check = &self[..len];
             if let Err(_) = std::str::from_utf8(to_check) {
-                panic!("use_as_const_c_char called with non utf-8 string. string was only checked until first 0 byte or end of string. data={:?}", to_check);
+                panic!(
+                    "use_as_const_c_char called with non utf-8 string. string was only checked until first 0 byte or end of string. data={:?}",
+                    to_check
+                );
             }
         }
 
@@ -1896,7 +2275,6 @@ impl private::SealedUseCString for Vec<u8> {
         if last == 0 {
             return func(self.as_ptr().cast());
         }
-
 
         if self.capacity() > self.len() {
             //We own the Vec, faster to push 0 in this case, no need to copy or check for intermittent bytes.
@@ -1934,7 +2312,10 @@ impl private::SealedUseCString for &[u8] {
             let len = self.iter().position(|r| *r == 0).unwrap_or(self.len());
             let to_check = &self[..len];
             if let Err(_) = std::str::from_utf8(to_check) {
-                panic!("use_as_const_c_char called with non utf-8 string. string was only checked until first 0 byte or end of string. data={:?}", to_check);
+                panic!(
+                    "use_as_const_c_char called with non utf-8 string. string was only checked until first 0 byte or end of string. data={:?}",
+                    to_check
+                );
             }
         }
 
@@ -1944,23 +2325,25 @@ impl private::SealedUseCString for &[u8] {
 
         // Fast case, last byte in slice is 0
         if last == 0 {
+            //We get here if the caller appends \0 to their rust string literals.
             return func(self.as_ptr().cast());
         }
 
         // Impl detail: CStr::from_bytes_until_nul
         // will iterate the string from beginning to end to look for 0 byte,
         // so checking if last byte is 0 byte makes sense, especially for longer strings.
-        // We do not actually care if there is a second 0 byte already somewhere in the middle of the string.
+        // We do not care if there is a second 0 byte already somewhere in the middle of the string.
         if let Ok(c_str) = CStr::from_bytes_until_nul(self) {
             return func(c_str.as_ptr());
         }
 
-        unsafe {
-            // SAFETY: CStr::from_bytes_until_nul can only fail if the slice contains no 0 byte.
-            let c_str = CString::from_vec_unchecked(self.to_vec());
-            func(c_str.as_ptr())
-        }
-
+        // There no 0 byte in the slice. We have to copy the slice, append a 0 byte and then call downstream.
+        // This is the slowest path. Unfortunately all ordinary ""
+        // rust strings get here unless the caller explicitly made sure to add \0 to the end.
+        let mut vec = self.to_vec();
+        vec.reserve_exact(1);
+        vec.push(0);
+        func(vec.as_ptr().cast())
     }
 }
 
@@ -19576,7 +19959,7 @@ impl JavaVM {
     /// some operations such a cleanup before eventually calling `exit()`
     ///
     /// Please note that this fn never returns if the `JavaVM` terminates abnormally (e.g. due to a crash),
-    /// or someone calling Runtime.getRuntime().halt(...), because this just terminates the Process.
+    /// or someone calling Runtime.getRuntime().halt(...) in Java, because that just terminates the Process instantly.
     /// Its usefulness to run shutdown code is therefore limited.
     ///
     ///
@@ -19593,4 +19976,8 @@ const fn test_sync() {
 
     static_assertions::assert_not_impl_all!(JNIEnv: Sync);
     static_assertions::assert_not_impl_all!(JNIEnv: Send);
+
+
+    static_assertions::assert_not_impl_all!(JVMTIEnv: Sync);
+    static_assertions::assert_not_impl_all!(JVMTIEnv: Send);
 }

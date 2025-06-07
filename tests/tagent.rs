@@ -1,5 +1,5 @@
-use std::ffi::c_void;
 use jni_simple::*;
+use std::ffi::c_void;
 
 #[unsafe(no_mangle)]
 extern "system" fn Agent_OnLoad(vm: JavaVM, _command_line_options: *const char, _: *mut c_void) -> i32 {

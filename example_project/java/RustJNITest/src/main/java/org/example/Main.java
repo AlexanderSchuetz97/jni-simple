@@ -2,7 +2,7 @@ package org.example;
 
 public class Main {
     public static void main(String[] args) throws InterruptedException {
-        System.out.println("Pre!");
+        System.out.println("Pre! " + System.getProperty("java.version"));
         System.load(args[0]);
         System.out.println("Loaded!");
         JNITest.test();
