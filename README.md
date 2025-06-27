@@ -159,7 +159,12 @@ marked as "unsafe" as they should be.
 All types like jobject, jstring, jarray,... which are opaque handles represented as pointers in C are 
 represented as raw opaque pointers in Rust that are type aliases of each other. 
 This essentially makes them just hint to the user and doesn't enforce any type safety as that would sometimes
-be a big hindrance when working with JNI.
+be a big hindrance when working with JNI. 
+
+##### Why?
+For example, conversion between jobject and jobjectArray or any other array type is required for some jni methods and trivial to do in C, 
+yet using the existing `jni` crate this requires convoluted casts that probably have side effects (like calling IsInstanceOf) for 'safety' reasons.
+Using `jni-simple` (this crate) you don't even need a cast. Naturally, passing the wrong type of object to the JVM is UB, hence the need for unsafe.
 
 ### Designed for runtime dynamic linking of the JVM
 The Problem: The existing jni crate depends on the jni-sys crate which requires the JVM to be resolvable by the dynamic linker.

@@ -41,7 +41,6 @@ use std::path::PathBuf;
 use std::ptr::null;
 use std::ptr::null_mut;
 use std::{ffi, mem};
-
 use crate::private::SealedEnvVTable;
 use sync_ptr::SyncMutPtr;
 #[cfg(not(feature = "dynlink"))]
@@ -1362,6 +1361,21 @@ pub const JVMTI_REFERENCE_INTERFACE: jvmtiObjectReferenceKind = 7;
 pub const JVMTI_REFERENCE_STATIC_FIELD: jvmtiObjectReferenceKind = 8;
 pub const JVMTI_REFERENCE_CONSTANT_POOL: jvmtiObjectReferenceKind = 9;
 
+
+//// GetClassStatus bitmask values
+///	Class bytecodes have been verified
+pub const JVMTI_CLASS_STATUS_VERIFIED : jint = 1;
+/// Class preparation is complete
+pub const JVMTI_CLASS_STATUS_PREPARED : jint = 2;
+/// Class initialization is complete. Static initializer has been run.
+pub const JVMTI_CLASS_STATUS_INITIALIZED : jint = 4;
+/// Error during initialization makes class unusable
+pub const JVMTI_CLASS_STATUS_ERROR : jint = 8;
+/// Class is an array. If set, all other bits are zero.
+pub const JVMTI_CLASS_STATUS_ARRAY : jint = 16;
+/// Class is a primitive class (for example, java.lang.Integer.TYPE). If set, all other bits are zero.
+pub const JVMTI_CLASS_STATUS_PRIMITIVE : jint = 32;
+
 #[derive(Debug, Default, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Hash)]
 #[repr(C)]
 pub enum jvmtiHeapObjectFilter {
@@ -1444,6 +1458,27 @@ impl From<jvmtiStringPrimitiveValueCallback> for jvmtiHeapCallbacks {
 }
 
 pub type jvmtiStartFunction = extern "system" fn(JVMTIEnv, JNIEnv, *mut c_void);
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct jvmtiClassDefinition{
+    klass: jclass,
+    class_byte_count: jint,
+    class_bytes: *const c_uchar,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct jvmtiMonitorUsage{
+    owner: jthread,
+    entry_count: jint,
+    waiter_count: jint,
+    waiters: *mut jthread,
+    notify_waiter_count: jint,
+    notify_waiters: *mut jthread,
+}
+
+
 
 /// Vtable of `JVMTIEnv` is passed like this.
 type JVMTIEnvVTable = *mut *mut [*mut c_void; 157];
@@ -2001,6 +2036,254 @@ impl JVMTIEnv {
             self.vtable,
             count_ptr,
             classes_ptr
+        )
+    }
+
+    pub unsafe fn GetClassLoaderClasses(&self, initiating_loader: jobject, count_ptr: *mut jint, classes_ptr: *mut *mut jclass) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint, *mut *mut jclass) -> jvmtiError>(78)(
+            self.vtable,
+            initiating_loader,
+            count_ptr,
+            classes_ptr
+        )
+    }
+
+    pub unsafe fn GetClassSignature(&self, klass: jclass, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(47)(
+            self.vtable,
+            klass,
+            signature_ptr,
+            generic_ptr
+        )
+    }
+
+    pub unsafe fn GetClassStatus(&self, klass: jclass, status_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(48)(
+            self.vtable,
+            klass,
+            status_ptr,
+        )
+    }
+
+    pub unsafe fn GetSourceFileName(&self, klass: jclass, source_name_ptr: *mut *mut c_char) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(49)(
+            self.vtable,
+            klass,
+            source_name_ptr,
+        )
+    }
+
+    pub unsafe fn GetClassModifiers(&self, klass: jclass, modifiers_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(50)(
+            self.vtable,
+            klass,
+            modifiers_ptr,
+        )
+    }
+
+    pub unsafe fn GetClassMethods(&self, klass: jclass, method_count_ptr: *mut jint, methods_ptr: *mut *mut jmethodID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jmethodID) -> jvmtiError>(51)(
+            self.vtable,
+            klass,
+            method_count_ptr,
+            methods_ptr
+        )
+    }
+
+    pub unsafe fn GetClassFields(&self, klass: jclass, field_count_ptr: *mut jint, fields_ptr: *mut *mut jfieldID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jfieldID) -> jvmtiError>(52)(
+            self.vtable,
+            klass,
+            field_count_ptr,
+            fields_ptr
+        )
+    }
+
+    pub unsafe fn GetImplementedInterfaces(&self, klass: jclass, interface_count_ptr: *mut jint, interfaces_ptr: *mut *mut jclass) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jclass) -> jvmtiError>(53)(
+            self.vtable,
+            klass,
+            interface_count_ptr,
+            interfaces_ptr
+        )
+    }
+
+    pub unsafe fn GetClassVersionNumbers(&self, klass: jclass, minor_version_ptr: *mut jint, major_version_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint) -> jvmtiError>(54)(
+            self.vtable,
+            klass,
+            minor_version_ptr,
+            major_version_ptr
+        )
+    }
+
+    pub unsafe fn GetConstantPool(&self, klass: jclass, constant_pool_count_ptr: *mut jint, constant_pool_byte_count_ptr: *mut jint, constant_pool_bytes_ptr: *mut *mut c_uchar) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint, *mut *mut c_uchar) -> jvmtiError>(54)(
+            self.vtable,
+            klass,
+            constant_pool_count_ptr,
+            constant_pool_byte_count_ptr,
+            constant_pool_bytes_ptr,
+        )
+    }
+
+    pub unsafe fn IsInterface(&self, klass: jclass, is_interface_ptr: *mut jboolean) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(54)(
+            self.vtable,
+            klass,
+            is_interface_ptr
+        )
+    }
+
+    pub unsafe fn IsArrayClass(&self, klass: jclass, is_array_class_ptr: *mut jboolean) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(55)(
+            self.vtable,
+            klass,
+            is_array_class_ptr
+        )
+    }
+
+    pub unsafe fn IsModifiableClass(&self, klass: jclass, is_modifiable_class_ptr: *mut jboolean) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(44)(
+            self.vtable,
+            klass,
+            is_modifiable_class_ptr
+        )
+    }
+
+    pub unsafe fn GetClassLoader(&self, klass: jclass, classloader_ptr: *mut jobject) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jobject) -> jvmtiError>(56)(
+            self.vtable,
+            klass,
+            classloader_ptr
+        )
+    }
+
+    pub unsafe fn GetSourceDebugExtension(&self, klass: jclass, source_debug_extension_ptr: *mut *mut c_char) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(89)(
+            self.vtable,
+            klass,
+            source_debug_extension_ptr
+        )
+    }
+
+    pub unsafe fn RetransformClasses(&self, class_count: jint, classes: *const jclass) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jclass) -> jvmtiError>(151)(
+            self.vtable,
+            class_count,
+            classes
+        )
+    }
+
+    pub unsafe fn RedefineClasses(&self, class_count: jint, class_definitions: *const jvmtiClassDefinition) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jvmtiClassDefinition) -> jvmtiError>(86)(
+            self.vtable,
+            class_count,
+            class_definitions
+        )
+    }
+
+    pub unsafe fn GetObjectSize(&self, object: jobject, size_ptr: *mut jlong) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jlong) -> jvmtiError>(153)(
+            self.vtable,
+            object,
+            size_ptr
+        )
+    }
+
+    pub unsafe fn GetObjectHashCode(&self, object: jobject, hash_code_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint) -> jvmtiError>(57)(
+            self.vtable,
+            object,
+            hash_code_ptr
+        )
+    }
+
+    pub unsafe fn GetObjectMonitorUsage(&self, object: jobject, info_ptr: *mut jvmtiMonitorUsage) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jvmtiMonitorUsage) -> jvmtiError>(58)(
+            self.vtable,
+            object,
+            info_ptr
+        )
+    }
+
+    pub unsafe fn GetFieldName(&self, klass: jclass, field: jfieldID, name_ptr: *mut *mut c_char, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut *mut c_char, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(59)(
+            self.vtable,
+            klass,
+            field,
+            name_ptr,
+            signature_ptr,
+            generic_ptr
+        )
+    }
+
+    pub unsafe fn GetFieldDeclaringClass(&self, klass: jclass, field: jfieldID, declaring_class_ptr: *mut jclass) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jclass) -> jvmtiError>(60)(
+            self.vtable,
+            klass,
+            field,
+            declaring_class_ptr,
+        )
+    }
+
+    pub unsafe fn GetFieldModifiers(&self, klass: jclass, field: jfieldID, modifiers_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jint) -> jvmtiError>(61)(
+            self.vtable,
+            klass,
+            field,
+            modifiers_ptr,
+        )
+    }
+
+    pub unsafe fn IsFieldSynthetic(&self, klass: jclass, field: jfieldID, is_synthetic_ptr: *mut jboolean) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jboolean) -> jvmtiError>(62)(
+            self.vtable,
+            klass,
+            field,
+            is_synthetic_ptr,
+        )
+    }
+
+    pub unsafe fn GetMethodName(&self, method: jmethodID, name_ptr: *mut *mut c_char, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut *mut c_char, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(63)(
+            self.vtable,
+            method,
+            name_ptr,
+            signature_ptr,
+            generic_ptr,
+        )
+    }
+
+    pub unsafe fn GetMethodDeclaringClass(&self, method: jmethodID, declaring_class_ptr: *mut jclass) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jclass) -> jvmtiError>(64)(
+            self.vtable,
+            method,
+            declaring_class_ptr
+        )
+    }
+
+    pub unsafe fn GetMethodModifiers(&self, method: jmethodID, modifiers_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(65)(
+            self.vtable,
+            method,
+            modifiers_ptr
+        )
+    }
+
+    pub unsafe fn GetMaxLocals(&self, method: jmethodID, modifiers_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(67)(
+            self.vtable,
+            method,
+            modifiers_ptr
+        )
+    }
+
+    pub unsafe fn GetArgumentsSize(&self, method: jmethodID, modifiers_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(68)(
+            self.vtable,
+            method,
+            modifiers_ptr
         )
     }
 }
