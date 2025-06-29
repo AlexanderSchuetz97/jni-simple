@@ -13,9 +13,9 @@ pub mod test {
             let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
             let version = env.GetVersion();
             match version {
-                JNI_VERSION_1_8 | JNI_VERSION_9 | JNI_VERSION_10 | JNI_VERSION_19 | JNI_VERSION_20 | JNI_VERSION_21 => (),
+                JNI_VERSION_1_8 | JNI_VERSION_9 | JNI_VERSION_10 | JNI_VERSION_19 | JNI_VERSION_20 | JNI_VERSION_21 | JNI_VERSION_24 => (),
                 _ => {
-                    panic!("Invalid or unknown JVM JNI version {}. This test is only aware of versions up to 21. If the jvm is newer than this then point your JAVA_HOME to a jvm version >= 8 and <= 21", version);
+                    panic!("Invalid or unknown JVM JNI version {}. This test is only aware of versions up to 24. If the jvm is newer than this then point your JAVA_HOME to a jvm version >= 8 and <= 24", version);
                 }
             }
 

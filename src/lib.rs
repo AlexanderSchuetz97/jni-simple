@@ -33,6 +33,7 @@
 #![allow(clippy::inline_always)]
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
+use crate::private::{SealedAsJNILinkage, SealedEnvVTable};
 use std::borrow::Cow;
 use std::ffi::{c_char, c_int, c_uchar, c_void, CStr, CString, OsStr, OsString};
 use std::fmt::{Debug, Display, Formatter};
@@ -41,7 +42,6 @@ use std::path::PathBuf;
 use std::ptr::null;
 use std::ptr::null_mut;
 use std::{ffi, mem};
-use crate::private::SealedEnvVTable;
 use sync_ptr::SyncMutPtr;
 #[cfg(not(feature = "dynlink"))]
 use sync_ptr::{FromConstPtr, SyncConstPtr};
@@ -77,6 +77,8 @@ pub const JNI_VERSION_10: jint = 0x000a_0000;
 pub const JNI_VERSION_19: jint = 0x0013_0000;
 pub const JNI_VERSION_20: jint = 0x0014_0000;
 pub const JNI_VERSION_21: jint = 0x0015_0000;
+
+pub const JNI_VERSION_24: jint = 0x0018_0000;
 
 pub type jlong = i64;
 
@@ -240,6 +242,12 @@ pub const JVMTI_THREAD_STATE_VENDOR_3: jint = 0x40000000;
 /// Mod for private trait seals that should be hidden.
 mod private {
     use std::ffi::{c_char, c_void};
+
+    ///Trait seal for `AsJNILinkage`
+    pub trait SealedAsJNILinkage {
+        /// Returns the jni linkage index.
+        fn linkage(self) -> usize;
+    }
 
     /// Trait seal for `JType`
     pub trait SealedJType {}
@@ -413,6 +421,8 @@ pub union jtype {
 }
 
 pub type jvalue = jtype;
+
+pub type jrawMonitorID = *mut c_void;
 
 ///
 /// This macro is usefull for constructing jtype arrays.
@@ -665,7 +675,7 @@ impl From<jboolean> for jtype {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct JNINativeMethod {
     /// Name of the native method
     name: *const c_char,
@@ -675,9 +685,9 @@ pub struct JNINativeMethod {
     fnPtr: *const c_void,
 }
 
-type JNIInvPtr = SyncMutPtr<*mut [*mut c_void; 10]>;
+type JNIInvPtr = SyncMutPtr<*mut *mut c_void>;
 
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct JavaVM {
     /// The vtable of the `JavaVM` object.
@@ -685,7 +695,7 @@ pub struct JavaVM {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct JavaVMAttachArgs {
     /// Jni version
     version: jint,
@@ -696,7 +706,7 @@ pub struct JavaVMAttachArgs {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct JavaVMOption {
     /// this field contains the string option as a C-like string.
     optionString: *mut c_char,
@@ -724,7 +734,7 @@ impl JavaVMOption {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct JavaVMInitArgs {
     /// The JNI version
     version: i32,
@@ -767,7 +777,7 @@ impl JavaVMInitArgs {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct jvmtiThreadInfo {
     pub name: *const c_char,
@@ -789,20 +799,181 @@ impl Default for jvmtiThreadInfo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct jvmtiThreadGroupInfo {
-    parent: jthreadGroup,
-    name: *const c_char,
-    max_priority: jint,
-    is_daemon: jboolean,
+    pub parent: jthreadGroup,
+    pub name: *const c_char,
+    pub max_priority: jint,
+    pub is_daemon: jboolean,
 }
+
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct jvmtiMonitorStackDepthInfo {
+    pub monitor: jobject,
+    pub stack_depth: jint,
+}
+
+pub type jvmtiEventReserved = extern "system" fn();
+pub type jvmtiEventBreakpoint = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, method: jmethodID, location: jlocation);
+
+pub type jvmtiEventClassFileLoadHook = extern "system" fn(
+    jvmti_env: JVMTIEnv,
+    jni_env: JNIEnv,
+    class_being_redefined: jclass,
+    loader: jobject,
+    name: *const c_char,
+    protection_domain: jobject,
+    class_data_len: jint,
+    class_data: *const c_uchar,
+    new_class_data_len: *mut jint,
+    new_class_data: *mut *mut c_uchar,
+);
+
+pub type jvmtiEventClassLoad = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, klass: jclass);
+
+pub type jvmtiEventClassPrepare = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, klass: jclass);
 
 #[derive(Debug)]
 #[repr(C)]
-pub struct jvmtiMonitorStackDepthInfo {
-    monitor: jobject,
-    stack_depth: jint,
+pub struct jvmtiAddrLocationMap {
+    pub start_address: *const c_void,
+    pub location: jlocation,
+}
+pub type jvmtiEventCompiledMethodLoad = extern "system" fn(
+    jvmti_env: JVMTIEnv,
+    method: jmethodID,
+    code_size: jint,
+    code_addr: *const c_void,
+    map_length: jint,
+    map: *const jvmtiAddrLocationMap,
+    compile_info: *const c_void,
+);
+
+pub type jvmtiEventCompiledMethodUnload = extern "system" fn(jvmti_env: JVMTIEnv, method: jmethodID, code_addr: *const c_void);
+
+pub type jvmtiEventDataDumpRequest = extern "system" fn(jvmti_env: JVMTIEnv);
+
+pub type jvmtiEventDynamicCodeGenerated = extern "system" fn(jvmti_env: JVMTIEnv, name: *const c_char, address: *const c_void, length: jint);
+
+pub type jvmtiEventException = extern "system" fn(
+    jvmti_env: JVMTIEnv,
+    jni_env: JNIEnv,
+    thread: jthread,
+    method: jmethodID,
+    location: jlocation,
+    exception: jobject,
+    catch_method: jmethodID,
+    catch_location: jlocation,
+);
+
+pub type jvmtiEventExceptionCatch = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, method: jmethodID, location: jlocation, exception: jobject);
+
+pub type jvmtiEventFieldAccess =
+    extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, method: jmethodID, location: jlocation, field_klass: jclass, object: jobject, field: jfieldID);
+
+pub type jvmtiEventFieldModification = extern "system" fn(
+    jvmti_env: JVMTIEnv,
+    jni_env: JNIEnv,
+    thread: jthread,
+    method: jmethodID,
+    location: jlocation,
+    field_klass: jclass,
+    object: jobject,
+    field: jfieldID,
+    signature_type: c_char,
+    new_value: jvalue,
+);
+
+pub type jvmtiEventFramePop = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, method: jmethodID, was_popped_by_exception: jboolean);
+
+pub type jvmtiEventGarbageCollectionFinish = extern "system" fn(jvmti_env: JVMTIEnv);
+
+pub type jvmtiEventGarbageCollectionStart = extern "system" fn(jvmti_env: JVMTIEnv);
+
+pub type jvmtiEventMethodEntry = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, method: jmethodID);
+
+pub type jvmtiEventMethodExit =
+    extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, method: jmethodID, was_popped_by_exception: jboolean, return_value: jvalue);
+
+pub type jvmtiEventMonitorContendedEnter = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, object: jobject);
+
+pub type jvmtiEventMonitorContendedEntered = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, object: jobject);
+
+pub type jvmtiEventMonitorWait = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, object: jobject, timeout: jlong);
+
+pub type jvmtiEventMonitorWaited = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, object: jobject, timed_out: jboolean);
+
+pub type jvmtiEventNativeMethodBind =
+    extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, method: jmethodID, address: *mut c_void, new_address_ptr: *mut *mut c_void);
+
+pub type jvmtiEventObjectFree = extern "system" fn(jvmti_env: JVMTIEnv, tag: jlong);
+
+pub type jvmtiEventResourceExhausted = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, flags: jint, reserved: *const c_void, description: *const c_char);
+
+pub type jvmtiEventSampledObjectAlloc = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, object: jobject, object_klass: jclass, size: jlong);
+
+pub type jvmtiEventSingleStep = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, method: jmethodID, location: jlocation);
+
+pub type jvmtiEventThreadEnd = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread);
+
+pub type jvmtiEventThreadStart = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread);
+
+pub type jvmtiEventVirtualThreadEnd = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, virtual_thread: jthread);
+
+pub type jvmtiEventVirtualThreadStart = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, virtual_thread: jthread);
+
+pub type jvmtiEventVMDeath = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv);
+
+pub type jvmtiEventVMInit = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread);
+
+pub type jvmtiEventVMObjectAlloc = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv, thread: jthread, object: jobject, object_klass: jclass, size: jlong);
+
+pub type jvmtiEventVMStart = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JNIEnv);
+
+#[derive(Debug, Clone, Default)]
+#[repr(C)]
+pub struct jvmtiEventCallbacks {
+    pub VMInit: Option<jvmtiEventVMInit>,
+    pub VMDeath: Option<jvmtiEventVMDeath>,
+    pub ThreadStart: Option<jvmtiEventThreadStart>,
+    pub ThreadEnd: Option<jvmtiEventThreadEnd>,
+    pub ClassFileLoadHook: Option<jvmtiEventClassFileLoadHook>,
+    pub ClassLoad: Option<jvmtiEventClassLoad>,
+    pub ClassPrepare: Option<jvmtiEventClassPrepare>,
+    pub VMStart: Option<jvmtiEventVMStart>,
+    pub Exception: Option<jvmtiEventException>,
+    pub ExceptionCatch: Option<jvmtiEventExceptionCatch>,
+    pub SingleStep: Option<jvmtiEventSingleStep>,
+    pub FramePop: Option<jvmtiEventFramePop>,
+    pub Breakpoint: Option<jvmtiEventBreakpoint>,
+    pub FieldAccess: Option<jvmtiEventFieldAccess>,
+    pub FieldModification: Option<jvmtiEventFieldModification>,
+    pub MethodEntry: Option<jvmtiEventMethodEntry>,
+    pub MethodExit: Option<jvmtiEventMethodExit>,
+    pub NativeMethodBind: Option<jvmtiEventNativeMethodBind>,
+    pub CompiledMethodLoad: Option<jvmtiEventCompiledMethodLoad>,
+    pub CompiledMethodUnload: Option<jvmtiEventCompiledMethodUnload>,
+    pub DynamicCodeGenerated: Option<jvmtiEventDynamicCodeGenerated>,
+    pub DataDumpRequest: Option<jvmtiEventDataDumpRequest>,
+    pub reserved72: Option<jvmtiEventReserved>,
+    pub MonitorWait: Option<jvmtiEventMonitorWait>,
+    pub MonitorWaited: Option<jvmtiEventMonitorWaited>,
+    pub MonitorContendedEnter: Option<jvmtiEventMonitorContendedEnter>,
+    pub MonitorContendedEntered: Option<jvmtiEventMonitorContendedEntered>,
+    pub reserved77: Option<jvmtiEventReserved>,
+    pub reserved78: Option<jvmtiEventReserved>,
+    pub reserved79: Option<jvmtiEventReserved>,
+    pub ResourceExhausted: Option<jvmtiEventResourceExhausted>,
+    pub GarbageCollectionStart: Option<jvmtiEventGarbageCollectionStart>,
+    pub GarbageCollectionFinish: Option<jvmtiEventGarbageCollectionFinish>,
+    pub ObjectFree: Option<jvmtiEventObjectFree>,
+    pub VMObjectAlloc: Option<jvmtiEventVMObjectAlloc>,
+    pub reserved85: Option<jvmtiEventReserved>,
+    pub SampledObjectAlloc: Option<jvmtiEventSampledObjectAlloc>,
+    pub VirtualThreadStart: Option<jvmtiEventVirtualThreadStart>,
+    pub VirtualThreadEnd: Option<jvmtiEventVirtualThreadEnd>,
 }
 
 #[repr(transparent)]
@@ -1023,52 +1194,52 @@ impl jvmtiCapabilities {
 impl Display for jvmtiCapabilities {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!(
-            "jvmtiCapabilities {{\n
-    can_tag_objects: {}\n
-    can_generate_field_modification_events: {}\n
-    can_generate_field_access_events: {}\n
-    can_get_bytecodes: {}\n
-    can_get_synthetic_attribute: {}\n
-    can_get_owned_monitor_info: {}\n
-    can_get_current_contended_monitor: {}\n
-    can_get_monitor_info: {}\n
-    can_pop_frame: {}\n
-    can_redefine_classes: {}\n
-    can_signal_thread: {}\n
-    can_get_source_file_name: {}\n
-    can_get_line_numbers: {}\n
-    can_get_source_debug_extension: {}\n
-    can_access_local_variables: {}\n
-    can_maintain_original_method_order: {}\n
-    can_generate_single_step_events: {}\n
-    can_generate_exception_events: {}\n
-    can_generate_frame_pop_events: {}\n
-    can_generate_breakpoint_events: {}\n
-    can_suspend: {}\n
-    can_redefine_any_class: {}\n
-    can_get_current_thread_cpu_time: {}\n
-    can_get_thread_cpu_time: {}\n
-    can_generate_method_entry_events: {}\n
-    can_generate_method_exit_events: {}\n
-    can_generate_all_class_hook_events: {}\n
-    can_generate_compiled_method_load_events: {}\n
-    can_generate_monitor_events: {}\n
-    can_generate_vm_object_alloc_events: {}\n
-    can_generate_native_method_bind_events: {}\n
-    can_generate_garbage_collection_events: {}\n
-    can_generate_object_free_events: {}\n
-    can_force_early_return: {}\n
-    can_get_owned_monitor_stack_depth_info: {}\n
-    can_get_constant_pool: {}\n
-    can_set_native_method_prefix: {}\n
-    can_retransform_classes: {}\n
-    can_retransform_any_class: {}\n
-    can_generate_resource_exhaustion_heap_events: {}\n
-    can_generate_resource_exhaustion_threads_events: {}\n
-    can_generate_early_vmstart: {}\n
-    can_generate_early_class_hook_events: {}\n
-    can_generate_sampled_object_alloc_events: {}\n
-    can_support_virtual_threads: {}\n
+            "jvmtiCapabilities {{
+    can_tag_objects: {}
+    can_generate_field_modification_events: {}
+    can_generate_field_access_events: {}
+    can_get_bytecodes: {}
+    can_get_synthetic_attribute: {}
+    can_get_owned_monitor_info: {}
+    can_get_current_contended_monitor: {}
+    can_get_monitor_info: {}
+    can_pop_frame: {}
+    can_redefine_classes: {}
+    can_signal_thread: {}
+    can_get_source_file_name: {}
+    can_get_line_numbers: {}
+    can_get_source_debug_extension: {}
+    can_access_local_variables: {}
+    can_maintain_original_method_order: {}
+    can_generate_single_step_events: {}
+    can_generate_exception_events: {}
+    can_generate_frame_pop_events: {}
+    can_generate_breakpoint_events: {}
+    can_suspend: {}
+    can_redefine_any_class: {}
+    can_get_current_thread_cpu_time: {}
+    can_get_thread_cpu_time: {}
+    can_generate_method_entry_events: {}
+    can_generate_method_exit_events: {}
+    can_generate_all_class_hook_events: {}
+    can_generate_compiled_method_load_events: {}
+    can_generate_monitor_events: {}
+    can_generate_vm_object_alloc_events: {}
+    can_generate_native_method_bind_events: {}
+    can_generate_garbage_collection_events: {}
+    can_generate_object_free_events: {}
+    can_force_early_return: {}
+    can_get_owned_monitor_stack_depth_info: {}
+    can_get_constant_pool: {}
+    can_set_native_method_prefix: {}
+    can_retransform_classes: {}
+    can_retransform_any_class: {}
+    can_generate_resource_exhaustion_heap_events: {}
+    can_generate_resource_exhaustion_threads_events: {}
+    can_generate_early_vmstart: {}
+    can_generate_early_class_hook_events: {}
+    can_generate_sampled_object_alloc_events: {}
+    can_support_virtual_threads: {}
 }}",
             self.can_tag_objects(),
             self.can_generate_field_modification_events(),
@@ -1121,7 +1292,7 @@ impl Display for jvmtiCapabilities {
 
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
-struct jvmtiHeapReferenceInfoReserved {
+pub struct jvmtiHeapReferenceInfoReserved {
     pub reserved1: jlong,
     pub reserved2: jlong,
     pub reserved3: jlong,
@@ -1221,12 +1392,12 @@ pub struct jvmtiHeapReferenceInfoConstantPool {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct jvmtiHeapReferenceInfoStackLocal {
-    thread_tag: jlong,
-    thread_id: jlong,
-    depth: jint,
-    method: jmethodID,
-    location: jlocation,
-    slot: jint,
+    pub thread_tag: jlong,
+    pub thread_id: jlong,
+    pub depth: jint,
+    pub method: jmethodID,
+    pub location: jlocation,
+    pub slot: jint,
 }
 
 impl Default for jvmtiHeapReferenceInfoStackLocal {
@@ -1245,10 +1416,10 @@ impl Default for jvmtiHeapReferenceInfoStackLocal {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct jvmtiHeapReferenceInfoJniLocal {
-    thread_tag: jlong,
-    thread_id: jlong,
-    depth: jint,
-    method: jmethodID,
+    pub thread_tag: jlong,
+    pub thread_id: jlong,
+    pub depth: jint,
+    pub method: jmethodID,
 }
 
 impl Default for jvmtiHeapReferenceInfoJniLocal {
@@ -1264,12 +1435,12 @@ impl Default for jvmtiHeapReferenceInfoJniLocal {
 
 #[repr(C)]
 pub union jvmtiHeapReferenceInfo {
-    field: jvmtiHeapReferenceInfoField,
-    array: jvmtiHeapReferenceInfoArray,
-    constant_pool: jvmtiHeapReferenceInfoConstantPool,
-    stack_local: jvmtiHeapReferenceInfoStackLocal,
-    jni_local: jvmtiHeapReferenceInfoJniLocal,
-    other: jvmtiHeapReferenceInfoReserved,
+    pub field: jvmtiHeapReferenceInfoField,
+    pub array: jvmtiHeapReferenceInfoArray,
+    pub constant_pool: jvmtiHeapReferenceInfoConstantPool,
+    pub stack_local: jvmtiHeapReferenceInfoStackLocal,
+    pub jni_local: jvmtiHeapReferenceInfoJniLocal,
+    pub other: jvmtiHeapReferenceInfoReserved,
 }
 
 pub type jvmtiHeapIterationCallback = extern "system" fn(class_tag: jlong, size: jlong, tag_ptr: *mut jlong, length: jint, user_data: *mut c_void) -> jint;
@@ -1361,20 +1532,19 @@ pub const JVMTI_REFERENCE_INTERFACE: jvmtiObjectReferenceKind = 7;
 pub const JVMTI_REFERENCE_STATIC_FIELD: jvmtiObjectReferenceKind = 8;
 pub const JVMTI_REFERENCE_CONSTANT_POOL: jvmtiObjectReferenceKind = 9;
 
-
 //// GetClassStatus bitmask values
 ///	Class bytecodes have been verified
-pub const JVMTI_CLASS_STATUS_VERIFIED : jint = 1;
+pub const JVMTI_CLASS_STATUS_VERIFIED: jint = 1;
 /// Class preparation is complete
-pub const JVMTI_CLASS_STATUS_PREPARED : jint = 2;
+pub const JVMTI_CLASS_STATUS_PREPARED: jint = 2;
 /// Class initialization is complete. Static initializer has been run.
-pub const JVMTI_CLASS_STATUS_INITIALIZED : jint = 4;
+pub const JVMTI_CLASS_STATUS_INITIALIZED: jint = 4;
 /// Error during initialization makes class unusable
-pub const JVMTI_CLASS_STATUS_ERROR : jint = 8;
+pub const JVMTI_CLASS_STATUS_ERROR: jint = 8;
 /// Class is an array. If set, all other bits are zero.
-pub const JVMTI_CLASS_STATUS_ARRAY : jint = 16;
+pub const JVMTI_CLASS_STATUS_ARRAY: jint = 16;
 /// Class is a primitive class (for example, java.lang.Integer.TYPE). If set, all other bits are zero.
-pub const JVMTI_CLASS_STATUS_PRIMITIVE : jint = 32;
+pub const JVMTI_CLASS_STATUS_PRIMITIVE: jint = 32;
 
 #[derive(Debug, Default, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Hash)]
 #[repr(C)]
@@ -1461,30 +1631,46 @@ pub type jvmtiStartFunction = extern "system" fn(JVMTIEnv, JNIEnv, *mut c_void);
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
-pub struct jvmtiClassDefinition{
-    klass: jclass,
-    class_byte_count: jint,
-    class_bytes: *const c_uchar,
+pub struct jvmtiClassDefinition {
+    pub klass: jclass,
+    pub class_byte_count: jint,
+    pub class_bytes: *const c_uchar,
 }
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
-pub struct jvmtiMonitorUsage{
-    owner: jthread,
-    entry_count: jint,
-    waiter_count: jint,
-    waiters: *mut jthread,
-    notify_waiter_count: jint,
-    notify_waiters: *mut jthread,
+pub struct jvmtiMonitorUsage {
+    pub owner: jthread,
+    pub entry_count: jint,
+    pub waiter_count: jint,
+    pub waiters: *mut jthread,
+    pub notify_waiter_count: jint,
+    pub notify_waiters: *mut jthread,
 }
 
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[repr(C)]
+pub struct jvmtiLineNumberEntry {
+    pub start_location: jlocation,
+    pub line_number: jint,
+}
 
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct jvmtiLocalVariableEntry {
+    pub start_location: jlocation,
+    pub length: jint,
+    pub name: *mut c_char,
+    pub signature: *mut c_char,
+    pub generic_signature: *mut c_char,
+    pub slot: jint,
+}
 
 /// Vtable of `JVMTIEnv` is passed like this.
-type JVMTIEnvVTable = *mut *mut [*mut c_void; 157];
+type JVMTIEnvVTable = *mut *mut *mut c_void;
 
 #[derive(Debug, Clone, Copy)]
-#[repr(C)]
+#[repr(transparent)]
 pub struct JVMTIEnv {
     /// The vtable that contains all the functions
     vtable: JVMTIEnvVTable,
@@ -1514,7 +1700,7 @@ impl JVMTIEnv {
     ///
     #[inline(always)]
     unsafe fn jvmti<X>(&self, index: usize) -> X {
-        mem::transmute_copy(&(**self.vtable)[index])
+        mem::transmute_copy(&(self.vtable.read_volatile().add(index).read_volatile()))
     }
 
     pub unsafe fn GetVersionNumber(&self, version_ptr: *mut jint) -> jvmtiError {
@@ -1790,7 +1976,13 @@ impl JVMTIEnv {
     #[deprecated(
         note = "This function was introduced in the original JVM TI version 1.0. It has been superseded in JVM TI version 1.2 (Java SE 6) and will be changed to return an error in a future release."
     )]
-    pub unsafe fn IterateOverInstancesOfClass(&self, klass: jclass, object_filter: jvmtiHeapObjectFilter, heap_object_callback: jvmtiHeapObjectCallback, user_data: *const c_void) -> jvmtiError {
+    pub unsafe fn IterateOverInstancesOfClass(
+        &self,
+        klass: jclass,
+        object_filter: jvmtiHeapObjectFilter,
+        heap_object_callback: jvmtiHeapObjectCallback,
+        user_data: *const c_void,
+    ) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jvmtiHeapObjectFilter, jvmtiHeapObjectCallback, *const c_void) -> jvmtiError>(111)(
             self.vtable,
             klass,
@@ -1801,323 +1993,158 @@ impl JVMTIEnv {
     }
 
     pub unsafe fn GetLocalObject(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jobject) -> jvmtiError>(20)(
-            self.vtable,
-            thread,
-            depth,
-            slot,
-            value_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jobject) -> jvmtiError>(20)(self.vtable, thread, depth, slot, value_ptr)
     }
 
     pub unsafe fn GetLocalInstance(&self, thread: jthread, depth: jint, value_ptr: *mut jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, *mut jobject) -> jvmtiError>(154)(
-            self.vtable,
-            thread,
-            depth,
-            value_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, *mut jobject) -> jvmtiError>(154)(self.vtable, thread, depth, value_ptr)
     }
 
     pub unsafe fn GetLocalInt(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jint) -> jvmtiError>(21)(
-            self.vtable,
-            thread,
-            depth,
-            slot,
-            value_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jint) -> jvmtiError>(21)(self.vtable, thread, depth, slot, value_ptr)
     }
 
     pub unsafe fn GetLocalLong(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jlong) -> jvmtiError>(22)(
-            self.vtable,
-            thread,
-            depth,
-            slot,
-            value_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jlong) -> jvmtiError>(22)(self.vtable, thread, depth, slot, value_ptr)
     }
 
     pub unsafe fn GetLocalFloat(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jfloat) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jfloat) -> jvmtiError>(23)(
-            self.vtable,
-            thread,
-            depth,
-            slot,
-            value_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jfloat) -> jvmtiError>(23)(self.vtable, thread, depth, slot, value_ptr)
     }
 
     pub unsafe fn GetLocalDouble(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jdouble) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jdouble) -> jvmtiError>(24)(
-            self.vtable,
-            thread,
-            depth,
-            slot,
-            value_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jdouble) -> jvmtiError>(24)(self.vtable, thread, depth, slot, value_ptr)
     }
 
     pub unsafe fn SetLocalObject(&self, thread: jthread, depth: jint, slot: jint, value: jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jobject) -> jvmtiError>(25)(
-            self.vtable,
-            thread,
-            depth,
-            slot,
-            value,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jobject) -> jvmtiError>(25)(self.vtable, thread, depth, slot, value)
     }
 
     pub unsafe fn SetLocalInt(&self, thread: jthread, depth: jint, slot: jint, value: jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jint) -> jvmtiError>(26)(
-            self.vtable,
-            thread,
-            depth,
-            slot,
-            value,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jint) -> jvmtiError>(26)(self.vtable, thread, depth, slot, value)
     }
 
     pub unsafe fn SetLocalLong(&self, thread: jthread, depth: jint, slot: jint, value: jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jlong) -> jvmtiError>(27)(
-            self.vtable,
-            thread,
-            depth,
-            slot,
-            value,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jlong) -> jvmtiError>(27)(self.vtable, thread, depth, slot, value)
     }
 
     pub unsafe fn SetLocalFloat(&self, thread: jthread, depth: jint, slot: jint, value: jfloat) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jfloat) -> jvmtiError>(28)(
-            self.vtable,
-            thread,
-            depth,
-            slot,
-            value,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jfloat) -> jvmtiError>(28)(self.vtable, thread, depth, slot, value)
     }
 
     pub unsafe fn SetLocalDouble(&self, thread: jthread, depth: jint, slot: jint, value: jdouble) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jdouble) -> jvmtiError>(29)(
-            self.vtable,
-            thread,
-            depth,
-            slot,
-            value,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jdouble) -> jvmtiError>(29)(self.vtable, thread, depth, slot, value)
     }
 
     pub unsafe fn SetBreakpoint(&self, method: jmethodID, location: jlocation) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, jlocation) -> jvmtiError>(37)(
-            self.vtable,
-            method,
-            location
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, jlocation) -> jvmtiError>(37)(self.vtable, method, location)
     }
 
     pub unsafe fn ClearBreakpoint(&self, method: jmethodID, location: jlocation) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, jlocation) -> jvmtiError>(37)(
-            self.vtable,
-            method,
-            location
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, jlocation) -> jvmtiError>(37)(self.vtable, method, location)
     }
 
     pub unsafe fn SetFieldAccessWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(40)(
-            self.vtable,
-            klass,
-            field
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(40)(self.vtable, klass, field)
     }
 
     pub unsafe fn ClearFieldAccessWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(41)(
-            self.vtable,
-            klass,
-            field
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(41)(self.vtable, klass, field)
     }
 
     pub unsafe fn SetFieldModificationWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(42)(
-            self.vtable,
-            klass,
-            field
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(42)(self.vtable, klass, field)
     }
 
     pub unsafe fn ClearFieldModificationWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(43)(
-            self.vtable,
-            klass,
-            field
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(43)(self.vtable, klass, field)
     }
 
     pub unsafe fn GetAllModules(&self, module_count_ptr: *mut jint, modules_ptr: *mut *mut jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jobject) -> jvmtiError>(2)(
-            self.vtable,
-            module_count_ptr,
-            modules_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jobject) -> jvmtiError>(2)(self.vtable, module_count_ptr, modules_ptr)
     }
 
     pub unsafe fn GetNamedModule(&self, class_loader: jobject, package_name: impl UseCString, module_ptr: *mut jobject) -> jvmtiError {
         package_name.use_as_const_c_char(|package_name| {
-            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, *mut jobject) -> jvmtiError>(39)(
-                self.vtable,
-                class_loader,
-                package_name,
-                module_ptr
-            )
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, *mut jobject) -> jvmtiError>(39)(self.vtable, class_loader, package_name, module_ptr)
         })
     }
 
     pub unsafe fn AddModuleReads(&self, module: jobject, to_module: jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jobject) -> jvmtiError>(93)(
-            self.vtable,
-            module,
-            to_module,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jobject) -> jvmtiError>(93)(self.vtable, module, to_module)
     }
 
     pub unsafe fn AddModuleExports(&self, module: jobject, pkg_name: impl UseCString, to_module: jobject) -> jvmtiError {
         pkg_name.use_as_const_c_char(|pkg_name| {
-            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(94)(
-                self.vtable,
-                module,
-                pkg_name,
-                to_module,
-            )
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(94)(self.vtable, module, pkg_name, to_module)
         })
     }
 
     pub unsafe fn AddModuleOpens(&self, module: jobject, pkg_name: impl UseCString, to_module: jobject) -> jvmtiError {
         pkg_name.use_as_const_c_char(|pkg_name| {
-            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(95)(
-                self.vtable,
-                module,
-                pkg_name,
-                to_module,
-            )
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(95)(self.vtable, module, pkg_name, to_module)
         })
     }
 
     pub unsafe fn AddModuleUses(&self, module: jobject, service: jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass) -> jvmtiError>(96)(
-            self.vtable,
-            module,
-            service,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass) -> jvmtiError>(96)(self.vtable, module, service)
     }
 
     pub unsafe fn AddModuleProvides(&self, module: jobject, service: jclass, impl_class: jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass, jclass) -> jvmtiError>(97)(
-            self.vtable,
-            module,
-            service,
-            impl_class,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass, jclass) -> jvmtiError>(97)(self.vtable, module, service, impl_class)
     }
 
     pub unsafe fn IsModifiableModule(&self, module: jobject, is_modifiable_module_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jboolean) -> jvmtiError>(98)(
-            self.vtable,
-            module,
-            is_modifiable_module_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jboolean) -> jvmtiError>(98)(self.vtable, module, is_modifiable_module_ptr)
     }
 
     pub unsafe fn GetLoadedClasses(&self, count_ptr: *mut jint, classes_ptr: *mut *mut jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jclass) -> jvmtiError>(77)(
-            self.vtable,
-            count_ptr,
-            classes_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jclass) -> jvmtiError>(77)(self.vtable, count_ptr, classes_ptr)
     }
 
     pub unsafe fn GetClassLoaderClasses(&self, initiating_loader: jobject, count_ptr: *mut jint, classes_ptr: *mut *mut jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint, *mut *mut jclass) -> jvmtiError>(78)(
-            self.vtable,
-            initiating_loader,
-            count_ptr,
-            classes_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint, *mut *mut jclass) -> jvmtiError>(78)(self.vtable, initiating_loader, count_ptr, classes_ptr)
     }
 
     pub unsafe fn GetClassSignature(&self, klass: jclass, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(47)(
-            self.vtable,
-            klass,
-            signature_ptr,
-            generic_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(47)(self.vtable, klass, signature_ptr, generic_ptr)
     }
 
     pub unsafe fn GetClassStatus(&self, klass: jclass, status_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(48)(
-            self.vtable,
-            klass,
-            status_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(48)(self.vtable, klass, status_ptr)
     }
 
     pub unsafe fn GetSourceFileName(&self, klass: jclass, source_name_ptr: *mut *mut c_char) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(49)(
-            self.vtable,
-            klass,
-            source_name_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(49)(self.vtable, klass, source_name_ptr)
     }
 
     pub unsafe fn GetClassModifiers(&self, klass: jclass, modifiers_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(50)(
-            self.vtable,
-            klass,
-            modifiers_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(50)(self.vtable, klass, modifiers_ptr)
     }
 
     pub unsafe fn GetClassMethods(&self, klass: jclass, method_count_ptr: *mut jint, methods_ptr: *mut *mut jmethodID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jmethodID) -> jvmtiError>(51)(
-            self.vtable,
-            klass,
-            method_count_ptr,
-            methods_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jmethodID) -> jvmtiError>(51)(self.vtable, klass, method_count_ptr, methods_ptr)
     }
 
     pub unsafe fn GetClassFields(&self, klass: jclass, field_count_ptr: *mut jint, fields_ptr: *mut *mut jfieldID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jfieldID) -> jvmtiError>(52)(
-            self.vtable,
-            klass,
-            field_count_ptr,
-            fields_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jfieldID) -> jvmtiError>(52)(self.vtable, klass, field_count_ptr, fields_ptr)
     }
 
     pub unsafe fn GetImplementedInterfaces(&self, klass: jclass, interface_count_ptr: *mut jint, interfaces_ptr: *mut *mut jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jclass) -> jvmtiError>(53)(
-            self.vtable,
-            klass,
-            interface_count_ptr,
-            interfaces_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jclass) -> jvmtiError>(53)(self.vtable, klass, interface_count_ptr, interfaces_ptr)
     }
 
     pub unsafe fn GetClassVersionNumbers(&self, klass: jclass, minor_version_ptr: *mut jint, major_version_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint) -> jvmtiError>(54)(
-            self.vtable,
-            klass,
-            minor_version_ptr,
-            major_version_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint) -> jvmtiError>(54)(self.vtable, klass, minor_version_ptr, major_version_ptr)
     }
 
-    pub unsafe fn GetConstantPool(&self, klass: jclass, constant_pool_count_ptr: *mut jint, constant_pool_byte_count_ptr: *mut jint, constant_pool_bytes_ptr: *mut *mut c_uchar) -> jvmtiError {
+    pub unsafe fn GetConstantPool(
+        &self,
+        klass: jclass,
+        constant_pool_count_ptr: *mut jint,
+        constant_pool_byte_count_ptr: *mut jint,
+        constant_pool_bytes_ptr: *mut *mut c_uchar,
+    ) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint, *mut *mut c_uchar) -> jvmtiError>(54)(
             self.vtable,
             klass,
@@ -2128,83 +2155,43 @@ impl JVMTIEnv {
     }
 
     pub unsafe fn IsInterface(&self, klass: jclass, is_interface_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(54)(
-            self.vtable,
-            klass,
-            is_interface_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(54)(self.vtable, klass, is_interface_ptr)
     }
 
     pub unsafe fn IsArrayClass(&self, klass: jclass, is_array_class_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(55)(
-            self.vtable,
-            klass,
-            is_array_class_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(55)(self.vtable, klass, is_array_class_ptr)
     }
 
     pub unsafe fn IsModifiableClass(&self, klass: jclass, is_modifiable_class_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(44)(
-            self.vtable,
-            klass,
-            is_modifiable_class_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(44)(self.vtable, klass, is_modifiable_class_ptr)
     }
 
     pub unsafe fn GetClassLoader(&self, klass: jclass, classloader_ptr: *mut jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jobject) -> jvmtiError>(56)(
-            self.vtable,
-            klass,
-            classloader_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jobject) -> jvmtiError>(56)(self.vtable, klass, classloader_ptr)
     }
 
     pub unsafe fn GetSourceDebugExtension(&self, klass: jclass, source_debug_extension_ptr: *mut *mut c_char) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(89)(
-            self.vtable,
-            klass,
-            source_debug_extension_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(89)(self.vtable, klass, source_debug_extension_ptr)
     }
 
     pub unsafe fn RetransformClasses(&self, class_count: jint, classes: *const jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jclass) -> jvmtiError>(151)(
-            self.vtable,
-            class_count,
-            classes
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jclass) -> jvmtiError>(151)(self.vtable, class_count, classes)
     }
 
     pub unsafe fn RedefineClasses(&self, class_count: jint, class_definitions: *const jvmtiClassDefinition) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jvmtiClassDefinition) -> jvmtiError>(86)(
-            self.vtable,
-            class_count,
-            class_definitions
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jvmtiClassDefinition) -> jvmtiError>(86)(self.vtable, class_count, class_definitions)
     }
 
     pub unsafe fn GetObjectSize(&self, object: jobject, size_ptr: *mut jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jlong) -> jvmtiError>(153)(
-            self.vtable,
-            object,
-            size_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jlong) -> jvmtiError>(153)(self.vtable, object, size_ptr)
     }
 
     pub unsafe fn GetObjectHashCode(&self, object: jobject, hash_code_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint) -> jvmtiError>(57)(
-            self.vtable,
-            object,
-            hash_code_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint) -> jvmtiError>(57)(self.vtable, object, hash_code_ptr)
     }
 
     pub unsafe fn GetObjectMonitorUsage(&self, object: jobject, info_ptr: *mut jvmtiMonitorUsage) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jvmtiMonitorUsage) -> jvmtiError>(58)(
-            self.vtable,
-            object,
-            info_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jvmtiMonitorUsage) -> jvmtiError>(58)(self.vtable, object, info_ptr)
     }
 
     pub unsafe fn GetFieldName(&self, klass: jclass, field: jfieldID, name_ptr: *mut *mut c_char, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
@@ -2214,35 +2201,20 @@ impl JVMTIEnv {
             field,
             name_ptr,
             signature_ptr,
-            generic_ptr
+            generic_ptr,
         )
     }
 
     pub unsafe fn GetFieldDeclaringClass(&self, klass: jclass, field: jfieldID, declaring_class_ptr: *mut jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jclass) -> jvmtiError>(60)(
-            self.vtable,
-            klass,
-            field,
-            declaring_class_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jclass) -> jvmtiError>(60)(self.vtable, klass, field, declaring_class_ptr)
     }
 
     pub unsafe fn GetFieldModifiers(&self, klass: jclass, field: jfieldID, modifiers_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jint) -> jvmtiError>(61)(
-            self.vtable,
-            klass,
-            field,
-            modifiers_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jint) -> jvmtiError>(61)(self.vtable, klass, field, modifiers_ptr)
     }
 
     pub unsafe fn IsFieldSynthetic(&self, klass: jclass, field: jfieldID, is_synthetic_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jboolean) -> jvmtiError>(62)(
-            self.vtable,
-            klass,
-            field,
-            is_synthetic_ptr,
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jboolean) -> jvmtiError>(62)(self.vtable, klass, field, is_synthetic_ptr)
     }
 
     pub unsafe fn GetMethodName(&self, method: jmethodID, name_ptr: *mut *mut c_char, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
@@ -2256,43 +2228,532 @@ impl JVMTIEnv {
     }
 
     pub unsafe fn GetMethodDeclaringClass(&self, method: jmethodID, declaring_class_ptr: *mut jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jclass) -> jvmtiError>(64)(
-            self.vtable,
-            method,
-            declaring_class_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jclass) -> jvmtiError>(64)(self.vtable, method, declaring_class_ptr)
     }
 
     pub unsafe fn GetMethodModifiers(&self, method: jmethodID, modifiers_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(65)(
-            self.vtable,
-            method,
-            modifiers_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(65)(self.vtable, method, modifiers_ptr)
     }
 
     pub unsafe fn GetMaxLocals(&self, method: jmethodID, modifiers_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(67)(
-            self.vtable,
-            method,
-            modifiers_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(67)(self.vtable, method, modifiers_ptr)
     }
 
     pub unsafe fn GetArgumentsSize(&self, method: jmethodID, modifiers_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(68)(
-            self.vtable,
-            method,
-            modifiers_ptr
-        )
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(68)(self.vtable, method, modifiers_ptr)
+    }
+
+    pub unsafe fn GetLineNumberTable(&self, method: jmethodID, entry_count_ptr: *mut jint, table_ptr: *mut *mut jvmtiLineNumberEntry) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut jvmtiLineNumberEntry) -> jvmtiError>(69)(self.vtable, method, entry_count_ptr, table_ptr)
+    }
+
+    pub unsafe fn GetMethodLocation(&self, method: jmethodID, start_location_ptr: *mut jlocation, end_location_ptr: *mut jlocation) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jlocation, *mut jlocation) -> jvmtiError>(70)(self.vtable, method, start_location_ptr, end_location_ptr)
+    }
+
+    pub unsafe fn GetLocalVariableTable(&self, method: jmethodID, entry_count_ptr: *mut jint, table_ptr: *mut *mut jvmtiLocalVariableEntry) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut jvmtiLocalVariableEntry) -> jvmtiError>(71)(self.vtable, method, entry_count_ptr, table_ptr)
+    }
+
+    pub unsafe fn GetBytecodes(&self, method: jmethodID, bytecode_count_ptr: *mut jint, bytecodes_ptr: *mut *mut c_uchar) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut c_uchar) -> jvmtiError>(74)(self.vtable, method, bytecode_count_ptr, bytecodes_ptr)
+    }
+
+    pub unsafe fn IsMethodNative(&self, method: jmethodID, is_native_ptr: *mut jboolean) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(75)(self.vtable, method, is_native_ptr)
+    }
+
+    pub unsafe fn IsMethodSynthetic(&self, method: jmethodID, is_synthetic_ptr: *mut jboolean) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(76)(self.vtable, method, is_synthetic_ptr)
+    }
+
+    pub unsafe fn IsMethodObsolete(&self, method: jmethodID, is_obsolete_ptr: *mut jboolean) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(90)(self.vtable, method, is_obsolete_ptr)
+    }
+
+    pub unsafe fn SetNativeMethodPrefix(&self, prefix: impl UseCString) -> jvmtiError {
+        prefix.use_as_const_c_char(|prefix| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(72)(self.vtable, prefix))
+    }
+
+    pub unsafe fn SetNativeMethodPrefixes(&self, prefix_count: jint, prefixes: *mut *mut c_char) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *mut *mut c_char) -> jvmtiError>(73)(self.vtable, prefix_count, prefixes)
+    }
+
+    pub unsafe fn CreateRawMonitor(&self, name: impl UseCString, monitor_ptr: *mut jrawMonitorID) -> jvmtiError {
+        name.use_as_const_c_char(|name| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *mut jrawMonitorID) -> jvmtiError>(30)(self.vtable, name, monitor_ptr))
+    }
+
+    pub unsafe fn DestroyRawMonitor(&self, monitor: jrawMonitorID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(31)(self.vtable, monitor)
+    }
+
+    pub unsafe fn RawMonitorEnter(&self, monitor: jrawMonitorID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(32)(self.vtable, monitor)
+    }
+
+    pub unsafe fn RawMonitorExit(&self, monitor: jrawMonitorID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(33)(self.vtable, monitor)
+    }
+
+    pub unsafe fn RawMonitorWait(&self, monitor: jrawMonitorID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(34)(self.vtable, monitor)
+    }
+
+    pub unsafe fn RawMonitorNotify(&self, monitor: jrawMonitorID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(35)(self.vtable, monitor)
+    }
+
+    pub unsafe fn RawMonitorNotifyAll(&self, monitor: jrawMonitorID) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(36)(self.vtable, monitor)
+    }
+
+    pub unsafe fn SetJNIFunctionTable(&self, function_table: jniNativeInterface) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jniNativeInterface) -> jvmtiError>(119)(self.vtable, function_table)
+    }
+
+    pub unsafe fn GetJNIFunctionTable(&self, function_table: *mut jniNativeInterface) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jniNativeInterface) -> jvmtiError>(120)(self.vtable, function_table)
+    }
+
+    pub unsafe fn SetEventCallbacks(&self, callbacks: *const jvmtiEventCallbacks) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiEventCallbacks, jint) -> jvmtiError>(121)(self.vtable, callbacks, size_of::<jvmtiEventCallbacks>() as jint)
+    }
+
+    pub unsafe fn SetEventCallbacks_raw(&self, callbacks: *const c_void, size_of_callbacks: jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiEventCallbacks, jint) -> jvmtiError>(121)(self.vtable, callbacks.cast(), size_of_callbacks)
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+#[repr(transparent)]
+pub struct jniNativeInterface(SyncMutPtr<*mut c_void>);
+
+impl From<jniNativeInterface> for *mut c_void {
+    fn from(value: jniNativeInterface) -> Self {
+        value.0.inner().cast()
+    }
+}
+
+impl jniNativeInterface {
+    ///
+    /// Returns uninitalized jniNativeInterface.
+    /// The interface must be initialized with a call to `JVMTIEnv::GetJNIFunctionTable`
+    /// before it can be used in any way.
+    ///
+    /// # Undefined behvavior of uninitalized `jniNativeInterface`
+    /// Calling any jvmti fn is ub.
+    /// Calling any unsafe fn is ub.
+    pub const fn new_uninit() -> Self {
+        Self(SyncMutPtr::null())
+    }
+
+    /// Constructs a new jniNativeInterface from a raw pointer.
+    /// Unless the raw pointer was constructed by an invocation on `JVMTIEnv::GetJNIFunctionTable`
+    /// then the using the resulting `jniNativeInterface` in any way is UB.
+    pub const unsafe fn from_raw_ptr(ptr: *mut c_void) -> Self {
+        Self(SyncMutPtr::new(ptr.cast()))
+    }
+
+    ///
+    /// Overwrites function in this `jniNativeInterface`
+    ///
+    /// # Undefined behavior
+    /// if value is not a function with a matching signature/calling convention
+    /// then putting the `jniNativeInterface` into use will trigger UB once that linkage is later used.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::*;
+    ///
+    /// extern "system" fn hooked_get_version(_env: JNIEnv) -> jint {
+    ///     println!("JNIEnv GetVersion was called!");
+    ///     JNI_VERSION_1_8
+    /// }
+    ///
+    /// fn install_hook(env: JVMTIEnv) {
+    ///     unsafe {
+    ///         let mut iface = jniNativeInterface::new_uninit();
+    ///         assert_eq!(env.GetJNIFunctionTable(&mut iface), JVMTI_ERROR_NONE);
+    ///         iface.set(JNILinkage::GetVersion, hooked_get_version as _);
+    ///         assert_eq!(env.SetJNIFunctionTable(iface), JVMTI_ERROR_NONE);
+    ///     }
+    /// }
+    /// ```
+    ///
+    pub unsafe fn set(&self, linkage: impl AsJNILinkage, value: *mut c_void) {
+        self.0.add(linkage.linkage()).write_volatile(value);
+    }
+
+    ///
+    /// Returns a function in this `jniNativeInterface`
+    /// This is usually used to retrieve the unhooked original function from a `jniNativeInterface`
+    ///
+    /// # Undefined behavior
+    /// if the size of X is not usize.
+    ///
+    /// # Example
+    /// This example illustrates hooking of the GetVersion function.
+    /// The hooked function calls the original function and prints the result to stdout.
+    /// ```rust
+    /// use std::ffi::c_void;
+    /// use std::ops::DerefMut;
+    /// use std::sync::OnceLock;
+    /// use jni_simple::*;
+    ///
+    /// static ORIGINAL_FUNCTIONS: OnceLock<jniNativeInterface> = OnceLock::new();
+    ///
+    /// extern "system" fn hooked_get_version(env: JNIEnv) -> jint {
+    ///     println!("JNIEnv GetVersion will be called!");
+    ///     let guard = ORIGINAL_FUNCTIONS.get().unwrap();
+    ///     let result = unsafe {
+    ///         guard.get::<extern "system" fn(*mut c_void) -> jint>(JNILinkage::GetVersion)(env.vtable())
+    ///     };
+    ///
+    ///     println!("JNIEnv GetVersion returned {result}!");
+    ///     result
+    /// }
+    ///
+    /// fn install_hook(env: JVMTIEnv) {
+    ///     unsafe {
+    ///         _= ORIGINAL_FUNCTIONS.get_or_init(|| {
+    ///             let mut iface = jniNativeInterface::new_uninit();
+    ///             assert_eq!(env.GetJNIFunctionTable(&mut iface), JVMTI_ERROR_NONE);
+    ///             iface
+    ///         });
+    ///
+    ///         let mut iface = jniNativeInterface::new_uninit();
+    ///         assert_eq!(env.GetJNIFunctionTable(&mut iface), JVMTI_ERROR_NONE);
+    ///         iface.set(JNILinkage::GetVersion, hooked_get_version as _);
+    ///         assert_eq!(env.SetJNIFunctionTable(iface), JVMTI_ERROR_NONE);
+    ///     }
+    /// }
+    /// ```
+    ///
+    pub unsafe fn get<X>(&self, linkage: impl AsJNILinkage) -> X {
+        mem::transmute_copy(&self.0.add(linkage.linkage()).read_volatile())
+    }
+}
+
+/// Enum of all known jni linkage numbers
+/// This is mostly useful for use with jvmti when hooking jvm functions.
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, PartialEq, Eq, Default)]
+#[repr(usize)]
+pub enum JNILinkage {
+    #[default]
+    GetVersion = 4,
+
+    DefineClass = 5,
+    FindClass = 6,
+
+    FromReflectedMethod = 7,
+    FromReflectedField = 8,
+    ToReflectedMethod = 9,
+
+    GetSuperclass = 10,
+    IsAssignableFrom = 11,
+
+    ToReflectedField = 12,
+
+    Throw = 13,
+    ThrowNew = 14,
+    ExceptionOccurred = 15,
+    ExceptionDescribe = 16,
+    ExceptionClear = 17,
+    FatalError = 18,
+
+    PushLocalFrame = 19,
+    PopLocalFrame = 20,
+
+    NewGlobalRef = 21,
+    DeleteGlobalRef = 22,
+    DeleteLocalRef = 23,
+    IsSameObject = 24,
+    NewLocalRef = 25,
+    EnsureLocalCapacity = 26,
+
+    AllocObject = 27,
+    NewObject = 28,
+    NewObjectV = 29,
+    NewObjectA = 30,
+
+    GetObjectClass = 31,
+    IsInstanceOf = 32,
+
+    GetMethodID = 33,
+
+    CallObjectMethod = 34,
+    CallObjectMethodV = 35,
+    CallObjectMethodA = 36,
+    CallBooleanMethod = 37,
+    CallBooleanMethodV = 38,
+    CallBooleanMethodA = 39,
+    CallByteMethod = 40,
+    CallByteMethodV = 41,
+    CallByteMethodA = 42,
+    CallCharMethod = 43,
+    CallCharMethodV = 44,
+    CallCharMethodA = 45,
+    CallShortMethod = 46,
+    CallShortMethodV = 47,
+    CallShortMethodA = 48,
+    CallIntMethod = 49,
+    CallIntMethodV = 50,
+    CallIntMethodA = 51,
+    CallLongMethod = 52,
+    CallLongMethodV = 53,
+    CallLongMethodA = 54,
+    CallFloatMethod = 55,
+    CallFloatMethodV = 56,
+    CallFloatMethodA = 57,
+    CallDoubleMethod = 58,
+    CallDoubleMethodV = 59,
+    CallDoubleMethodA = 60,
+    CallVoidMethod = 61,
+    CallVoidMethodV = 62,
+    CallVoidMethodA = 63,
+
+    CallNonvirtualObjectMethod = 64,
+    CallNonvirtualObjectMethodV = 65,
+    CallNonvirtualObjectMethodA = 66,
+    CallNonvirtualBooleanMethod = 67,
+    CallNonvirtualBooleanMethodV = 68,
+    CallNonvirtualBooleanMethodA = 69,
+    CallNonvirtualByteMethod = 70,
+    CallNonvirtualByteMethodV = 71,
+    CallNonvirtualByteMethodA = 72,
+    CallNonvirtualCharMethod = 73,
+    CallNonvirtualCharMethodV = 74,
+    CallNonvirtualCharMethodA = 75,
+    CallNonvirtualShortMethod = 76,
+    CallNonvirtualShortMethodV = 77,
+    CallNonvirtualShortMethodA = 78,
+    CallNonvirtualIntMethod = 79,
+    CallNonvirtualIntMethodV = 80,
+    CallNonvirtualIntMethodA = 81,
+    CallNonvirtualLongMethod = 82,
+    CallNonvirtualLongMethodV = 83,
+    CallNonvirtualLongMethodA = 84,
+    CallNonvirtualFloatMethod = 85,
+    CallNonvirtualFloatMethodV = 86,
+    CallNonvirtualFloatMethodA = 87,
+    CallNonvirtualDoubleMethod = 88,
+    CallNonvirtualDoubleMethodV = 89,
+    CallNonvirtualDoubleMethodA = 90,
+    CallNonvirtualVoidMethod = 91,
+    CallNonvirtualVoidMethodV = 92,
+    CallNonvirtualVoidMethodA = 93,
+
+    GetFieldID = 94,
+
+    GetObjectField = 95,
+    GetBooleanField = 96,
+    GetByteField = 97,
+    GetCharField = 98,
+    GetShortField = 99,
+    GetIntField = 100,
+    GetLongField = 101,
+    GetFloatField = 102,
+    GetDoubleField = 103,
+    SetObjectField = 104,
+    SetBooleanField = 105,
+    SetByteField = 106,
+    SetCharField = 107,
+    SetShortField = 108,
+    SetIntField = 109,
+    SetLongField = 110,
+    SetFloatField = 111,
+    SetDoubleField = 112,
+
+    GetStaticMethodID = 113,
+
+    CallStaticObjectMethod = 114,
+    CallStaticObjectMethodV = 115,
+    CallStaticObjectMethodA = 116,
+    CallStaticBooleanMethod = 117,
+    CallStaticBooleanMethodV = 118,
+    CallStaticBooleanMethodA = 119,
+    CallStaticByteMethod = 120,
+    CallStaticByteMethodV = 121,
+    CallStaticByteMethodA = 122,
+    CallStaticCharMethod = 123,
+    CallStaticCharMethodV = 124,
+    CallStaticCharMethodA = 125,
+    CallStaticShortMethod = 126,
+    CallStaticShortMethodV = 127,
+    CallStaticShortMethodA = 128,
+    CallStaticIntMethod = 129,
+    CallStaticIntMethodV = 130,
+    CallStaticIntMethodA = 131,
+    CallStaticLongMethod = 132,
+    CallStaticLongMethodV = 133,
+    CallStaticLongMethodA = 134,
+    CallStaticFloatMethod = 135,
+    CallStaticFloatMethodV = 136,
+    CallStaticFloatMethodA = 137,
+    CallStaticDoubleMethod = 138,
+    CallStaticDoubleMethodV = 139,
+    CallStaticDoubleMethodA = 140,
+    CallStaticVoidMethod = 141,
+    CallStaticVoidMethodV = 142,
+    CallStaticVoidMethodA = 143,
+
+    GetStaticFieldID = 144,
+
+    GetStaticObjectField = 145,
+    GetStaticBooleanField = 146,
+    GetStaticByteField = 147,
+    GetStaticCharField = 148,
+    GetStaticShortField = 149,
+    GetStaticIntField = 150,
+    GetStaticLongField = 151,
+    GetStaticFloatField = 152,
+    GetStaticDoubleField = 153,
+
+    SetStaticObjectField = 154,
+    SetStaticBooleanField = 155,
+    SetStaticByteField = 156,
+    SetStaticCharField = 157,
+    SetStaticShortField = 158,
+    SetStaticIntField = 159,
+    SetStaticLongField = 160,
+    SetStaticFloatField = 161,
+    SetStaticDoubleField = 162,
+
+    NewString = 163,
+
+    GetStringLength = 164,
+    GetStringChars = 165,
+    ReleaseStringChars = 166,
+
+    NewStringUTF = 167,
+    GetStringUTFLength = 168,
+    GetStringUTFChars = 169,
+    ReleaseStringUTFChars = 170,
+
+    GetArrayLength = 171,
+
+    NewObjectArray = 172,
+    GetObjectArrayElement = 173,
+    SetObjectArrayElement = 174,
+
+    NewBooleanArray = 175,
+    NewByteArray = 176,
+    NewCharArray = 177,
+    NewShortArray = 178,
+    NewIntArray = 179,
+    NewLongArray = 180,
+    NewFloatArray = 181,
+    NewDoubleArray = 182,
+
+    GetBooleanArrayElements = 183,
+    GetByteArrayElements = 184,
+    GetCharArrayElements = 185,
+    GetShortArrayElements = 186,
+    GetIntArrayElements = 187,
+    GetLongArrayElements = 188,
+    GetFloatArrayElements = 189,
+    GetDoubleArrayElements = 190,
+
+    ReleaseBooleanArrayElements = 191,
+    ReleaseByteArrayElements = 192,
+    ReleaseCharArrayElements = 193,
+    ReleaseShortArrayElements = 194,
+    ReleaseIntArrayElements = 195,
+    ReleaseLongArrayElements = 196,
+    ReleaseFloatArrayElements = 197,
+    ReleaseDoubleArrayElements = 198,
+
+    GetBooleanArrayRegion = 199,
+    GetByteArrayRegion = 200,
+    GetCharArrayRegion = 201,
+    GetShortArrayRegion = 202,
+    GetIntArrayRegion = 203,
+    GetLongArrayRegion = 204,
+    GetFloatArrayRegion = 205,
+    GetDoubleArrayRegion = 206,
+    SetBooleanArrayRegion = 207,
+    SetByteArrayRegion = 208,
+    SetCharArrayRegion = 209,
+    SetShortArrayRegion = 210,
+    SetIntArrayRegion = 211,
+    SetLongArrayRegion = 212,
+    SetFloatArrayRegion = 213,
+    SetDoubleArrayRegion = 214,
+
+    RegisterNatives = 215,
+    UnregisterNatives = 216,
+
+    MonitorEnter = 217,
+    MonitorExit = 218,
+
+    GetJavaVM = 219,
+
+    GetStringRegion = 220,
+    GetStringUTFRegion = 221,
+
+    GetPrimitiveArrayCritical = 222,
+    ReleasePrimitiveArrayCritical = 223,
+
+    GetStringCritical = 224,
+    ReleaseStringCritical = 225,
+
+    NewWeakGlobalRef = 226,
+    DeleteWeakGlobalRef = 227,
+
+    ExceptionCheck = 228,
+
+    NewDirectByteBuffer = 229,
+    GetDirectBufferAddress = 230,
+    GetDirectBufferCapacity = 231,
+
+    GetObjectRefType = 232,
+
+    GetModule = 233,
+
+    IsVirtualThread = 234,
+
+    GetStringUTFLengthAsLong = 235,
+}
+
+impl From<JNILinkage> for usize {
+    fn from(value: JNILinkage) -> Self {
+        value as usize
+    }
+}
+
+pub trait AsJNILinkage: SealedAsJNILinkage {}
+
+impl SealedAsJNILinkage for JNILinkage {
+    fn linkage(self) -> usize {
+        self as usize
+    }
+}
+
+impl AsJNILinkage for JNILinkage {}
+
+impl SealedAsJNILinkage for usize {
+    fn linkage(self) -> usize {
+        self
+    }
+}
+
+impl AsJNILinkage for usize {}
+
+impl SealedAsJNILinkage for i32 {
+    fn linkage(self) -> usize {
+        self as usize
+    }
+}
+
+/// The compiler unless you specify a suffix will assume i32.
+/// This just makes it a bit easier to not have to write 6usize.
+impl AsJNILinkage for i32 {}
+
 /// Vtable of `JNIEnv` is passed like this.
-type JNIEnvVTable = *mut *mut [*mut c_void; 235];
+type JNIEnvVTable = *mut jniNativeInterface;
 
 #[derive(Debug, Clone, Copy)]
-#[repr(C)]
+#[repr(transparent)]
 pub struct JNIEnv {
     /// The vtable that contains all the functions
     vtable: JNIEnvVTable,
@@ -2640,12 +3101,61 @@ impl private::SealedUseCString for () {
 
 impl JNIEnv {
     ///
-    /// resolves the function pointer given its linkage index of the jni vtable.
+    /// Resolves the function pointer given its linkage index of the jni vtable.
     /// The indices are documented and guaranteed by the Oracle JVM Spec.
     ///
     #[inline(always)]
     unsafe fn jni<X>(&self, index: usize) -> X {
-        mem::transmute_copy(&(**self.vtable)[index])
+        //We need the read_volatile because a java debugger may at any point in time exchange the jni function table at its convenience.
+        mem::transmute_copy(&(self.vtable.read_volatile().0.add(index).read_volatile()))
+    }
+
+    ///
+    /// Raw indexes the JNI vtable.
+    /// This can be used to call future JNI methods that jni-simple in the used version is not aware of.
+    /// It can also be used to call undocumented implementation specific jni functions,
+    /// or functions defined in a native java debugger.
+    ///
+    /// 99% of programs do not need to use this function.
+    /// Use this function as a last resort.
+    ///
+    /// # Generic Type X
+    /// Almost always a "extern system" function signature.
+    /// The first parameter is nearly universally a pointer to the raw vtable.
+    ///
+    /// # Safety
+    /// This function is very unsafe. If index is too large, you cause UB due to out of bounds read.
+    /// The actual size of the vtable cannot be known and is JVM implementation specific.
+    ///
+    /// If the generic type X is wrong for the given index then you either cause UB instantly depending
+    /// on if your supplied X has the same size as c_void or not,
+    /// or once you use the result.
+    ///
+    /// # Example
+    /// This shows how to call the JNI Function GetVersion using the raw vtable call.
+    /// ```rust
+    /// use std::ffi::c_void;
+    /// use jni_simple::*;
+    ///
+    /// fn some_func(env: JNIEnv) {
+    ///     unsafe {
+    ///         // The linkage index for GetVersion is 4. See oracle documentation for a list of linkage indexes as well as their signature.
+    ///         // The calling convention is the "system" calling convention by default.
+    ///         // This is the same as "C" on linux but on Windows 32 bit its different. See jni.h and rusts calling convention documentation.
+    ///         let version: jint = env.index_vtable::<extern "system" fn(*mut c_void) -> jint>(4)(env.vtable());
+    ///     }
+    /// }
+    ///
+    /// ```
+    ///
+    pub unsafe fn index_vtable<X>(&self, index: impl AsJNILinkage) -> X {
+        self.jni::<X>(index.linkage())
+    }
+
+    /// Returns the raw jni vtable.
+    /// This is usefully in some rare situations, especially when used with the index_vtable function.
+    pub fn vtable(&self) -> *mut c_void {
+        self.vtable.cast()
     }
 
     ///
@@ -14531,6 +15041,8 @@ impl JNIEnv {
     ///
     /// Returns the length of a String in bytes if it were to be used with `GetStringUTFChars`.
     ///
+    /// Note: For Java 24 or newer this function is deprecated. use GetStringUTFLengthAsLong instead.
+    ///
     /// Note: Usage of this function should be carefully evaluated. For most jvms (especially for JVMS older than Java 17)
     /// it is faster to just call `GetStringUTFChars` and use a function equivalent to the c function `strlen()` on its return value.
     /// Some newer jvm's may, depending on how the vm was started, know this value for most strings,
@@ -14574,6 +15086,51 @@ impl JNIEnv {
         }
 
         self.jni::<extern "system" fn(JNIEnvVTable, jstring) -> jsize>(168)(self.vtable, string)
+    }
+
+    ///
+    /// Returns the length of a String in bytes if it were to be used with `GetStringUTFChars`.
+    /// Beware that this function is only available on Java 24 or newer!
+    ///
+    /// <https://docs.oracle.com/en/java/javase/24/docs/specs/jni/functions.html#getstringutflengthaslong>
+    ///
+    ///
+    /// # Arguments
+    /// * `string`
+    ///     * must not be null
+    ///     * must refer to a string
+    ///     * must not be already garbage collected
+    ///
+    /// # Returns
+    /// The amount of bytes the array returned by `GetStringUTFChars` would have for this string.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
+    /// # Safety
+    ///
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
+    ///
+    /// `string` must not be null, must refer to a string and not already be garbage collected.
+    ///
+    /// The JVM must be a Java 24 VM or newer
+    ///
+    pub unsafe fn GetStringUTFLengthAsLong(&self, string: jstring) -> jsize {
+        #[cfg(feature = "asserts")]
+        {
+            self.check_not_critical("GetStringUTFLengthAsLong");
+            self.check_no_exception("GetStringUTFLengthAsLong");
+            assert!(!string.is_null(), "GetStringUTFLengthAsLong string must not be null");
+            self.check_if_arg_is_string("GetStringUTFLengthAsLong", string);
+            assert!(self.GetVersion() >= JNI_VERSION_24);
+        }
+
+        self.jni::<extern "system" fn(JNIEnvVTable, jstring) -> jsize>(235)(self.vtable, string)
     }
 
     ///
@@ -20038,7 +20595,7 @@ impl JavaVM {
     /// This fn is only safe if X matches whats in the vtable of index.
     #[inline]
     unsafe fn ivk<X>(&self, index: usize) -> X {
-        unsafe { mem::transmute_copy(&(**self.vtable.inner())[index]) }
+        unsafe { mem::transmute_copy(&(self.vtable.inner().read_volatile().add(index).read_volatile())) }
     }
 
     ///
@@ -20257,9 +20814,11 @@ const fn test_sync() {
     static_assertions::assert_impl_all!(JavaVM: Sync);
     static_assertions::assert_impl_all!(JavaVM: Send);
 
+    static_assertions::assert_impl_all!(jniNativeInterface: Sync);
+    static_assertions::assert_impl_all!(jniNativeInterface: Send);
+
     static_assertions::assert_not_impl_all!(JNIEnv: Sync);
     static_assertions::assert_not_impl_all!(JNIEnv: Send);
-
 
     static_assertions::assert_not_impl_all!(JVMTIEnv: Sync);
     static_assertions::assert_not_impl_all!(JVMTIEnv: Send);
