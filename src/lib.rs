@@ -976,6 +976,54 @@ pub struct jvmtiEventCallbacks {
     pub VirtualThreadEnd: Option<jvmtiEventVirtualThreadEnd>,
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub enum jvmtiEventMode {
+    #[default]
+    JVMTI_ENABLE = 1,
+    JVMTI_DISABLE = 0
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub enum jvmtiEvent {
+    #[default]
+    JVMTI_EVENT_VM_DEATH = 51,
+    JVMTI_EVENT_THREAD_START = 52,
+    JVMTI_EVENT_THREAD_END = 53,
+    JVMTI_EVENT_CLASS_FILE_LOAD_HOOK = 54,
+    JVMTI_EVENT_CLASS_LOAD = 55,
+    JVMTI_EVENT_CLASS_PREPARE = 56,
+    JVMTI_EVENT_VM_START = 57,
+    JVMTI_EVENT_EXCEPTION = 58,
+    JVMTI_EVENT_EXCEPTION_CATCH = 59,
+    JVMTI_EVENT_SINGLE_STEP = 60,
+    JVMTI_EVENT_FRAME_POP = 61,
+    JVMTI_EVENT_BREAKPOINT = 62,
+    JVMTI_EVENT_FIELD_ACCESS = 63,
+    JVMTI_EVENT_FIELD_MODIFICATION = 64,
+    JVMTI_EVENT_METHOD_ENTRY = 65,
+    JVMTI_EVENT_METHOD_EXIT = 66,
+    JVMTI_EVENT_NATIVE_METHOD_BIND = 67,
+    JVMTI_EVENT_COMPILED_METHOD_LOAD = 68,
+    JVMTI_EVENT_COMPILED_METHOD_UNLOAD = 69,
+    JVMTI_EVENT_DYNAMIC_CODE_GENERATED = 70,
+    JVMTI_EVENT_DATA_DUMP_REQUEST = 71,
+    JVMTI_EVENT_MONITOR_WAIT = 73,
+    JVMTI_EVENT_MONITOR_WAITED = 74,
+    JVMTI_EVENT_MONITOR_CONTENDED_ENTER = 75,
+    JVMTI_EVENT_MONITOR_CONTENDED_ENTERED = 76,
+    JVMTI_EVENT_RESOURCE_EXHAUSTED = 80,
+    JVMTI_EVENT_GARBAGE_COLLECTION_START = 81,
+    JVMTI_EVENT_GARBAGE_COLLECTION_FINISH = 82,
+    JVMTI_EVENT_OBJECT_FREE = 83,
+    JVMTI_EVENT_VM_OBJECT_ALLOC = 84,
+    JVMTI_EVENT_SAMPLED_OBJECT_ALLOC = 86,
+    JVMTI_EVENT_VIRTUAL_THREAD_START = 87,
+    JVMTI_EVENT_VIRTUAL_THREAD_END = 88,
+}
+
+
 #[repr(transparent)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct jvmtiCapabilities(u128);
@@ -1703,6 +1751,10 @@ impl JVMTIEnv {
         mem::transmute_copy(&(self.vtable.read_volatile().add(index).read_volatile()))
     }
 
+    pub const fn vtable(&self) -> *mut c_void {
+        self.vtable.cast()
+    }
+
     pub unsafe fn GetVersionNumber(&self, version_ptr: *mut jint) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint) -> jvmtiError>(87)(self.vtable, version_ptr)
     }
@@ -2319,8 +2371,51 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiEventCallbacks, jint) -> jvmtiError>(121)(self.vtable, callbacks, size_of::<jvmtiEventCallbacks>() as jint)
     }
 
+
+    /// Raw variant of SetEventCallbacks which allows for passing an arbitary payload.
+    /// This is useful when attempting to use a jvmti version that is newer than what jni-simple supports.
+    ///
+    /// # Undefined behavior
+    /// if the callbacks and size_of_callbacks do not match what the jvm expects.
     pub unsafe fn SetEventCallbacks_raw(&self, callbacks: *const c_void, size_of_callbacks: jint) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiEventCallbacks, jint) -> jvmtiError>(121)(self.vtable, callbacks.cast(), size_of_callbacks)
+    }
+
+    pub unsafe fn SetEventNotificationMode(&self, mode: jvmtiEventMode, event_type: jvmtiEvent, event_thread: jthread) -> jvmtiError {
+        self.jvmti::<extern "C" fn(JVMTIEnvVTable, jvmtiEventMode, jvmtiEvent, jthread, ...) -> jvmtiError>(1)(self.vtable, mode, event_type, event_thread)
+    }
+
+    /// Allows for calling undocumented variadic extensions.
+    /// The current jvmti specification only provides this function with the disclaimer
+    /// "for future expansion"
+    ///
+    /// Since rust does support c-variadics yet calling this from rust is non trivial.
+    ///
+    /// # Safety
+    /// There are a lot of things that can go wrong when calling this function, see the example.
+    /// using this function requires deep knowledge of jvm implementation specific details.
+    /// Use with care and only if necessary.
+    ///
+    /// # example
+    /// ```rust
+    /// use std::ffi::{c_int, c_void};
+    /// use std::ptr::null_mut;
+    /// use jni_simple::*;
+    ///
+    /// fn enable_very_special_custom_event(env: JVMTIEnv) {
+    ///   unsafe {
+    ///     //NOTE: jvmtiEvent with a value 5 does not exist, this is just for illustrative purposes!
+    ///     //This example assumes that the hypothetical global jni event 5 would want a jint extension parameter.
+    ///     env.SetEventNotificationMode_extension::<extern "C" fn(*mut c_void, jvmtiEventMode, c_int, jthread, ...) -> jvmtiError>()(env.vtable(), jvmtiEventMode::JVMTI_ENABLE, 5, null_mut(), 4i32);
+    ///   }
+    /// }
+    /// ```
+    pub unsafe fn SetEventNotificationMode_extension<X>(&self) -> X {
+        self.jvmti::<X>(1)
+    }
+
+    pub unsafe fn GenerateEvents(&self, event_type: jvmtiEvent) -> jvmtiError {
+        self.jvmti::<extern "C" fn(JVMTIEnvVTable, jvmtiEvent) -> jvmtiError>(122)(self.vtable, event_type)
     }
 }
 
@@ -2336,11 +2431,11 @@ impl From<jniNativeInterface> for *mut c_void {
 
 impl jniNativeInterface {
     ///
-    /// Returns uninitalized jniNativeInterface.
+    /// Returns uninitialized jniNativeInterface.
     /// The interface must be initialized with a call to `JVMTIEnv::GetJNIFunctionTable`
     /// before it can be used in any way.
     ///
-    /// # Undefined behvavior of uninitalized `jniNativeInterface`
+    /// # Undefined behavior of uninitialized `jniNativeInterface`
     /// Calling any jvmti fn is ub.
     /// Calling any unsafe fn is ub.
     pub const fn new_uninit() -> Self {
