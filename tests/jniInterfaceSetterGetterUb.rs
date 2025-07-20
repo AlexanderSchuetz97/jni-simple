@@ -1,6 +1,6 @@
 use jni_simple::*;
 use std::ffi::c_void;
-use std::ptr::{null, null_mut};
+use std::ptr::null_mut;
 
 extern "system" fn beep() -> *mut *mut c_void {
     null_mut()

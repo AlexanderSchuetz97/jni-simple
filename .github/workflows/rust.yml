@@ -20,6 +20,8 @@ jobs:
       with:
         distribution: 'temurin' # See 'Supported distributions' for available options
         java-version: '8'
+    - name: Build JVMTI Shim
+      run: cd jvmti_shim && cargo build --release
     - name: Build
       run: cargo build --verbose --features loadjvm,asserts
     - name: Run tests

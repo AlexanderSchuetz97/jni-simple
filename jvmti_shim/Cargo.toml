@@ -5,5 +5,9 @@ edition = "2024"
 
 [dependencies]
 
+[profile.release]
+panic = "abort"
+
 [lib]
 crate-type = ["cdylib"]
+

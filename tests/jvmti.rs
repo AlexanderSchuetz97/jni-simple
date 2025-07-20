@@ -1,10 +1,5 @@
-use jni_simple::{
-    jint, jniNativeInterface, jrawMonitorID, jvmtiCapabilities, load_jvm_from_java_home, load_jvm_from_library, JNIEnv, JNILinkage, JNI_CreateJavaVM_with_string_args, JVMTIEnv,
-    JavaVM, JNI_VERSION_1_8, JVMTI_ERROR_NONE, JVMTI_VERSION_1_2,
-};
+use jni_simple::{jint, jniNativeInterface, jvmtiCapabilities, load_jvm_from_java_home, JNIEnv, JNILinkage, JNI_CreateJavaVM_with_string_args, JVMTIEnv, JavaVM, JNI_VERSION_1_8, JVMTI_ERROR_NONE, JVMTI_VERSION_1_2};
 use std::ffi::c_void;
-use std::mem;
-use std::ptr::null_mut;
 use std::sync::OnceLock;
 
 unsafe extern "C" fn shim_agent(vm: JavaVM, _options: *const char, _reserved: *mut c_void) -> i32 {
@@ -59,13 +54,12 @@ fn install_hook(env: JVMTIEnv) {
 #[test]
 pub fn test() {
     unsafe {
-        //load_jvm_from_java_home().expect("failed to load jvm");
-        load_jvm_from_library("~/.jdks/openjdk-24.0.1/lib/server/libjvm.so").unwrap();
+        load_jvm_from_java_home().expect("failed to load jvm");
 
         let ptr = shim_agent as usize;
 
-        //let args: Vec<String> = vec![format!("-agentpath:~/RustroverProjects/jni-simple/jvmti_shim/target/debug/libjvmti_shim.so={ptr}")];
-        let args: Vec<String> = vec![];
+        let args: Vec<String> = vec![format!("-agentpath:jvmti_shim/target/release/libjvmti_shim.so={ptr}")];
+        //let args: Vec<String> = vec![];
         let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
         let jvmti = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2).expect("failed to get JVMTI environment");
         println!("{:?}", jvmti);

@@ -35,8 +35,10 @@
 
 use crate::private::{SealedAsJNILinkage, SealedEnvVTable};
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::ffi::{c_char, c_int, c_uchar, c_void, CStr, CString, OsStr, OsString};
 use std::fmt::{Debug, Display, Formatter};
+use std::hash::{Hash, Hasher};
 #[cfg(feature = "loadjvm")]
 use std::path::PathBuf;
 use std::ptr::null;
@@ -130,63 +132,416 @@ pub enum jobjectRefType {
     JNIWeakGlobalRefType = 3,
 }
 
+/// rust enum that mirrors jvmtiError, however it has a different reprc to c_int causing it to be incompatible outside of rust code.
+/// This enum can be transformed from the repr(C) jvmtiError or transformed into it via the From/Into traits.
+#[derive(Debug, Ord, Eq, Clone, Copy)]
+pub enum JvmtiError {
+    NONE,
+    INVALID_THREAD,
+    INVALID_THREAD_GROUP,
+    INVALID_PRIORITY,
+    THREAD_NOT_SUSPENDED,
+    THREAD_SUSPENDED,
+    THREAD_NOT_ALIVE,
+    INVALID_OBJECT,
+    INVALID_CLASS,
+    CLASS_NOT_PREPARED,
+    INVALID_METHODID,
+    INVALID_LOCATION,
+    INVALID_FIELDID,
+    INVALID_MODULE,
+    NO_MORE_FRAMES,
+    OPAQUE_FRAME,
+    TYPE_MISMATCH,
+    INVALID_SLOT,
+    DUPLICATE,
+    NOT_FOUND,
+    INVALID_MONITOR,
+    NOT_MONITOR_OWNER,
+    INTERRUPT,
+    INVALID_CLASS_FORMAT,
+    CIRCULAR_CLASS_DEFINITION,
+    FAILS_VERIFICATION,
+    UNSUPPORTED_REDEFINITION_METHOD_ADDED,
+    UNSUPPORTED_REDEFINITION_SCHEMA_CHANGED,
+    INVALID_TYPESTATE,
+    UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED,
+    UNSUPPORTED_REDEFINITION_METHOD_DELETED,
+    UNSUPPORTED_VERSION,
+    NAMES_DONT_MATCH,
+    UNSUPPORTED_REDEFINITION_CLASS_MODIFIERS_CHANGED,
+    UNSUPPORTED_REDEFINITION_METHOD_MODIFIERS_CHANGED,
+    UNSUPPORTED_REDEFINITION_CLASS_ATTRIBUTE_CHANGED,
+    UNSUPPORTED_OPERATION,
+    UNMODIFIABLE_CLASS,
+    UNMODIFIABLE_MODULE,
+    NOT_AVAILABLE,
+    MUST_POSSESS_CAPABILITY,
+    NULL_POINTER,
+    ABSENT_INFORMATION,
+    INVALID_EVENT_TYPE,
+    ILLEGAL_ARGUMENT,
+    NATIVE_METHOD,
+    CLASS_LOADER_UNSUPPORTED,
+    OUT_OF_MEMORY,
+    ACCESS_DENIED,
+    WRONG_PHASE,
+    INTERNAL,
+    UNATTACHED_THREAD,
+    INVALID_ENVIRONMENT,
+    OTHER(c_int),
+}
+
+impl Display for JvmtiError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        //Unwind the other case and fold it into known codes.
+        let me: c_int = (*self).into();
+        let reform = JvmtiError::from(me);
+        //Debug fmt it.
+        Debug::fmt(&reform, f)
+    }
+}
+
+//we have to implement this because the OTHER case may shadow an actual error code.
+impl PartialEq for JvmtiError {
+    fn eq(&self, other: &Self) -> bool {
+        let me: c_int = (*self).into();
+        let other: c_int = (*other).into();
+        me == other
+    }
+}
+
+//we have to implement this because the OTHER case may shadow an actual error code.
+impl PartialOrd for JvmtiError {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let me: c_int = (*self).into();
+        let other: c_int = (*other).into();
+        c_int::partial_cmp(&me, &other)
+    }
+}
+
+//we have to implement this because the OTHER case may shadow an actual error code.
+impl Hash for JvmtiError {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let me: c_int = (*self).into();
+        state.write_i64(i64::from(me));
+    }
+}
+
+impl From<c_int> for JvmtiError {
+    fn from(value: c_int) -> Self {
+        match value {
+            0 => JvmtiError::NONE,
+            10 => JvmtiError::INVALID_THREAD,
+            11 => JvmtiError::INVALID_THREAD_GROUP,
+            12 => JvmtiError::INVALID_PRIORITY,
+            13 => JvmtiError::THREAD_NOT_SUSPENDED,
+            14 => JvmtiError::THREAD_SUSPENDED,
+            15 => JvmtiError::THREAD_NOT_ALIVE,
+            20 => JvmtiError::INVALID_OBJECT,
+            21 => JvmtiError::INVALID_CLASS,
+            22 => JvmtiError::CLASS_NOT_PREPARED,
+            23 => JvmtiError::INVALID_METHODID,
+            24 => JvmtiError::INVALID_LOCATION,
+            25 => JvmtiError::INVALID_FIELDID,
+            26 => JvmtiError::INVALID_MODULE,
+            31 => JvmtiError::NO_MORE_FRAMES,
+            32 => JvmtiError::OPAQUE_FRAME,
+            34 => JvmtiError::TYPE_MISMATCH,
+            35 => JvmtiError::INVALID_SLOT,
+            40 => JvmtiError::DUPLICATE,
+            41 => JvmtiError::NOT_FOUND,
+            50 => JvmtiError::INVALID_MONITOR,
+            51 => JvmtiError::NOT_MONITOR_OWNER,
+            52 => JvmtiError::INTERRUPT,
+            60 => JvmtiError::INVALID_CLASS_FORMAT,
+            61 => JvmtiError::CIRCULAR_CLASS_DEFINITION,
+            62 => JvmtiError::FAILS_VERIFICATION,
+            63 => JvmtiError::UNSUPPORTED_REDEFINITION_METHOD_ADDED,
+            64 => JvmtiError::UNSUPPORTED_REDEFINITION_SCHEMA_CHANGED,
+            65 => JvmtiError::INVALID_TYPESTATE,
+            66 => JvmtiError::UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED,
+            67 => JvmtiError::UNSUPPORTED_REDEFINITION_METHOD_DELETED,
+            68 => JvmtiError::UNSUPPORTED_VERSION,
+            69 => JvmtiError::NAMES_DONT_MATCH,
+            70 => JvmtiError::UNSUPPORTED_REDEFINITION_CLASS_MODIFIERS_CHANGED,
+            71 => JvmtiError::UNSUPPORTED_REDEFINITION_METHOD_MODIFIERS_CHANGED,
+            72 => JvmtiError::UNSUPPORTED_REDEFINITION_CLASS_ATTRIBUTE_CHANGED,
+            73 => JvmtiError::UNSUPPORTED_OPERATION,
+            79 => JvmtiError::UNMODIFIABLE_CLASS,
+            80 => JvmtiError::UNMODIFIABLE_MODULE,
+            98 => JvmtiError::NOT_AVAILABLE,
+            99 => JvmtiError::MUST_POSSESS_CAPABILITY,
+            100 => JvmtiError::NULL_POINTER,
+            101 => JvmtiError::ABSENT_INFORMATION,
+            102 => JvmtiError::INVALID_EVENT_TYPE,
+            103 => JvmtiError::ILLEGAL_ARGUMENT,
+            104 => JvmtiError::NATIVE_METHOD,
+            106 => JvmtiError::CLASS_LOADER_UNSUPPORTED,
+            110 => JvmtiError::OUT_OF_MEMORY,
+            111 => JvmtiError::ACCESS_DENIED,
+            112 => JvmtiError::WRONG_PHASE,
+            113 => JvmtiError::INTERNAL,
+            115 => JvmtiError::UNATTACHED_THREAD,
+            116 => JvmtiError::INVALID_ENVIRONMENT,
+            other => JvmtiError::OTHER(other),
+        }
+    }
+}
+
+impl From<JvmtiError> for c_int {
+    fn from(value: JvmtiError) -> Self {
+        match value {
+            JvmtiError::NONE => 0,
+            JvmtiError::INVALID_THREAD => 10,
+            JvmtiError::INVALID_THREAD_GROUP => 11,
+            JvmtiError::INVALID_PRIORITY => 12,
+            JvmtiError::THREAD_NOT_SUSPENDED => 13,
+            JvmtiError::THREAD_SUSPENDED => 14,
+            JvmtiError::THREAD_NOT_ALIVE => 15,
+            JvmtiError::INVALID_OBJECT => 20,
+            JvmtiError::INVALID_CLASS => 21,
+            JvmtiError::CLASS_NOT_PREPARED => 22,
+            JvmtiError::INVALID_METHODID => 23,
+            JvmtiError::INVALID_LOCATION => 24,
+            JvmtiError::INVALID_FIELDID => 25,
+            JvmtiError::INVALID_MODULE => 26,
+            JvmtiError::NO_MORE_FRAMES => 31,
+            JvmtiError::OPAQUE_FRAME => 32,
+            JvmtiError::TYPE_MISMATCH => 34,
+            JvmtiError::INVALID_SLOT => 35,
+            JvmtiError::DUPLICATE => 40,
+            JvmtiError::NOT_FOUND => 41,
+            JvmtiError::INVALID_MONITOR => 50,
+            JvmtiError::NOT_MONITOR_OWNER => 51,
+            JvmtiError::INTERRUPT => 52,
+            JvmtiError::INVALID_CLASS_FORMAT => 60,
+            JvmtiError::CIRCULAR_CLASS_DEFINITION => 61,
+            JvmtiError::FAILS_VERIFICATION => 62,
+            JvmtiError::UNSUPPORTED_REDEFINITION_METHOD_ADDED => 63,
+            JvmtiError::UNSUPPORTED_REDEFINITION_SCHEMA_CHANGED => 64,
+            JvmtiError::INVALID_TYPESTATE => 65,
+            JvmtiError::UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED => 66,
+            JvmtiError::UNSUPPORTED_REDEFINITION_METHOD_DELETED => 67,
+            JvmtiError::UNSUPPORTED_VERSION => 68,
+            JvmtiError::NAMES_DONT_MATCH => 69,
+            JvmtiError::UNSUPPORTED_REDEFINITION_CLASS_MODIFIERS_CHANGED => 70,
+            JvmtiError::UNSUPPORTED_REDEFINITION_METHOD_MODIFIERS_CHANGED => 71,
+            JvmtiError::UNSUPPORTED_REDEFINITION_CLASS_ATTRIBUTE_CHANGED => 72,
+            JvmtiError::UNSUPPORTED_OPERATION => 73,
+            JvmtiError::UNMODIFIABLE_CLASS => 79,
+            JvmtiError::UNMODIFIABLE_MODULE => 80,
+            JvmtiError::NOT_AVAILABLE => 98,
+            JvmtiError::MUST_POSSESS_CAPABILITY => 99,
+            JvmtiError::NULL_POINTER => 100,
+            JvmtiError::ABSENT_INFORMATION => 101,
+            JvmtiError::INVALID_EVENT_TYPE => 102,
+            JvmtiError::ILLEGAL_ARGUMENT => 103,
+            JvmtiError::NATIVE_METHOD => 104,
+            JvmtiError::CLASS_LOADER_UNSUPPORTED => 106,
+            JvmtiError::OUT_OF_MEMORY => 110,
+            JvmtiError::ACCESS_DENIED => 111,
+            JvmtiError::WRONG_PHASE => 112,
+            JvmtiError::INTERNAL => 113,
+            JvmtiError::UNATTACHED_THREAD => 115,
+            JvmtiError::INVALID_ENVIRONMENT => 116,
+            JvmtiError::OTHER(value) => value,
+        }
+    }
+}
+
 //We cannot turn this into an enum because the JVM may with a reasonable likelihood decide to add new codes in the future.
 //If we enum this and the VM returned a code we don't know it would instantly be UB.
-pub type jvmtiError = c_int;
-pub const JVMTI_ERROR_NONE: jvmtiError = 0;
-pub const JVMTI_ERROR_INVALID_THREAD: jvmtiError = 10;
-pub const JVMTI_ERROR_INVALID_THREAD_GROUP: jvmtiError = 11;
-pub const JVMTI_ERROR_INVALID_PRIORITY: jvmtiError = 12;
-pub const JVMTI_ERROR_THREAD_NOT_SUSPENDED: jvmtiError = 13;
-pub const JVMTI_ERROR_THREAD_SUSPENDED: jvmtiError = 14;
-pub const JVMTI_ERROR_THREAD_NOT_ALIVE: jvmtiError = 15;
-pub const JVMTI_ERROR_INVALID_OBJECT: jvmtiError = 20;
-pub const JVMTI_ERROR_INVALID_CLASS: jvmtiError = 21;
-pub const JVMTI_ERROR_CLASS_NOT_PREPARED: jvmtiError = 22;
-pub const JVMTI_ERROR_INVALID_METHODID: jvmtiError = 23;
-pub const JVMTI_ERROR_INVALID_LOCATION: jvmtiError = 24;
-pub const JVMTI_ERROR_INVALID_FIELDID: jvmtiError = 25;
-pub const JVMTI_ERROR_INVALID_MODULE: jvmtiError = 26;
-pub const JVMTI_ERROR_NO_MORE_FRAMES: jvmtiError = 31;
-pub const JVMTI_ERROR_OPAQUE_FRAME: jvmtiError = 32;
-pub const JVMTI_ERROR_TYPE_MISMATCH: jvmtiError = 34;
-pub const JVMTI_ERROR_INVALID_SLOT: jvmtiError = 35;
-pub const JVMTI_ERROR_DUPLICATE: jvmtiError = 40;
-pub const JVMTI_ERROR_NOT_FOUND: jvmtiError = 41;
-pub const JVMTI_ERROR_INVALID_MONITOR: jvmtiError = 50;
-pub const JVMTI_ERROR_NOT_MONITOR_OWNER: jvmtiError = 51;
-pub const JVMTI_ERROR_INTERRUPT: jvmtiError = 52;
-pub const JVMTI_ERROR_INVALID_CLASS_FORMAT: jvmtiError = 60;
-pub const JVMTI_ERROR_CIRCULAR_CLASS_DEFINITION: jvmtiError = 61;
-pub const JVMTI_ERROR_FAILS_VERIFICATION: jvmtiError = 62;
-pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_METHOD_ADDED: jvmtiError = 63;
-pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_SCHEMA_CHANGED: jvmtiError = 64;
-pub const JVMTI_ERROR_INVALID_TYPESTATE: jvmtiError = 65;
-pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED: jvmtiError = 66;
-pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_METHOD_DELETED: jvmtiError = 67;
-pub const JVMTI_ERROR_UNSUPPORTED_VERSION: jvmtiError = 68;
-pub const JVMTI_ERROR_NAMES_DONT_MATCH: jvmtiError = 69;
-pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_CLASS_MODIFIERS_CHANGED: jvmtiError = 70;
-pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_METHOD_MODIFIERS_CHANGED: jvmtiError = 71;
-pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_CLASS_ATTRIBUTE_CHANGED: jvmtiError = 72;
-pub const JVMTI_ERROR_UNSUPPORTED_OPERATION: jvmtiError = 73;
-pub const JVMTI_ERROR_UNMODIFIABLE_CLASS: jvmtiError = 79;
-pub const JVMTI_ERROR_UNMODIFIABLE_MODULE: jvmtiError = 80;
-pub const JVMTI_ERROR_NOT_AVAILABLE: jvmtiError = 98;
-pub const JVMTI_ERROR_MUST_POSSESS_CAPABILITY: jvmtiError = 99;
-pub const JVMTI_ERROR_NULL_POINTER: jvmtiError = 100;
-pub const JVMTI_ERROR_ABSENT_INFORMATION: jvmtiError = 101;
-pub const JVMTI_ERROR_INVALID_EVENT_TYPE: jvmtiError = 102;
-pub const JVMTI_ERROR_ILLEGAL_ARGUMENT: jvmtiError = 103;
-pub const JVMTI_ERROR_NATIVE_METHOD: jvmtiError = 104;
-pub const JVMTI_ERROR_CLASS_LOADER_UNSUPPORTED: jvmtiError = 106;
-pub const JVMTI_ERROR_OUT_OF_MEMORY: jvmtiError = 110;
-pub const JVMTI_ERROR_ACCESS_DENIED: jvmtiError = 111;
-pub const JVMTI_ERROR_WRONG_PHASE: jvmtiError = 112;
-pub const JVMTI_ERROR_INTERNAL: jvmtiError = 113;
-pub const JVMTI_ERROR_UNATTACHED_THREAD: jvmtiError = 115;
-pub const JVMTI_ERROR_INVALID_ENVIRONMENT: jvmtiError = 116;
-pub const JVMTI_ERROR_MAX: jvmtiError = 116;
+#[repr(transparent)]
+#[derive(Debug, Ord, Eq, PartialOrd, PartialEq, Hash, Clone, Copy)]
+pub struct jvmtiError(pub c_int);
+
+impl Display for jvmtiError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(self, f)
+    }
+}
+
+impl From<c_int> for jvmtiError {
+    fn from(value: c_int) -> Self {
+        jvmtiError(value)
+    }
+}
+
+impl From<jvmtiError> for c_int {
+    fn from(value: jvmtiError) -> Self {
+        value.0
+    }
+}
+
+impl From<JvmtiError> for jvmtiError {
+    fn from(value: JvmtiError) -> Self {
+        let me: c_int = value.into();
+        me.into()
+    }
+}
+
+impl From<jvmtiError> for JvmtiError {
+    fn from(value: jvmtiError) -> Self {
+        let me: c_int = value.into();
+        me.into()
+    }
+}
+
+impl jvmtiError {
+    pub fn is_ok(self) -> bool {
+        self == JVMTI_ERROR_NONE
+    }
+
+    /// This function transforms the jvmtiError into a Result if the jvmtiError is not "JVMTI_ERROR_NONE".
+    /// Its useful if you want to use the "if let" pattern.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{jint, JVMTIEnv, JVMTI_VERSION_21};
+    ///
+    /// fn check_version21(env: JVMTIEnv) {
+    ///     unsafe {
+    ///         let mut version: jint = 0;
+    ///         if let Err(err) = env.GetVersionNumber(&mut version).into_result() {
+    ///             //Handle failed jvmti call
+    ///             //You can also match on err here if you want.
+    ///             panic!("GetVersionNumber call failed with err={err}")
+    ///         }
+    ///
+    ///         //Handle successful jvmti call
+    ///         if version != JVMTI_VERSION_21 {
+    ///             panic!("JVMTI Version is not 21");
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// ```
+    ///
+    pub fn into_result(self) -> Result<(), JvmtiError> {
+        if self == JVMTI_ERROR_NONE {
+            return Ok(());
+        }
+
+        Err(self.into())
+    }
+
+    /// This function transforms the jvmtiError into a rust enum that you can easily match on.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{jint, JVMTIEnv, JvmtiError, JVMTI_VERSION_21};
+    ///
+    /// fn check_version21(env: JVMTIEnv) {
+    ///     unsafe {
+    ///         let mut version: jint = 0;
+    ///         match env.GetVersionNumber(&mut version).into_enum() {
+    ///             JvmtiError::NONE => {
+    ///              //Handle successful jvmti call
+    ///              if version != JVMTI_VERSION_21 {
+    ///                  panic!("JVMTI Version is not 21");
+    ///              }
+    ///             }
+    ///             err => {
+    ///                  panic!("GetVersionNumber call failed with err={err}")
+    ///             }
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// ```
+    ///
+    pub fn into_enum(self) -> JvmtiError {
+        self.into()
+    }
+
+    /// This function transforms the jvmtiError back into its raw magic number from the jvm.
+    /// This is useful if you deal with undocumented errors from customized jvm's.
+    ///
+    /// # Example
+    /// ```rust
+    /// use std::ffi::c_int;
+    /// use jni_simple::{jint, JVMTIEnv, JvmtiError, JVMTI_VERSION_21};
+    ///
+    /// fn check_version21(env: JVMTIEnv) {
+    ///     unsafe {
+    ///         let mut version: jint = 0;
+    ///         let raw_err : c_int = env.GetVersionNumber(&mut version).into_raw();
+    ///         match raw_err {
+    ///             0 => {
+    ///              //Handle successful jvmti call
+    ///              if version != JVMTI_VERSION_21 {
+    ///                  panic!("JVMTI Version is not 21");
+    ///              }
+    ///             }
+    ///             err => {
+    ///                  panic!("GetVersionNumber call failed with magic number err={err}")
+    ///             }
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// ```
+    ///
+    pub fn into_raw(self) -> c_int {
+        self.0
+    }
+}
+
+pub const JVMTI_ERROR_NONE: jvmtiError = jvmtiError(0);
+pub const JVMTI_ERROR_INVALID_THREAD: jvmtiError = jvmtiError(10);
+pub const JVMTI_ERROR_INVALID_THREAD_GROUP: jvmtiError = jvmtiError(11);
+pub const JVMTI_ERROR_INVALID_PRIORITY: jvmtiError = jvmtiError(12);
+pub const JVMTI_ERROR_THREAD_NOT_SUSPENDED: jvmtiError = jvmtiError(13);
+pub const JVMTI_ERROR_THREAD_SUSPENDED: jvmtiError = jvmtiError(14);
+pub const JVMTI_ERROR_THREAD_NOT_ALIVE: jvmtiError = jvmtiError(15);
+pub const JVMTI_ERROR_INVALID_OBJECT: jvmtiError = jvmtiError(20);
+pub const JVMTI_ERROR_INVALID_CLASS: jvmtiError = jvmtiError(21);
+pub const JVMTI_ERROR_CLASS_NOT_PREPARED: jvmtiError = jvmtiError(22);
+pub const JVMTI_ERROR_INVALID_METHODID: jvmtiError = jvmtiError(23);
+pub const JVMTI_ERROR_INVALID_LOCATION: jvmtiError = jvmtiError(24);
+pub const JVMTI_ERROR_INVALID_FIELDID: jvmtiError = jvmtiError(25);
+pub const JVMTI_ERROR_INVALID_MODULE: jvmtiError = jvmtiError(26);
+pub const JVMTI_ERROR_NO_MORE_FRAMES: jvmtiError = jvmtiError(31);
+pub const JVMTI_ERROR_OPAQUE_FRAME: jvmtiError = jvmtiError(32);
+pub const JVMTI_ERROR_TYPE_MISMATCH: jvmtiError = jvmtiError(34);
+pub const JVMTI_ERROR_INVALID_SLOT: jvmtiError = jvmtiError(35);
+pub const JVMTI_ERROR_DUPLICATE: jvmtiError = jvmtiError(40);
+pub const JVMTI_ERROR_NOT_FOUND: jvmtiError = jvmtiError(41);
+pub const JVMTI_ERROR_INVALID_MONITOR: jvmtiError = jvmtiError(50);
+pub const JVMTI_ERROR_NOT_MONITOR_OWNER: jvmtiError = jvmtiError(51);
+pub const JVMTI_ERROR_INTERRUPT: jvmtiError = jvmtiError(52);
+pub const JVMTI_ERROR_INVALID_CLASS_FORMAT: jvmtiError = jvmtiError(60);
+pub const JVMTI_ERROR_CIRCULAR_CLASS_DEFINITION: jvmtiError = jvmtiError(61);
+pub const JVMTI_ERROR_FAILS_VERIFICATION: jvmtiError = jvmtiError(62);
+pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_METHOD_ADDED: jvmtiError = jvmtiError(63);
+pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_SCHEMA_CHANGED: jvmtiError = jvmtiError(64);
+pub const JVMTI_ERROR_INVALID_TYPESTATE: jvmtiError = jvmtiError(65);
+pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED: jvmtiError = jvmtiError(66);
+pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_METHOD_DELETED: jvmtiError = jvmtiError(67);
+pub const JVMTI_ERROR_UNSUPPORTED_VERSION: jvmtiError = jvmtiError(68);
+pub const JVMTI_ERROR_NAMES_DONT_MATCH: jvmtiError = jvmtiError(69);
+pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_CLASS_MODIFIERS_CHANGED: jvmtiError = jvmtiError(70);
+pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_METHOD_MODIFIERS_CHANGED: jvmtiError = jvmtiError(71);
+pub const JVMTI_ERROR_UNSUPPORTED_REDEFINITION_CLASS_ATTRIBUTE_CHANGED: jvmtiError = jvmtiError(72);
+pub const JVMTI_ERROR_UNSUPPORTED_OPERATION: jvmtiError = jvmtiError(73);
+pub const JVMTI_ERROR_UNMODIFIABLE_CLASS: jvmtiError = jvmtiError(79);
+pub const JVMTI_ERROR_UNMODIFIABLE_MODULE: jvmtiError = jvmtiError(80);
+pub const JVMTI_ERROR_NOT_AVAILABLE: jvmtiError = jvmtiError(98);
+pub const JVMTI_ERROR_MUST_POSSESS_CAPABILITY: jvmtiError = jvmtiError(99);
+pub const JVMTI_ERROR_NULL_POINTER: jvmtiError = jvmtiError(100);
+pub const JVMTI_ERROR_ABSENT_INFORMATION: jvmtiError = jvmtiError(101);
+pub const JVMTI_ERROR_INVALID_EVENT_TYPE: jvmtiError = jvmtiError(102);
+pub const JVMTI_ERROR_ILLEGAL_ARGUMENT: jvmtiError = jvmtiError(103);
+pub const JVMTI_ERROR_NATIVE_METHOD: jvmtiError = jvmtiError(104);
+pub const JVMTI_ERROR_CLASS_LOADER_UNSUPPORTED: jvmtiError = jvmtiError(106);
+pub const JVMTI_ERROR_OUT_OF_MEMORY: jvmtiError = jvmtiError(110);
+pub const JVMTI_ERROR_ACCESS_DENIED: jvmtiError = jvmtiError(111);
+pub const JVMTI_ERROR_WRONG_PHASE: jvmtiError = jvmtiError(112);
+pub const JVMTI_ERROR_INTERNAL: jvmtiError = jvmtiError(113);
+pub const JVMTI_ERROR_UNATTACHED_THREAD: jvmtiError = jvmtiError(115);
+pub const JVMTI_ERROR_INVALID_ENVIRONMENT: jvmtiError = jvmtiError(116);
+pub const JVMTI_ERROR_MAX: jvmtiError = jvmtiError(116);
 
 /////////////////////////////////////////////////////////////////////
 ///Thread is alive. Zero if thread is new (not started) or terminated.
@@ -981,7 +1336,7 @@ pub struct jvmtiEventCallbacks {
 pub enum jvmtiEventMode {
     #[default]
     JVMTI_ENABLE = 1,
-    JVMTI_DISABLE = 0
+    JVMTI_DISABLE = 0,
 }
 
 #[repr(C)]
@@ -1023,6 +1378,188 @@ pub enum jvmtiEvent {
     JVMTI_EVENT_VIRTUAL_THREAD_END = 88,
 }
 
+pub type jvmtiExtensionFunction = Option<extern "C" fn(jvmti_env: JVMTIEnv, ...)>;
+
+pub type jvmtiExtensionEvent = Option<extern "C" fn(jvmti_env: JVMTIEnv, ...)>;
+
+//We cant enum this as the jvm returning an unknown value to us would be ub.
+pub type jvmtiParamKind = c_int;
+
+/// Ingoing argument - foo.
+pub const JVMTI_KIND_IN: c_int = 91;
+
+/// Ingoing pointer argument - const foo*.
+pub const JVMTI_KIND_IN_PTR: c_int = 92;
+
+/// Ingoing array argument - const foo*.
+pub const JVMTI_KIND_IN_BUF: c_int = 93;
+
+/// Outgoing allocated array argument - foo**. Free with Deallocate.
+pub const JVMTI_KIND_ALLOC_BUF: c_int = 94;
+
+/// Outgoing allocated array of allocated arrays argument - foo***. Free with Deallocate.
+pub const JVMTI_KIND_ALLOC_ALLOC_BUF: c_int = 95;
+
+/// Outgoing argument - foo*.
+pub const JVMTI_KIND_OUT: c_int = 96;
+
+/// Outgoing array argument (pre-allocated by agent) - foo*. Do not Deallocate.
+pub const JVMTI_KIND_OUT_BUF: c_int = 97;
+
+//We cant enum this as the jvm returning an unknown value to us would be ub.
+pub type jvmtiParamTypes = c_int;
+
+/// Java programming language primitive type - byte. JNI type jbyte.
+pub const JVMTI_TYPE_JBYTE: c_int = 101;
+
+/// Java programming language primitive type - char. JNI type jchar.
+pub const JVMTI_TYPE_JCHAR: c_int = 102;
+
+/// Java programming language primitive type - short. JNI type jshort.
+pub const JVMTI_TYPE_JSHORT: c_int = 103;
+
+/// Java programming language primitive type - int. JNI type jint.
+pub const JVMTI_TYPE_JINT: c_int = 104;
+
+/// Java programming language primitive type - long. JNI type jlong.
+pub const JVMTI_TYPE_JLONG: c_int = 105;
+
+/// Java programming language primitive type - float. JNI type jfloat.
+pub const JVMTI_TYPE_JFLOAT: c_int = 106;
+
+/// Java programming language primitive type - double. JNI type jdouble.
+pub const JVMTI_TYPE_JDOUBLE: c_int = 107;
+
+/// Java programming language primitive type - boolean. JNI type jboolean.
+pub const JVMTI_TYPE_JBOOLEAN: c_int = 108;
+
+/// Java programming language object type - java.lang.Object. JNI type jobject. Returned values are JNI local references and must be managed.
+pub const JVMTI_TYPE_JOBJECT: c_int = 109;
+
+/// Java programming language object type - java.lang.Thread. JVM TI type jthread. Returned values are JNI local references and must be managed.
+pub const JVMTI_TYPE_JTHREAD: c_int = 110;
+
+/// Java programming language object type - java.lang.Class. JNI type jclass. Returned values are JNI local references and must be managed.
+pub const JVMTI_TYPE_JCLASS: c_int = 111;
+
+/// Union of all Java programming language primitive and object types - JNI type jvalue. Returned values which represent object types are JNI local references and must be managed.
+pub const JVMTI_TYPE_JVALUE: c_int = 112;
+
+/// Java programming language field identifier - JNI type jfieldID.
+pub const JVMTI_TYPE_JFIELDID: c_int = 113;
+
+/// Java programming language method identifier - JNI type jmethodID.
+pub const JVMTI_TYPE_JMETHODID: c_int = 114;
+
+/// C programming language type - char.
+pub const JVMTI_TYPE_CCHAR: c_int = 115;
+
+/// C programming language type - void.
+pub const JVMTI_TYPE_CVOID: c_int = 116;
+
+/// JNI environment - JNIEnv. Should be used with the correct jvmtiParamKind to make it a pointer type.
+pub const JVMTI_TYPE_JNIENV: c_int = 117;
+
+pub type jvmtiTimerKind = c_int;
+
+pub const JVMTI_TIMER_USER_CPU: jvmtiTimerKind = 30;
+
+pub const JVMTI_TIMER_TOTAL_CPU: jvmtiTimerKind = 31;
+
+pub const JVMTI_TIMER_ELAPSED: jvmtiTimerKind = 32;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct jvmtiTimerInfo {
+    pub max_value: jlong,
+    pub may_skip_forward: jboolean,
+    pub may_skip_backward: jboolean,
+    pub kind: jvmtiTimerKind,
+    pub reserved1: jlong,
+    pub reserved2: jlong,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jvmtiParamInfo {
+    pub name: *mut c_char,
+    pub kind: jvmtiParamKind,
+    pub base_type: jvmtiParamTypes,
+    pub null_ok: jboolean,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jvmtiExtensionFunctionInfo {
+    pub func: jvmtiExtensionFunction,
+    pub id: *mut c_char,
+    pub short_description: *mut c_char,
+    pub param_count: jint,
+    pub params: *mut jvmtiParamInfo,
+    pub error_count: jint,
+    pub errors: *mut jvmtiError,
+}
+
+impl Default for jvmtiExtensionFunctionInfo {
+    fn default() -> Self {
+        Self {
+            func: None,
+            id: null_mut(),
+            short_description: null_mut(),
+            param_count: 0,
+            params: null_mut(),
+            error_count: 0,
+            errors: null_mut(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jvmtiExtensionEventInfo {
+    pub extension_event_index: jint,
+    pub id: *mut c_char,
+    pub short_description: *mut c_char,
+    pub param_count: jint,
+    pub params: *mut jvmtiParamInfo,
+}
+
+impl Default for jvmtiExtensionEventInfo {
+    fn default() -> Self {
+        Self {
+            extension_event_index: 0,
+            id: null_mut(),
+            short_description: null_mut(),
+            param_count: 0,
+            params: null_mut(),
+        }
+    }
+}
+
+pub type jvmtiPhase = c_int;
+pub const JVMTI_PHASE_ONLOAD: jvmtiPhase = 1;
+pub const JVMTI_PHASE_PRIMORDIAL: jvmtiPhase = 2;
+pub const JVMTI_PHASE_START: jvmtiPhase = 6;
+pub const JVMTI_PHASE_LIVE: jvmtiPhase = 4;
+pub const JVMTI_PHASE_DEAD: jvmtiPhase = 8;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub enum jvmtiVerboseFlag {
+    JVMTI_VERBOSE_OTHER = 0,
+    JVMTI_VERBOSE_GC = 1,
+    JVMTI_VERBOSE_CLASS = 2,
+    JVMTI_VERBOSE_JNI = 4
+}
+
+pub type jvmtiJlocationFormat = c_int;
+
+/// jlocation values represent virtual machine bytecode indices--that is, offsets into the virtual machine code for a method.
+pub const JVMTI_JLOCATION_JVMBCI: jvmtiJlocationFormat = 1;
+
+/// jlocation values represent native machine program counter values.
+pub const JVMTI_JLOCATION_MACHINEPC: jvmtiJlocationFormat = 2;
+
+/// jlocation values have some other representation.
+pub const JVMTI_JLOCATION_OTHER: jvmtiJlocationFormat = 0;
 
 #[repr(transparent)]
 #[derive(Debug, Default, Copy, Clone)]
@@ -1759,7 +2296,7 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint) -> jvmtiError>(87)(self.vtable, version_ptr)
     }
 
-    pub unsafe fn GetPhase(&self, phase: *mut c_int) -> jvmtiError {
+    pub unsafe fn GetPhase(&self, phase: *mut jvmtiPhase) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut c_int) -> jvmtiError>(132)(self.vtable, phase)
     }
 
@@ -2371,7 +2908,6 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiEventCallbacks, jint) -> jvmtiError>(121)(self.vtable, callbacks, size_of::<jvmtiEventCallbacks>() as jint)
     }
 
-
     /// Raw variant of SetEventCallbacks which allows for passing an arbitary payload.
     /// This is useful when attempting to use a jvmti version that is newer than what jni-simple supports.
     ///
@@ -2415,7 +2951,105 @@ impl JVMTIEnv {
     }
 
     pub unsafe fn GenerateEvents(&self, event_type: jvmtiEvent) -> jvmtiError {
-        self.jvmti::<extern "C" fn(JVMTIEnvVTable, jvmtiEvent) -> jvmtiError>(122)(self.vtable, event_type)
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiEvent) -> jvmtiError>(122)(self.vtable, event_type)
+    }
+
+    pub unsafe fn GetExtensionFunctions(&self, extension_count_ptr: *mut jint, extensions: *mut *mut jvmtiExtensionFunctionInfo) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jvmtiExtensionFunctionInfo) -> jvmtiError>(123)(self.vtable, extension_count_ptr, extensions)
+    }
+
+    pub unsafe fn GetExtensionEvents(&self, extension_count_ptr: *mut jint, extensions: *mut *mut jvmtiExtensionEventInfo) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jvmtiExtensionEventInfo) -> jvmtiError>(124)(self.vtable, extension_count_ptr, extensions)
+    }
+
+    pub unsafe fn SetExtensionEventCallback(&self, extension_event_index: jint, callback: jvmtiExtensionEvent) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, jvmtiExtensionEvent) -> jvmtiError>(125)(self.vtable, extension_event_index, callback)
+    }
+
+    pub unsafe fn GetCurrentThreadCpuTimerInfo(&self, info_ptr: *mut jvmtiTimerInfo) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(133)(self.vtable, info_ptr)
+    }
+
+    pub unsafe fn GetCurrentThreadCpuTime(&self, nanos_ptr: *mut jlong) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jlong) -> jvmtiError>(134)(self.vtable, nanos_ptr)
+    }
+
+    pub unsafe fn GetThreadCpuTimerInfo(&self, info_ptr: *mut jvmtiTimerInfo) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(135)(self.vtable, info_ptr)
+    }
+
+    pub unsafe fn GetThreadCpuTime(&self, thread: jthread, nanos_ptr: *mut jlong) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jlong) -> jvmtiError>(136)(self.vtable, thread, nanos_ptr)
+    }
+
+    pub unsafe fn GetTimerInfo(&self, info_ptr: *mut jvmtiTimerInfo) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(137)(self.vtable, info_ptr)
+    }
+
+    pub unsafe fn GetTime(&self, nanos_ptr: *mut jlong) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jlong) -> jvmtiError>(138)(self.vtable, nanos_ptr)
+    }
+
+    pub unsafe fn GetAvailableProcessors(&self, processor_count_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint) -> jvmtiError>(143)(self.vtable, processor_count_ptr)
+    }
+
+    pub unsafe fn AddToBootstrapClassLoaderSearch(&self, segment: impl UseCString) -> jvmtiError {
+        segment.use_as_const_c_char(|segment| {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(148)(self.vtable, segment)
+        })
+    }
+
+    pub unsafe fn AddToSystemClassLoaderSearch(&self, segment: impl UseCString) -> jvmtiError {
+        segment.use_as_const_c_char(|segment| {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(150)(self.vtable, segment)
+        })
+    }
+
+    pub unsafe fn GetSystemProperties(&self, count_ptr: *mut jint, property_ptr: *mut *mut *mut c_char) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut *mut c_char) -> jvmtiError>(129)(self.vtable, count_ptr, property_ptr)
+    }
+
+    pub unsafe fn GetSystemProperty(&self, property: impl UseCString, value_ptr: *mut *mut c_char) -> jvmtiError {
+        property.use_as_const_c_char(|property| {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *mut *mut c_char) -> jvmtiError>(130)(self.vtable, property, value_ptr)
+        })
+    }
+
+    pub unsafe fn SetSystemProperty(&self, property: impl UseCString, value_ptr: impl UseCString) -> jvmtiError {
+        property.use_as_const_c_char(|property| {
+            value_ptr.use_as_const_c_char(|value_ptr| {
+                self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *const c_char) -> jvmtiError>(131)(self.vtable, property, value_ptr)
+            })
+        })
+    }
+
+    pub unsafe fn DisposeEnvironment(&self) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable) -> jvmtiError>(126)(self.vtable)
+    }
+
+    pub unsafe fn SetEnvironmentLocalStorage(&self, data: *const c_void) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_void) -> jvmtiError>(147)(self.vtable, data)
+    }
+
+    pub unsafe fn GetEnvironmentLocalStorage(&self, data: *mut *mut c_void) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut *mut c_void) -> jvmtiError>(146)(self.vtable, data)
+    }
+
+    pub unsafe fn GetErrorName(&self, error: impl Into<jvmtiError>, name_ptr: *mut *mut c_char) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiError, *mut *mut c_char) -> jvmtiError>(127)(self.vtable, error.into(), name_ptr)
+    }
+
+    pub unsafe fn SetVerboseFlag(&self, flag: jvmtiVerboseFlag, value: jboolean) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiVerboseFlag, jboolean) -> jvmtiError>(149)(self.vtable, flag, value)
+    }
+
+    pub unsafe fn GetJLocationFormat(&self, format_ptr: *mut jvmtiJlocationFormat) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiJlocationFormat) -> jvmtiError>(128)(self.vtable, format_ptr)
+    }
+
+    pub unsafe fn SetHeapSamplingInterval(&self, sampling_interval: jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint) -> jvmtiError>(155)(self.vtable, sampling_interval)
     }
 }
 
@@ -20502,7 +21136,7 @@ pub unsafe fn load_jvm_from_library(_: &str) -> Result<(), String> {
 /// or on linux by distribution package installers.
 ///
 /// # Errors
-/// If `JAVA_HOME` is not set or doesn't point to a known layout of a JVM installation
+/// If `JAVA_HOME` is not set or doesn't point to a known layout of a JVM installation or cant be read
 /// then this function returns an error.
 ///
 /// # Safety
@@ -20510,6 +21144,21 @@ pub unsafe fn load_jvm_from_library(_: &str) -> Result<(), String> {
 ///
 #[cfg(feature = "loadjvm")]
 pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
+    let java_home = std::env::var("JAVA_HOME").map_err(|_| "JAVA_HOME is not set or invalid".to_string())?;
+    load_jvm_from_java_home_folder(&java_home)
+}
+
+/// Convinience method to load the jvm from a given path to a java installation.
+/// Info: The java_home should refer to a path of a folder, which directly contains the "bin" or "jre" folder.
+///
+/// # Errors
+/// If `java_home` doesn't refer to a known layout of a JVM installation or cant be read
+/// then this function returns an error.
+///
+/// # Safety
+/// The Safety of this fn depends on the shared object that will be loaded as a result of this call.
+#[cfg(feature = "loadjvm")]
+pub unsafe fn load_jvm_from_java_home_folder(java_home: &str) -> Result<(), String> {
     ///All (most) jvm layouts that I am aware of on windows+linux.
     const COMMON_LIBJVM_PATHS: &[&[&str]] = &[
         &["lib", "server", "libjvm.so"],                   //LINUX JAVA 11+
@@ -20523,10 +21172,8 @@ pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
         &["bin", "server", "jvm.dll"],                     //WINDOWS JRE <= 8 AND WINDOWS JDK/JRE 11+
     ];
 
-    let java_home = std::env::var("JAVA_HOME").map_err(|_| "JAVA_HOME is not set or invalid".to_string())?;
-
     for parts in COMMON_LIBJVM_PATHS {
-        let mut buf = PathBuf::from(java_home.as_str());
+        let mut buf = PathBuf::from(java_home);
         for part in *parts {
             buf.push(part);
         }
