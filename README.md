@@ -7,7 +7,7 @@ In addition to JNI, this crate also provides a similar simplistic wrapper for th
 The JVMTI Api can be used to write, for example, a Java Agent (like a Java debugger) in Rust or perform similar deep instrumentation with the JVM.
 
 ## Examples
-### Loading a JVM on from a shared object file or dll
+### Loading a JVM from a shared object file or dll
 Note: this example assumes the `loadjvm` feature is enabled!
 ```rust
 use jni_simple::{*};
@@ -188,7 +188,7 @@ This feature is not enabled by default!
 This feature provides functions to dynamically link the jvm using the `libloading` crate 
 from a string containing the absolute path to `libjvm.so` or `jvm.dll`.
 
-Note: If you do not want to use the `libloading` create but still start the JVM then there are methods provided to 
+Note: If you do not want to use the `libloading` crate but still start the JVM then there are methods provided to 
 load the JVM from a pointer to JNI_CreateJavaVM function instead of a dll/so file. 
 Do that if you want to do dynamic linking yourself using `dlopen` or `LoadLibraryA` for example.
 

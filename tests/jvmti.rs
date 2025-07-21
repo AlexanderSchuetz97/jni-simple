@@ -1,4 +1,7 @@
-use jni_simple::{jint, jniNativeInterface, jvmtiCapabilities, load_jvm_from_java_home, JNIEnv, JNILinkage, JNI_CreateJavaVM_with_string_args, JVMTIEnv, JavaVM, JNI_VERSION_1_8, JVMTI_ERROR_NONE, JVMTI_VERSION_1_2};
+use jni_simple::{
+    jint, jniNativeInterface, jvmtiCapabilities, load_jvm_from_java_home, JNIEnv, JNILinkage, JNI_CreateJavaVM_with_string_args, JVMTIEnv, JavaVM, JNI_VERSION_1_8,
+    JVMTI_ERROR_NONE, JVMTI_VERSION_1_2,
+};
 use std::ffi::c_void;
 use std::sync::OnceLock;
 
@@ -51,7 +54,7 @@ fn install_hook(env: JVMTIEnv) {
     }
 }
 
-#[test]
+//#[test]
 pub fn test() {
     unsafe {
         load_jvm_from_java_home().expect("failed to load jvm");

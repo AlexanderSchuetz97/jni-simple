@@ -1,4 +1,7 @@
-use jni_simple::{jint, jniNativeInterface, jvmtiPhase, load_jvm_from_java_home, JNIEnv, JNILinkage, JNI_CreateJavaVM_with_string_args, JVMTIEnv, JNI_VERSION_1_8, JVMTI_ERROR_NONE, JVMTI_VERSION_1_2};
+use jni_simple::{
+    jint, jniNativeInterface, jvmtiPhase, load_jvm_from_java_home, JNIEnv, JNILinkage, JNI_CreateJavaVM_with_string_args, JVMTIEnv, JNI_VERSION_1_8, JVMTI_ERROR_NONE,
+    JVMTI_VERSION_1_2,
+};
 use std::ffi::c_void;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
@@ -8,7 +11,7 @@ static ORIGINAL_FUNCTIONS: OnceLock<jniNativeInterface> = OnceLock::new();
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 extern "system" fn hooked_get_version(env: JNIEnv) -> jint {
-    COUNTER.fetch_add(1,SeqCst);
+    COUNTER.fetch_add(1, SeqCst);
     let guard = ORIGINAL_FUNCTIONS.get().unwrap();
     let result = unsafe { guard.get::<extern "system" fn(*mut c_void) -> jint>(JNILinkage::GetVersion)(env.vtable()) };
     result
@@ -45,6 +48,5 @@ pub fn test() {
         let x2 = env.GetVersion();
         assert_eq!(2, COUNTER.load(SeqCst));
         assert_eq!(x, x2);
-
     }
 }
