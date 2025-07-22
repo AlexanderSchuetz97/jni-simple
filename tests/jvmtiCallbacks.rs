@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 static DEBUGGER: OnceLock<JVMTIEnv> = OnceLock::new();
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-unsafe fn shim_agent(vm: JavaVM, _options: *const char, _reserved: *mut c_void) -> i32 {
+unsafe extern "C" fn shim_agent(vm: JavaVM, _options: *const char, _reserved: *mut c_void) -> i32 {
     let jvmti = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2).expect("failed to get JVMTI environment");
 
     let mut cap = jvmtiCapabilities::default();
