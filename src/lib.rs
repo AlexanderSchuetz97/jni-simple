@@ -3638,32 +3638,99 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(49)(self.vtable, klass, source_name_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the class indicated by klass, return the access flags via modifiers_ptr.
+    ///
+    /// Access flags are defined in The Java™ Virtual Machine Specification, Chapter 4.
+    ///
+    /// If the class is an array class, then its public, private, and protected modifiers are the same as those of its component type.
+    /// For arrays of primitives, this component type is represented by one of the primitive classes (for example, java.lang.Integer.TYPE).
+    /// If the class is a primitive class, its public modifier is always true, and its protected and private modifiers are always false.
+    /// If the class is an array class or a primitive class then its final modifier is always true and its interface modifier is always false.
+    /// The values of its other modifiers are not determined by this specification.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetSourceFileName>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `modifiers_ptr` must not be dangling.
     pub unsafe fn GetClassModifiers(&self, klass: jclass, modifiers_ptr: *mut jint) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(50)(self.vtable, klass, modifiers_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the class indicated by klass, return a count of methods via method_count_ptr and a list of method IDs via methods_ptr.
+    ///
+    /// The method list contains constructors and static initializers as well as true methods.
+    /// Only directly declared methods are returned (not inherited methods).
+    /// An empty method list is returned for array classes and primitive classes (for example, java.lang.Integer.TYPE).
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassMethods>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `method_count_ptr` and `methods_ptr` must not be dangling.
     pub unsafe fn GetClassMethods(&self, klass: jclass, method_count_ptr: *mut jint, methods_ptr: *mut *mut jmethodID) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jmethodID) -> jvmtiError>(51)(self.vtable, klass, method_count_ptr, methods_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the class indicated by klass, return a count of fields via field_count_ptr and a list of field IDs via fields_ptr.
+    ///
+    /// Only directly declared fields are returned (not inherited fields).
+    /// Fields are returned in the order they occur in the class file.
+    /// An empty field list is returned for array classes and primitive classes (for example, java.lang.Integer.TYPE).
+    /// Use JNI to determine the length of an array.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassFields>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `field_count_ptr` and `fields_ptr` must not be dangling.
     pub unsafe fn GetClassFields(&self, klass: jclass, field_count_ptr: *mut jint, fields_ptr: *mut *mut jfieldID) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jfieldID) -> jvmtiError>(52)(self.vtable, klass, field_count_ptr, fields_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Return the direct super-interfaces of this class. For a class, this function returns the interfaces declared in its implements clause.
+    ///
+    /// For an interface, this function returns the interfaces declared in its extends clause.
+    /// An empty interface list is returned for array classes and primitive classes (for example, java.lang.Integer.TYPE).
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetImplementedInterfaces>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `interface_count_ptr` and `interfaces_ptr` must not be dangling.
     pub unsafe fn GetImplementedInterfaces(&self, klass: jclass, interface_count_ptr: *mut jint, interfaces_ptr: *mut *mut jclass) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jclass) -> jvmtiError>(53)(self.vtable, klass, interface_count_ptr, interfaces_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the class indicated by klass, return the minor and major version numbers, as defined in The Java™ Virtual Machine Specification, Chapter 4.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassVersionNumbers>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `minor_version_ptr` and `major_version_ptr` must not be dangling.
     pub unsafe fn GetClassVersionNumbers(&self, klass: jclass, minor_version_ptr: *mut jint, major_version_ptr: *mut jint) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint) -> jvmtiError>(54)(self.vtable, klass, minor_version_ptr, major_version_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the class indicated by klass, return the raw bytes of the constant pool in the format of the constant_pool item of The Java™ Virtual Machine Specification, Chapter 4.
+    ///
+    /// The format of the constant pool may differ between versions of the Class File Format, so, the minor and major class version numbers should be checked for compatibility.
+    ///
+    /// The returned constant pool might not have the same layout or contents as the constant pool in the defining class file.
+    /// The constant pool returned by GetConstantPool() may have more or fewer entries than the defining constant pool.
+    /// Entries may be in a different order. The constant pool returned by GetConstantPool() will match the constant pool used by GetBytecodes().
+    /// That is, the bytecodes returned by GetBytecodes() will have constant pool indices which refer to constant pool entries returned by GetConstantPool().
+    /// Note that since RetransformClasses and RedefineClasses can change the constant pool, the constant pool returned by this function can change accordingly.
+    /// Thus, the correspondence between GetConstantPool() and GetBytecodes() does not hold if there is an intervening class retransformation or redefinition.
+    /// The value of a constant pool entry used by a given bytecode will match that of the defining class file (even if the indices don't match).
+    /// Constant pool entries which are not used directly or indirectly by bytecodes (for example, UTF-8 strings associated with annotations) are not required to exist in the returned constant pool.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetConstantPool>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetConstantPool(
         &self,
         klass: jclass,
