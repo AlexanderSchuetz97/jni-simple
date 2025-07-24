@@ -2965,7 +2965,7 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread) -> jvmtiError>(85)(self.vtable, thread)
     }
 
-    /// This function initiates a traversal over the objects that are directly and indirectly reachable from the specified object or, if initial_object is not specified, all objects reachable from the heap roots.
+    /// This function initiates a traversal over the objects that are directly and indirectly reachable from the specified object or, if `initial_object` is not specified, all objects reachable from the heap roots.
     ///
     /// The heap root are the set of system classes, JNI globals, references from platform thread stacks, and other objects used as roots for the purposes of garbage collection.
     ///
@@ -3156,13 +3156,13 @@ impl JVMTIEnv {
 
     /// Iterate over all objects in the heap. This includes both reachable and unreachable objects.
     ///
-    /// The object_filter parameter indicates the objects for which the callback function is called.
+    /// The `object_filter` parameter indicates the objects for which the callback function is called.
     ///
-    /// If this parameter is JVMTI_HEAP_OBJECT_TAGGED then the callback will only be called for every object that is tagged.
+    /// If this parameter is `JVMTI_HEAP_OBJECT_TAGGED` then the callback will only be called for every object that is tagged.
     ///
-    /// If the parameter is JVMTI_HEAP_OBJECT_UNTAGGED then the callback will only be for objects that are not tagged.
+    /// If the parameter is `JVMTI_HEAP_OBJECT_UNTAGGED` then the callback will only be for objects that are not tagged.
     ///
-    /// If the parameter is JVMTI_HEAP_OBJECT_EITHER then the callback will be called for every object in the heap, irrespective of whether it is tagged or not.
+    /// If the parameter is `JVMTI_HEAP_OBJECT_EITHER` then the callback will be called for every object in the heap, irrespective of whether it is tagged or not.
     /// During the execution of this function the state of the heap does not change: no objects are allocated, no objects are garbage collected,
     /// and the state of objects (including held values) does not change.
     ///
@@ -3190,13 +3190,13 @@ impl JVMTIEnv {
     /// This includes direct instances of the specified class and instances of all subclasses of the specified class.
     /// This includes both reachable and unreachable objects.
     ///
-    /// The object_filter parameter indicates the objects for which the callback function is called.
+    /// The `object_filter` parameter indicates the objects for which the callback function is called.
     ///
-    /// If this parameter is JVMTI_HEAP_OBJECT_TAGGED then the callback will only be called for every object that is tagged.
+    /// If this parameter is `JVMTI_HEAP_OBJECT_TAGGED` then the callback will only be called for every object that is tagged.
     ///
-    /// If the parameter is JVMTI_HEAP_OBJECT_UNTAGGED then the callback will only be called for objects that are not tagged.
+    /// If the parameter is `JVMTI_HEAP_OBJECT_UNTAGGED` then the callback will only be called for objects that are not tagged.
     ///
-    /// If the parameter is JVMTI_HEAP_OBJECT_EITHER then the callback will be called for every object in the heap, irrespective of whether it is tagged or not.
+    /// If the parameter is `JVMTI_HEAP_OBJECT_EITHER` then the callback will be called for every object in the heap, irrespective of whether it is tagged or not.
     ///
     /// During the execution of this function the state of the heap does not change: no objects are allocated, no objects are garbage collected, and the state of objects (including held values) does not change.
     /// As a result, threads executing Java programming language code, threads attempting to resume the execution of Java programming language code, and threads attempting to execute JNI functions are typically stalled.
@@ -3240,7 +3240,7 @@ impl JVMTIEnv {
 
     /// This function can be used to retrieve the value of the local object variable at slot 0 (the "this" object) from non-static frames.
     ///
-    /// This function can retrieve the "this" object from native method frames, whereas GetLocalObject() would return JVMTI_ERROR_OPAQUE_FRAME in those cases.
+    /// This function can retrieve the "this" object from native method frames, whereas `GetLocalObject()` would return `JVMTI_ERROR_OPAQUE_FRAME` in those cases.
     /// The specified thread must be suspended or must be the current thread.
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetLocalInstance>
@@ -3438,7 +3438,7 @@ impl JVMTIEnv {
 
     /// Return an array of all modules loaded in the virtual machine.
     /// The array includes the unnamed module for each class loader.
-    /// The number of modules in the array is returned via `module_count_ptr`, and the array itself via modules_ptr.
+    /// The number of modules in the array is returned via `module_count_ptr`, and the array itself via `modules_ptr`.
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetAllModules>
     ///
@@ -3450,7 +3450,7 @@ impl JVMTIEnv {
 
     /// Return the java.lang.Module object for a named module defined to a class loader that contains a given package.
     ///
-    /// The module is returned via module_ptr.
+    /// The module is returned via `module_ptr`.
     /// If a named module is defined to the class loader and it contains the package then that named module is returned, otherwise null is returned.
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetNamedModule>
@@ -3464,61 +3464,176 @@ impl JVMTIEnv {
         })
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Update a module to read another module.
+    ///
+    /// This function is a no-op when module is an unnamed module.
+    /// This function facilitates the instrumentation of code in named modules where that instrumentation requires expanding the set of modules that a module reads.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#AddModuleReads>
+    ///
+    /// # Safety
+    /// `module` must be a valid strong reference or null
+    /// `to_module` must be a valid strong reference or null
     pub unsafe fn AddModuleReads(&self, module: jobject, to_module: jobject) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jobject) -> jvmtiError>(93)(self.vtable, module, to_module)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Update a module to export a package to another module.
+    ///
+    /// This function is a no-op when module is an unnamed module or an open module.
+    /// This function facilitates the instrumentation of code in named modules where that instrumentation requires expanding the set of packages that a module exports.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#AddModuleExports>
+    ///
+    /// # Safety
+    /// `module` must be a valid strong reference or null
+    /// `to_module` must be a valid strong reference or null
+    /// all pointer parameters must not be dangling.
     pub unsafe fn AddModuleExports(&self, module: jobject, pkg_name: impl UseCString, to_module: jobject) -> jvmtiError {
         pkg_name.use_as_const_c_char(|pkg_name| {
             self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(94)(self.vtable, module, pkg_name, to_module)
         })
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Update a module to open a package to another module.
+    ///
+    /// This function is a no-op when module is an unnamed module or an open module.
+    /// This function facilitates the instrumentation of code in modules where that instrumentation requires expanding the set of packages that a module opens to other modules.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#AddModuleOpens>
+    ///
+    /// # Safety
+    /// `module` must be a valid strong reference or null
+    /// `to_module` must be a valid strong reference or null
+    /// all pointer parameters must not be dangling.
     pub unsafe fn AddModuleOpens(&self, module: jobject, pkg_name: impl UseCString, to_module: jobject) -> jvmtiError {
         pkg_name.use_as_const_c_char(|pkg_name| {
             self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(95)(self.vtable, module, pkg_name, to_module)
         })
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Updates a module to add a service to the set of services that a module uses.
+    ///
+    /// This function is a no-op when the module is an unnamed module.
+    /// This function facilitates the instrumentation of code in named modules where that instrumentation requires expanding the set of services that a module is using.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#AddModuleUses>
+    ///
+    /// # Safety
+    /// `module` must be a valid strong reference or null
+    /// `service` must be a valid strong reference or null
     pub unsafe fn AddModuleUses(&self, module: jobject, service: jclass) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass) -> jvmtiError>(96)(self.vtable, module, service)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Updates a module to add a service to the set of services that a module provides.
+    ///
+    /// This function is a no-op when the module is an unnamed module.
+    /// This function facilitates the instrumentation of code in named modules where that instrumentation requires changes to the services that are provided.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#AddModuleProvides>
+    ///
+    /// # Safety
+    /// `module` must be a valid strong reference or null
+    /// `service` must be a valid strong reference or null
+    /// `impl_class` must be a valid strong reference or null
     pub unsafe fn AddModuleProvides(&self, module: jobject, service: jclass, impl_class: jclass) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass, jclass) -> jvmtiError>(97)(self.vtable, module, service, impl_class)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Determines whether a module is modifiable.
+    ///
+    /// If a module is modifiable then this module can be updated with `AddModuleReads`, `AddModuleExports`, `AddModuleOpens`, `AddModuleUses`, and `AddModuleProvides`.
+    /// If a module is not modifiable then the module can not be updated with these functions.
+    /// The result of this function is always `JNI_TRUE` when called to determine if an unnamed module is modifiable.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsModifiableModule>
+    ///
+    /// # Safety
+    /// `module` must be a valid strong reference or null
+    /// `service` must be a valid strong reference or null
+    /// `impl_class` must be a valid strong reference or null
     pub unsafe fn IsModifiableModule(&self, module: jobject, is_modifiable_module_ptr: *mut jboolean) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jboolean) -> jvmtiError>(98)(self.vtable, module, is_modifiable_module_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Return an array of all classes loaded in the virtual machine.
+    ///
+    /// The number of classes in the array is returned via `class_count_ptr`, and the array itself via `classes_ptr`.
+    ///
+    /// A class or interface creation can be triggered by one of the following:
+    /// * By loading and deriving a class from a class file representation using a class loader (see The Java™ Virtual Machine Specification, Chapter 5.3).
+    /// * By invoking `Lookup::defineHiddenClass` that creates a hidden class or interface from a class file representation.
+    /// * By invoking methods in certain Java SE Platform APIs such as reflection.
+    ///
+    /// An array class is created directly by the Java virtual machine. The creation can be triggered by using class loaders or by invoking methods in certain Java SE Platform APIs such as reflection.
+    /// The returned list includes all classes and interfaces, including hidden classes or interfaces, and also array classes of all types (including arrays of primitive types). Primitive classes (for example, java.lang.Integer.TYPE) are not included in the returned list.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetLoadedClasses>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetLoadedClasses(&self, count_ptr: *mut jint, classes_ptr: *mut *mut jclass) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jclass) -> jvmtiError>(77)(self.vtable, count_ptr, classes_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Returns an array of all classes which this class loader can find by name via `ClassLoader::loadClass`, `Class::forName` and bytecode linkage.
+    ///
+    /// That is, all classes for which `initiating_loader` has been recorded as an initiating loader.
+    /// Each class in the returned array was created by this class loader, either by defining it directly or by delegation to another class loader.
+    /// See The Java™ Virtual Machine Specification, Chapter 5.3.
+    /// The returned list does not include hidden classes or interfaces or array classes whose element type is a hidden class or interface as they cannot be discovered by any class loader.
+    /// The number of classes in the array is returned via `class_count_ptr`, and the array itself via `classes_ptr`.
+    /// See `Lookup::defineHiddenClass`.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassLoaderClasses>
+    ///
+    /// # Safety
+    /// `initiating_loader` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetClassLoaderClasses(&self, initiating_loader: jobject, count_ptr: *mut jint, classes_ptr: *mut *mut jclass) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint, *mut *mut jclass) -> jvmtiError>(78)(self.vtable, initiating_loader, count_ptr, classes_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Returns an array of all classes which this class loader can find by name via `ClassLoader::loadClass`, `Class::forName` and bytecode linkage.
+    ///
+    /// That is, all classes for which `initiating_loader` has been recorded as an initiating loader.
+    /// Each class in the returned array was created by this class loader, either by defining it directly or by delegation to another class loader. See The Java™ Virtual Machine Specification, Chapter 5.3.
+    /// The returned list does not include hidden classes or interfaces or array classes whose element type is a hidden class or interface as they cannot be discovered by any class loader.
+    /// The number of classes in the array is returned via `class_count_ptr`, and the array itself via `classes_ptr`.
+    /// See `Lookup::defineHiddenClass`.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassSignature>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetClassSignature(&self, klass: jclass, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(47)(self.vtable, klass, signature_ptr, generic_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Get the status of the class. Zero or more of the following bits can be set.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassStatus>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `status_ptr` must not be dangling.
     pub unsafe fn GetClassStatus(&self, klass: jclass, status_ptr: *mut jint) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(48)(self.vtable, klass, status_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the class indicated by klass, return the source file name via `source_name_ptr`.
+    ///
+    /// The returned string is a file name only and never contains a directory name.
+    ///
+    /// For primitive classes (for example, java.lang.Integer.TYPE) and for arrays this function returns `JVMTI_ERROR_ABSENT_INFORMATION`.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetSourceFileName>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `source_name_ptr` must not be dangling.
     pub unsafe fn GetSourceFileName(&self, klass: jclass, source_name_ptr: *mut *mut c_char) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(49)(self.vtable, klass, source_name_ptr)
     }
