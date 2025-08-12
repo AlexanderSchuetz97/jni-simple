@@ -3638,7 +3638,7 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(49)(self.vtable, klass, source_name_ptr)
     }
 
-    /// For the class indicated by klass, return the access flags via modifiers_ptr.
+    /// For the class indicated by klass, return the access flags via `modifiers_ptr`.
     ///
     /// Access flags are defined in The Java™ Virtual Machine Specification, Chapter 4.
     ///
@@ -3657,7 +3657,7 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(50)(self.vtable, klass, modifiers_ptr)
     }
 
-    /// For the class indicated by klass, return a count of methods via method_count_ptr and a list of method IDs via methods_ptr.
+    /// For the class indicated by klass, return a count of methods via `method_count_ptr` and a list of method IDs via `methods_ptr`.
     ///
     /// The method list contains constructors and static initializers as well as true methods.
     /// Only directly declared methods are returned (not inherited methods).
@@ -3672,7 +3672,7 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jmethodID) -> jvmtiError>(51)(self.vtable, klass, method_count_ptr, methods_ptr)
     }
 
-    /// For the class indicated by klass, return a count of fields via field_count_ptr and a list of field IDs via fields_ptr.
+    /// For the class indicated by klass, return a count of fields via `field_count_ptr` and a list of field IDs via `fields_ptr`.
     ///
     /// Only directly declared fields are returned (not inherited fields).
     /// Fields are returned in the order they occur in the class file.
@@ -3713,16 +3713,16 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint) -> jvmtiError>(54)(self.vtable, klass, minor_version_ptr, major_version_ptr)
     }
 
-    /// For the class indicated by klass, return the raw bytes of the constant pool in the format of the constant_pool item of The Java™ Virtual Machine Specification, Chapter 4.
+    /// For the class indicated by klass, return the raw bytes of the constant pool in the format of the `constant_pool` item of The Java™ Virtual Machine Specification, Chapter 4.
     ///
     /// The format of the constant pool may differ between versions of the Class File Format, so, the minor and major class version numbers should be checked for compatibility.
     ///
     /// The returned constant pool might not have the same layout or contents as the constant pool in the defining class file.
-    /// The constant pool returned by GetConstantPool() may have more or fewer entries than the defining constant pool.
-    /// Entries may be in a different order. The constant pool returned by GetConstantPool() will match the constant pool used by GetBytecodes().
-    /// That is, the bytecodes returned by GetBytecodes() will have constant pool indices which refer to constant pool entries returned by GetConstantPool().
-    /// Note that since RetransformClasses and RedefineClasses can change the constant pool, the constant pool returned by this function can change accordingly.
-    /// Thus, the correspondence between GetConstantPool() and GetBytecodes() does not hold if there is an intervening class retransformation or redefinition.
+    /// The constant pool returned by `GetConstantPool()` may have more or fewer entries than the defining constant pool.
+    /// Entries may be in a different order. The constant pool returned by `GetConstantPool()` will match the constant pool used by `GetBytecodes()`.
+    /// That is, the bytecodes returned by `GetBytecodes()` will have constant pool indices which refer to constant pool entries returned by `GetConstantPool()`.
+    /// Note that since `RetransformClasses` and `RedefineClasses` can change the constant pool, the constant pool returned by this function can change accordingly.
+    /// Thus, the correspondence between `GetConstantPool()` and `GetBytecodes()` does not hold if there is an intervening class retransformation or redefinition.
     /// The value of a constant pool entry used by a given bytecode will match that of the defining class file (even if the indices don't match).
     /// Constant pool entries which are not used directly or indirectly by bytecodes (for example, UTF-8 strings associated with annotations) are not required to exist in the returned constant pool.
     ///
@@ -3747,32 +3747,82 @@ impl JVMTIEnv {
         )
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Determines whether a class object reference represents an interface.
+    /// The jboolean result is `JNI_TRUE` if the "class" is actually an interface,
+    /// `JNI_FALSE` otherwise.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsInterface>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn IsInterface(&self, klass: jclass, is_interface_ptr: *mut jboolean) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(54)(self.vtable, klass, is_interface_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Determines whether a class object reference represents an array.
+    /// The jboolean result is JNI_TRUE if the class is an array, JNI_FALSE otherwise.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsArrayClass>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn IsArrayClass(&self, klass: jclass, is_array_class_ptr: *mut jboolean) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(55)(self.vtable, klass, is_array_class_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Determines whether a class is modifiable.
+    ///
+    /// If a class is modifiable (is_modifiable_class_ptr returns JNI_TRUE)
+    /// the class can be redefined with RedefineClasses (assuming the agent possesses the can_redefine_classes capability)
+    /// or retransformed with RetransformClasses (assuming the agent possesses the can_retransform_classes capability).
+    /// If a class is not modifiable (is_modifiable_class_ptr returns JNI_FALSE) the class can be neither redefined nor retransformed.
+    /// Primitive classes (for example, java.lang.Integer.TYPE), array classes, and some implementation defined classes are never modifiable.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsModifiableClass>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn IsModifiableClass(&self, klass: jclass, is_modifiable_class_ptr: *mut jboolean) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(44)(self.vtable, klass, is_modifiable_class_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the class indicated by klass, return via classloader_ptr a reference to the class loader for the class.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsModifiableClass>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetClassLoader(&self, klass: jclass, classloader_ptr: *mut jobject) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jobject) -> jvmtiError>(56)(self.vtable, klass, classloader_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the class indicated by klass, return the debug extension via source_debug_extension_ptr.
+    /// The returned string contains exactly the debug extension information present in the class file of klass.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetSourceDebugExtension>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetSourceDebugExtension(&self, klass: jclass, source_debug_extension_ptr: *mut *mut c_char) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(89)(self.vtable, klass, source_debug_extension_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// This function facilitates the bytecode instrumentation of already loaded classes.
+    ///
+    /// To replace the class definition without reference to the existing bytecodes,
+    /// as one might do when recompiling from source for fix-and-continue debugging,
+    /// RedefineClasses function should be used instead.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#RetransformClasses>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn RetransformClasses(&self, class_count: jint, classes: *const jclass) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jclass) -> jvmtiError>(151)(self.vtable, class_count, classes)
     }

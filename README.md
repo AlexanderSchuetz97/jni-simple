@@ -327,7 +327,7 @@ Variant 3 is not implemented by this crate because "va_list" cannot be created i
 Variant 2 is relatively straight forward and fully supported by this crate. 
 This means you can call ANY java method using Variant 2.
 
-Variant 1 has a Variadic parameter. This is Variadic up-calls refers to.
+Variant 1 has a Variadic parameter. This is what Variadic up-calls refers to.
 Rust does support this but only for explicit extern "C" functions and not for any
 functions implemented in rust itself. To call Variant 1 this crate provides concrete
 implementations to call this Variadic function with 0, 1, 2 and 3 parameters.
