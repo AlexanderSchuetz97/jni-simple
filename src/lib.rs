@@ -1722,9 +1722,9 @@ impl jvmtiCapabilities {
     /// # Panics
     /// if the target slice does not have the same length as `size()` returns
     #[inline(always)]
-    pub fn copy_from_slice(&mut self, data: &[u8]) {
+    pub const fn copy_from_slice(&mut self, data: &[u8]) {
         let mut raw = [0u8; 16];
-        raw.as_mut_slice().copy_from_slice(data);
+        raw.copy_from_slice(data);
         self.0 = u128::from_ne_bytes(raw);
     }
 
@@ -3827,17 +3827,79 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jclass) -> jvmtiError>(151)(self.vtable, class_count, classes)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// All classes given are redefined according to the definitions supplied.
+    ///
+    /// This function is used to replace the definition of a class with a new definition, as might be needed in fix-and-continue debugging.
+    /// Where the existing class file bytes are to be transformed, for example in bytecode instrumentation, RetransformClasses should be used.
+    ///
+    /// Redefinition can cause new versions of methods to be installed.
+    /// Old method versions may become obsolete The new method version will be used on new invokes.
+    /// If a method has active stack frames, those active frames continue to run the bytecodes of the original method version.
+    /// If resetting of stack frames is desired, use PopFrame to pop frames with obsolete method versions.
+    ///
+    /// This function does not cause any initialization except that which would occur under the customary JVM semantics.
+    /// In other words, redefining a class does not cause its initializers to be run.
+    /// The values of static fields will remain as they were prior to the call.
+    ///
+    /// Threads need not be suspended.
+    /// All breakpoints in the class are cleared.
+    /// All attributes are updated.
+    /// Instances of the redefined class are not affected, fields retain their previous values.
+    /// Tags on the instances are also unaffected.
+    /// In response to this call, the JVM TI event Class File Load Hook will be sent (if enabled),
+    /// but no other JVM TI events will be sent.
+    ///
+    /// The redefinition may change method bodies, the constant pool and attributes (unless explicitly prohibited).
+    /// The redefinition must not add, remove or rename fields or methods, change the signatures of methods, change modifiers, or change inheritance.
+    /// The redefinition must not change the NestHost, NestMembers, Record, or PermittedSubclasses attributes.
+    /// These restrictions may be lifted in future versions.
+    /// See the error return description for information on error codes returned if an unsupported redefinition is attempted.
+    /// The class file bytes are not verified or installed until they have passed through the chain of ClassFileLoadHook events,
+    /// thus the returned error code reflects the result of the transformations applied to the bytes passed into class_definitions.
+    ///
+    /// If any error code is returned other than JVMTI_ERROR_NONE,
+    /// none of the classes to be redefined will have a new definition installed.
+    ///
+    /// When this function returns (with the error code of JVMTI_ERROR_NONE)
+    /// all of the classes to be redefined will have their new definitions installed.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#RedefineClasses>
+    ///
+    /// # Safety
+    /// class_count and class_definitions must form a valid array.
+    /// all pointer parameters must not be dangling.
+    /// `class_definitions` must be internally consistent and valid. (no dangling pointers, size + byte pointer must match)
     pub unsafe fn RedefineClasses(&self, class_count: jint, class_definitions: *const jvmtiClassDefinition) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jvmtiClassDefinition) -> jvmtiError>(86)(self.vtable, class_count, class_definitions)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the object indicated by object, return via size_ptr the size of the object.
+    ///
+    /// This size is an implementation-specific approximation of the amount of storage consumed by this object.
+    /// It may include some or all of the object's overhead, and thus is useful for comparison within an implementation but not between implementations.
+    /// The estimate may change during a single invocation of the JVM.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetObjectSize>
+    ///
+    /// # Safety
+    /// `object` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetObjectSize(&self, object: jobject, size_ptr: *mut jlong) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jlong) -> jvmtiError>(153)(self.vtable, object, size_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the object indicated by object, return via hash_code_ptr a hash code.
+    ///
+    /// This hash code could be used to maintain a hash table of object references, however, on some implementations this can cause significant performance impacts,
+    /// in most cases tags will be a more efficient means of associating information with objects.
+    ///
+    /// This function guarantees the same hash code value for a particular object throughout its life
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetObjectHashCode>
+    ///
+    /// # Safety
+    /// `object` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetObjectHashCode(&self, object: jobject, hash_code_ptr: *mut jint) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint) -> jvmtiError>(57)(self.vtable, object, hash_code_ptr)
     }
