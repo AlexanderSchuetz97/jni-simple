@@ -24,7 +24,7 @@ extern "system" fn blah(ti: JVMTIEnv, env: JNIEnv, _arg: *mut c_void) {
         println!("blah");
         let n = env.GetVersion();
         let mut x = 0;
-        _= ti.GetPhase(&mut x);
+        _ = ti.GetPhase(&mut x);
         println!("blah {} {}", n, x);
     }
 }

@@ -1,6 +1,6 @@
+use jni_simple::*;
 use std::collections::HashMap;
 use std::ffi::CStr;
-use jni_simple::*;
 use std::ptr::null_mut;
 
 #[test]

@@ -34,30 +34,29 @@
 #![allow(clippy::inline_always)]
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
-
+extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
-extern crate alloc;
 
-use alloc::vec;
-use alloc::string::String;
-use alloc::vec::Vec;
-use alloc::string::ToString;
 use alloc::borrow::Cow;
 use alloc::ffi::CString;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
 
 use crate::private::{SealedAsJNILinkage, SealedEnvVTable};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int, c_uchar, c_void, CStr};
 use core::fmt::{Debug, Display, Formatter};
 use core::hash::{Hash, Hasher};
-#[cfg(feature = "loadjvm")]
-use std::path::PathBuf;
 use core::ptr::null;
 use core::ptr::null_mut;
-use sync_ptr::{FromMutPtr, SyncMutPtr};
+#[cfg(feature = "loadjvm")]
+use std::path::PathBuf;
 #[cfg(not(feature = "dynlink"))]
 use sync_ptr::{FromConstPtr, SyncConstPtr};
+use sync_ptr::{FromMutPtr, SyncMutPtr};
 
 pub const JNI_TRUE: jboolean = true;
 pub const JNI_FALSE: jboolean = false;
@@ -228,7 +227,6 @@ impl PartialEq for JvmtiError {
     }
 }
 
-
 //we have to implement this because the OTHER case may shadow an actual error code.
 impl Ord for JvmtiError {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -239,7 +237,9 @@ impl Ord for JvmtiError {
 }
 
 impl PartialOrd for JvmtiError {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 //we have to implement this because the OTHER case may shadow an actual error code.
@@ -1671,7 +1671,6 @@ mod jvmti_cap_offsets {
     pub const OFFSET_CAN_SUPPORT_VIRTUAL_THREADS: usize = 0x0510;
 }
 
-
 #[expect(clippy::missing_docs_in_private_items)]
 #[cfg(target_endian = "big")]
 mod jvmti_cap_offsets {
@@ -2396,11 +2395,12 @@ impl SealedEnvVTable for JVMTIEnv {
 }
 
 impl From<*mut c_void> for JVMTIEnv {
-
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn from(value: *mut c_void) -> Self {
         unsafe {
-            Self { vtable: value.as_sync_mut().cast() }
+            Self {
+                vtable: value.as_sync_mut().cast(),
+            }
         }
     }
 }
@@ -2415,7 +2415,6 @@ impl JVMTIEnv {
     unsafe fn jvmti<X>(&self, index: usize) -> X {
         core::mem::transmute_copy(&(self.vtable.read_volatile().add(index).read_volatile()))
     }
-
 
     /// Returns the raw jvmti vtable.
     /// Calling this function is usually not needed.
@@ -2704,7 +2703,6 @@ impl JVMTIEnv {
     pub unsafe fn GetCurrentContendedMonitor(&self, thread: jthread, monitor_ptr: *mut jobject) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jobject) -> jvmtiError>(10)(self.vtable, thread, monitor_ptr)
     }
-
 
     /// Starts the execution of an agent thread. with the specified native function.
     ///
@@ -4317,7 +4315,6 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jniNativeInterface) -> jvmtiError>(120)(self.vtable, function_table)
     }
 
-
     /// Set the functions to be called for each event.
     ///
     /// The callbacks are specified by supplying a replacement function table.
@@ -4634,7 +4631,6 @@ impl JVMTIEnv {
     pub unsafe fn AddToSystemClassLoaderSearch(&self, segment: impl UseCString) -> jvmtiError {
         segment.use_as_const_c_char(|segment| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(150)(self.vtable, segment))
     }
-
 
     /// Provides access to system properties defined by and used by the VM.
     ///
@@ -5324,9 +5320,7 @@ impl JavaVMAttachArgs {
 ///
 pub trait UseCString: private::SealedUseCString {}
 
-
 impl UseCString for &str {}
-
 
 impl private::SealedUseCString for &str {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5334,9 +5328,7 @@ impl private::SealedUseCString for &str {
     }
 }
 
-
 impl UseCString for String {}
-
 
 impl private::SealedUseCString for String {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5344,9 +5336,7 @@ impl private::SealedUseCString for String {
     }
 }
 
-
 impl UseCString for &String {}
-
 
 impl private::SealedUseCString for &String {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5354,9 +5344,7 @@ impl private::SealedUseCString for &String {
     }
 }
 
-
 impl UseCString for CString {}
-
 
 impl private::SealedUseCString for CString {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5364,9 +5352,7 @@ impl private::SealedUseCString for CString {
     }
 }
 
-
 impl UseCString for &CString {}
-
 
 impl private::SealedUseCString for &CString {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5405,8 +5391,10 @@ impl private::SealedUseCString for *const i8 {
 
             unsafe {
                 let to_check: &[u8] = std::slice::from_raw_parts(self.cast(), size);
-                assert!(std::str::from_utf8(to_check).is_ok(),
-                        "use_as_const_c_char called on a non utf-8 *const i8. string was only checked until first 0 byte or end of string. data={to_check:?}");
+                assert!(
+                    std::str::from_utf8(to_check).is_ok(),
+                    "use_as_const_c_char called on a non utf-8 *const i8. string was only checked until first 0 byte or end of string. data={to_check:?}"
+                );
             }
         }
 
@@ -5437,9 +5425,10 @@ impl private::SealedUseCString for *const u8 {
 
             unsafe {
                 let to_check = std::slice::from_raw_parts(self, size);
-                assert!(std::str::from_utf8(to_check).is_ok(),
-                        "use_as_const_c_char called on a non utf-8 *const u8. string was only checked until first 0 byte or end of string. data={to_check:?}"
-                    );
+                assert!(
+                    std::str::from_utf8(to_check).is_ok(),
+                    "use_as_const_c_char called on a non utf-8 *const u8. string was only checked until first 0 byte or end of string. data={to_check:?}"
+                );
             }
         }
 
@@ -5447,9 +5436,7 @@ impl private::SealedUseCString for *const u8 {
     }
 }
 
-impl UseCString for *mut i8 {
-
-}
+impl UseCString for *mut i8 {}
 
 impl private::SealedUseCString for *mut i8 {
     fn use_as_const_c_char<X>(self, param: impl FnOnce(*const c_char) -> X) -> X {
@@ -5457,16 +5444,13 @@ impl private::SealedUseCString for *mut i8 {
     }
 }
 
-impl UseCString for *mut u8 {
-
-}
+impl UseCString for *mut u8 {}
 
 impl private::SealedUseCString for *mut u8 {
     fn use_as_const_c_char<X>(self, param: impl FnOnce(*const c_char) -> X) -> X {
         self.cast_const().use_as_const_c_char(param)
     }
 }
-
 
 impl UseCString for Cow<'_, str> {}
 
@@ -5477,7 +5461,6 @@ impl private::SealedUseCString for Cow<'_, str> {
 }
 
 impl UseCString for &Cow<'_, str> {}
-
 
 impl private::SealedUseCString for &Cow<'_, str> {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5515,9 +5498,7 @@ impl private::SealedUseCString for &std::ffi::OsStr {
     }
 }
 
-
 impl UseCString for Vec<u8> {}
-
 
 impl private::SealedUseCString for Vec<u8> {
     fn use_as_const_c_char<X>(mut self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5526,9 +5507,10 @@ impl private::SealedUseCString for Vec<u8> {
             //Check for valid UTF-8
             let len = self.iter().position(|r| *r == 0).unwrap_or(self.len());
             let to_check = &self[..len];
-            assert!(std::str::from_utf8(to_check).is_ok(),
-                    "use_as_const_c_char called with non utf-8 string. string was only checked until first 0 byte or end of string. data={to_check:?}"
-                );
+            assert!(
+                std::str::from_utf8(to_check).is_ok(),
+                "use_as_const_c_char called with non utf-8 string. string was only checked until first 0 byte or end of string. data={to_check:?}"
+            );
         }
 
         let Some(last) = self.last().copied() else {
@@ -5557,9 +5539,7 @@ impl private::SealedUseCString for Vec<u8> {
     }
 }
 
-
 impl UseCString for &Vec<u8> {}
-
 
 impl private::SealedUseCString for &Vec<u8> {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5576,9 +5556,10 @@ impl private::SealedUseCString for &[u8] {
             //Check for valid UTF-8
             let len = self.iter().position(|r| *r == 0).unwrap_or(self.len());
             let to_check = &self[..len];
-            assert!(std::str::from_utf8(to_check).is_ok(),
-                    "use_as_const_c_char called with non utf-8 string. string was only checked until first 0 byte or end of string. data={to_check:?}",
-                );
+            assert!(
+                std::str::from_utf8(to_check).is_ok(),
+                "use_as_const_c_char called with non utf-8 string. string was only checked until first 0 byte or end of string. data={to_check:?}",
+            );
         }
 
         let Some(last) = self.last().copied() else {
@@ -17872,7 +17853,7 @@ impl JNIEnv {
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
     ///
-        pub unsafe fn GetStringUTFChars_as_string(&self, string: jstring) -> Option<String> {
+    pub unsafe fn GetStringUTFChars_as_string(&self, string: jstring) -> Option<String> {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("GetStringUTFChars_as_string");
@@ -19788,7 +19769,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-        pub unsafe fn GetByteArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<jbyte> {
+    pub unsafe fn GetByteArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<jbyte> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0i8; len];
@@ -20019,7 +20000,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-        pub unsafe fn GetCharArrayRegion_as_vec(&self, array: jcharArray, start: jsize, len: Option<jsize>) -> Vec<jchar> {
+    pub unsafe fn GetCharArrayRegion_as_vec(&self, array: jcharArray, start: jsize, len: Option<jsize>) -> Vec<jchar> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0u16; len];
@@ -20250,7 +20231,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-        pub unsafe fn GetShortArrayRegion_as_vec(&self, array: jshortArray, start: jsize, len: Option<jsize>) -> Vec<jshort> {
+    pub unsafe fn GetShortArrayRegion_as_vec(&self, array: jshortArray, start: jsize, len: Option<jsize>) -> Vec<jshort> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0i16; len];
@@ -20481,7 +20462,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-        pub unsafe fn GetIntArrayRegion_as_vec(&self, array: jintArray, start: jsize, len: Option<jsize>) -> Vec<jint> {
+    pub unsafe fn GetIntArrayRegion_as_vec(&self, array: jintArray, start: jsize, len: Option<jsize>) -> Vec<jint> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0i32; len];
@@ -20712,7 +20693,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-        pub unsafe fn GetLongArrayRegion_as_vec(&self, array: jlongArray, start: jsize, len: Option<jsize>) -> Vec<jlong> {
+    pub unsafe fn GetLongArrayRegion_as_vec(&self, array: jlongArray, start: jsize, len: Option<jsize>) -> Vec<jlong> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0i64; len];
@@ -20943,7 +20924,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-        pub unsafe fn GetFloatArrayRegion_as_vec(&self, array: jfloatArray, start: jsize, len: Option<jsize>) -> Vec<jfloat> {
+    pub unsafe fn GetFloatArrayRegion_as_vec(&self, array: jfloatArray, start: jsize, len: Option<jsize>) -> Vec<jfloat> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0f32; len];
@@ -21174,7 +21155,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-        pub unsafe fn GetDoubleArrayRegion_as_vec(&self, array: jdoubleArray, start: jsize, len: Option<jsize>) -> Vec<jdouble> {
+    pub unsafe fn GetDoubleArrayRegion_as_vec(&self, array: jdoubleArray, start: jsize, len: Option<jsize>) -> Vec<jdouble> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0f64; len];
@@ -23188,7 +23169,6 @@ pub unsafe fn JNI_GetCreatedJavaVMs(vms: &mut [Option<JavaVM>]) -> Result<usize,
         *target = Some(JavaVM { vtable: buf[i] });
     }
 
-
     Ok(count)
 }
 ///
@@ -23209,10 +23189,9 @@ pub unsafe fn JNI_GetCreatedJavaVMs(vms: &mut [Option<JavaVM>]) -> Result<usize,
 ///
 pub unsafe fn JNI_GetCreatedJavaVMs_first() -> Result<Option<JavaVM>, jint> {
     let mut vm = [None];
-    _= JNI_GetCreatedJavaVMs(vm.as_mut())?;
+    _ = JNI_GetCreatedJavaVMs(vm.as_mut())?;
     Ok(vm[0])
 }
-
 
 ///
 /// Directly calls `JNI_CreateJavaVM` with the provided arguments.
@@ -23457,11 +23436,15 @@ impl JavaVM {
         let mut envptr: *mut c_void = null_mut();
         #[cfg(feature = "asserts")]
         {
-            assert!(jni_version & 0x3000_0000 != 0x3000_0000 || T::can_jvmti(),
-                    "type parameter T cannot receive a JVMTI function VTable but jni_version 0x{jni_version:X} would likely request one. Using the resulting VTable would be UB."
-                );
+            assert!(
+                jni_version & 0x3000_0000 != 0x3000_0000 || T::can_jvmti(),
+                "type parameter T cannot receive a JVMTI function VTable but jni_version 0x{jni_version:X} would likely request one. Using the resulting VTable would be UB."
+            );
 
-            assert!(jni_version & 0x3000_0000 != 0x0000_0000 || T::can_jni(), "type parameter T cannot receive a JNI function VTable but jni_version 0x{jni_version:X} would likely request one. Using the resulting VTable would be UB.");
+            assert!(
+                jni_version & 0x3000_0000 != 0x0000_0000 || T::can_jni(),
+                "type parameter T cannot receive a JNI function VTable but jni_version 0x{jni_version:X} would likely request one. Using the resulting VTable would be UB."
+            );
         }
 
         let result = self.ivk::<extern "system" fn(JNIInvPtr, *mut *mut c_void, jint) -> jint>(6)(self.vtable, &raw mut envptr, jni_version);
