@@ -11,6 +11,7 @@
 //! If you are looking to write a jni library in rust then the types `JNIEnv` and jclass, etc.
 //! should be sufficient.
 //!
+#![no_std]
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 #![deny(clippy::correctness)]
@@ -33,17 +34,27 @@
 #![allow(clippy::inline_always)]
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
+
+#[cfg(feature = "std")]
+extern crate std;
+extern crate alloc;
+
+use alloc::vec;
+use alloc::string::String;
+use alloc::vec::Vec;
+use alloc::string::ToString;
+use alloc::borrow::Cow;
+use alloc::ffi::CString;
+
 use crate::private::{SealedAsJNILinkage, SealedEnvVTable};
-use std::borrow::Cow;
-use std::cmp::Ordering;
-use std::ffi::{c_char, c_int, c_uchar, c_void, CStr, CString, OsStr, OsString};
-use std::fmt::{Debug, Display, Formatter};
-use std::hash::{Hash, Hasher};
+use core::cmp::Ordering;
+use core::ffi::{c_char, c_int, c_uchar, c_void, CStr};
+use core::fmt::{Debug, Display, Formatter};
+use core::hash::{Hash, Hasher};
 #[cfg(feature = "loadjvm")]
 use std::path::PathBuf;
-use std::ptr::null;
-use std::ptr::null_mut;
-use std::{ffi, mem};
+use core::ptr::null;
+use core::ptr::null_mut;
 use sync_ptr::{FromMutPtr, SyncMutPtr};
 #[cfg(not(feature = "dynlink"))]
 use sync_ptr::{FromConstPtr, SyncConstPtr};
@@ -96,9 +107,9 @@ pub type jchar = u16;
 pub type jbyte = i8;
 pub type jboolean = bool;
 
-pub type jfloat = ffi::c_float;
+pub type jfloat = core::ffi::c_float;
 
-pub type jdouble = ffi::c_double;
+pub type jdouble = core::ffi::c_double;
 
 pub type jclass = *mut c_void;
 
@@ -199,7 +210,7 @@ pub enum JvmtiError {
 }
 
 impl Display for JvmtiError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         //Unwind the other case and fold it into known codes.
         let me: c_int = (*self).into();
         let reform = Self::from(me);
@@ -383,7 +394,7 @@ impl JvmtiError {
 pub struct jvmtiError(pub c_int);
 
 impl Display for jvmtiError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         Debug::fmt(self, f)
     }
 }
@@ -635,7 +646,7 @@ pub const JVMTI_THREAD_STATE_VENDOR_3: jint = 0x4000_0000;
 
 /// Mod for private trait seals that should be hidden.
 mod private {
-    use std::ffi::{c_char, c_void};
+    use core::ffi::{c_char, c_void};
 
     ///Trait seal for `AsJNILinkage`
     pub trait SealedAsJNILinkage {
@@ -666,6 +677,7 @@ mod private {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     pub fn testSealedUseCString() {
         use std::ffi::{CStr, OsString};
 
@@ -860,14 +872,14 @@ macro_rules! jtypes {
 
 impl Debug for jtype {
     #[inline(never)]
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         unsafe {
-            let long = std::ptr::read_unaligned(std::ptr::from_ref::<jlong>(&self.long));
-            let int = std::ptr::read_unaligned(std::ptr::from_ref::<jint>(&self.int));
-            let short = std::ptr::read_unaligned(std::ptr::from_ref::<jshort>(&self.short));
-            let byte = std::ptr::read_unaligned(std::ptr::from_ref::<jbyte>(&self.byte));
-            let float = std::ptr::read_unaligned(std::ptr::from_ref::<jfloat>(&self.float));
-            let double = std::ptr::read_unaligned(std::ptr::from_ref::<jdouble>(&self.double));
+            let long = core::ptr::read_unaligned(core::ptr::from_ref::<jlong>(&self.long));
+            let int = core::ptr::read_unaligned(core::ptr::from_ref::<jint>(&self.int));
+            let short = core::ptr::read_unaligned(core::ptr::from_ref::<jshort>(&self.short));
+            let byte = core::ptr::read_unaligned(core::ptr::from_ref::<jbyte>(&self.byte));
+            let float = core::ptr::read_unaligned(core::ptr::from_ref::<jfloat>(&self.float));
+            let double = core::ptr::read_unaligned(core::ptr::from_ref::<jdouble>(&self.double));
 
             f.write_fmt(format_args!(
                 "jtype union[long=0x{long:x} int=0x{int:x} short=0x{short:x} byte=0x{byte:x} float={float:e} double={double:e}]"
@@ -1886,7 +1898,7 @@ impl jvmtiCapabilities {
 }
 
 impl Display for jvmtiCapabilities {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_fmt(format_args!(
             "jvmtiCapabilities {{
     can_tag_objects: {}
@@ -2401,7 +2413,7 @@ impl JVMTIEnv {
     ///
     #[inline(always)]
     unsafe fn jvmti<X>(&self, index: usize) -> X {
-        mem::transmute_copy(&(self.vtable.read_volatile().add(index).read_volatile()))
+        core::mem::transmute_copy(&(self.vtable.read_volatile().add(index).read_volatile()))
     }
 
 
@@ -4382,7 +4394,7 @@ impl JVMTIEnv {
     /// # Example
     /// ```rust
     /// use std::ffi::{c_int, c_void};
-    /// use std::ptr::null_mut;
+    /// use core::ptr::null_mut;
     /// use jni_simple::*;
     ///
     /// fn enable_very_special_custom_event(env: JVMTIEnv) {
@@ -4905,7 +4917,7 @@ impl jniNativeInterface {
     /// ```
     ///
     pub unsafe fn get<X>(&self, linkage: impl AsJNILinkage) -> X {
-        mem::transmute_copy(&self.0.add(linkage.linkage()).read_volatile())
+        core::mem::transmute_copy(&self.0.add(linkage.linkage()).read_volatile())
     }
 }
 
@@ -5312,7 +5324,9 @@ impl JavaVMAttachArgs {
 ///
 pub trait UseCString: private::SealedUseCString {}
 
+
 impl UseCString for &str {}
+
 
 impl private::SealedUseCString for &str {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5320,7 +5334,9 @@ impl private::SealedUseCString for &str {
     }
 }
 
+
 impl UseCString for String {}
+
 
 impl private::SealedUseCString for String {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5328,7 +5344,9 @@ impl private::SealedUseCString for String {
     }
 }
 
+
 impl UseCString for &String {}
+
 
 impl private::SealedUseCString for &String {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5336,7 +5354,9 @@ impl private::SealedUseCString for &String {
     }
 }
 
+
 impl UseCString for CString {}
+
 
 impl private::SealedUseCString for CString {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5344,7 +5364,9 @@ impl private::SealedUseCString for CString {
     }
 }
 
+
 impl UseCString for &CString {}
+
 
 impl private::SealedUseCString for &CString {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5445,6 +5467,7 @@ impl private::SealedUseCString for *mut u8 {
     }
 }
 
+
 impl UseCString for Cow<'_, str> {}
 
 impl private::SealedUseCString for Cow<'_, str> {
@@ -5455,37 +5478,46 @@ impl private::SealedUseCString for Cow<'_, str> {
 
 impl UseCString for &Cow<'_, str> {}
 
+
 impl private::SealedUseCString for &Cow<'_, str> {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
         self.as_ref().use_as_const_c_char(func)
     }
 }
 
-impl UseCString for OsString {}
+#[cfg(feature = "std")]
+impl UseCString for std::ffi::OsString {}
 
-impl private::SealedUseCString for OsString {
+#[cfg(feature = "std")]
+impl private::SealedUseCString for std::ffi::OsString {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
         self.to_string_lossy().use_as_const_c_char(func)
     }
 }
 
-impl UseCString for &OsString {}
+#[cfg(feature = "std")]
+impl UseCString for &std::ffi::OsString {}
 
-impl private::SealedUseCString for &OsString {
+#[cfg(feature = "std")]
+impl private::SealedUseCString for &std::ffi::OsString {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
         self.to_string_lossy().use_as_const_c_char(func)
     }
 }
 
-impl UseCString for &OsStr {}
+#[cfg(feature = "std")]
+impl UseCString for &std::ffi::OsStr {}
 
-impl private::SealedUseCString for &OsStr {
+#[cfg(feature = "std")]
+impl private::SealedUseCString for &std::ffi::OsStr {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
         self.to_string_lossy().use_as_const_c_char(func)
     }
 }
+
 
 impl UseCString for Vec<u8> {}
+
 
 impl private::SealedUseCString for Vec<u8> {
     fn use_as_const_c_char<X>(mut self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5525,7 +5557,9 @@ impl private::SealedUseCString for Vec<u8> {
     }
 }
 
+
 impl UseCString for &Vec<u8> {}
+
 
 impl private::SealedUseCString for &Vec<u8> {
     fn use_as_const_c_char<X>(self, func: impl FnOnce(*const c_char) -> X) -> X {
@@ -5591,7 +5625,7 @@ impl JNIEnv {
     #[inline(always)]
     unsafe fn jni<X>(&self, index: usize) -> X {
         //We need the read_volatile because a java debugger may at any point in time exchange the jni function table at its convenience.
-        mem::transmute_copy(&(self.vtable.read_volatile().0.add(index).read_volatile()))
+        core::mem::transmute_copy(&(self.vtable.read_volatile().0.add(index).read_volatile()))
     }
 
     ///
@@ -5730,7 +5764,7 @@ impl JNIEnv {
     /// # Example
     /// ```rust
     /// use std::ffi::CString;
-    /// use std::ptr::null_mut;
+    /// use core::ptr::null_mut;
     /// use jni_simple::{*};
     ///
     /// unsafe fn define_main_class(env: JNIEnv) -> jclass {
@@ -5804,7 +5838,7 @@ impl JNIEnv {
     /// # Example
     /// ```rust
     /// use std::ffi::CString;
-    /// use std::ptr::null_mut;
+    /// use core::ptr::null_mut;
     /// use jni_simple::{*};
     ///
     /// unsafe fn define_main_class(env: JNIEnv) -> jclass {
@@ -6173,7 +6207,7 @@ impl JNIEnv {
     /// # Example
     /// ```rust
     /// use std::ffi::CString;
-    /// use std::ptr::null;
+    /// use core::ptr::null;
     /// use jni_simple::{*};
     ///
     /// unsafe fn throw_illegal_argument_exception(env: JNIEnv, message: Option<&str>) {
@@ -17838,7 +17872,7 @@ impl JNIEnv {
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
     ///
-    pub unsafe fn GetStringUTFChars_as_string(&self, string: jstring) -> Option<String> {
+        pub unsafe fn GetStringUTFChars_as_string(&self, string: jstring) -> Option<String> {
         #[cfg(feature = "asserts")]
         {
             self.check_not_critical("GetStringUTFChars_as_string");
@@ -18054,10 +18088,10 @@ impl JNIEnv {
     }
 
     #[cfg(feature = "asserts")]
-    thread_local! {
+    std::thread_local! {
         //The "Critical Section" created by GetStringCritical has a lot of restrictions placed upon it.
         //This attempts to track "some" of them on a best effort basis.
-        static CRITICAL_STRINGS: std::cell::RefCell<std::collections::HashMap<*const jchar, usize>> = std::cell::RefCell::new(std::collections::HashMap::new());
+        static CRITICAL_STRINGS: core::cell::RefCell<std::collections::HashMap<*const jchar, usize>> = core::cell::RefCell::new(std::collections::HashMap::new());
     }
 
     ///
@@ -19754,7 +19788,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetByteArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<jbyte> {
+        pub unsafe fn GetByteArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<jbyte> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0i8; len];
@@ -19985,7 +20019,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetCharArrayRegion_as_vec(&self, array: jcharArray, start: jsize, len: Option<jsize>) -> Vec<jchar> {
+        pub unsafe fn GetCharArrayRegion_as_vec(&self, array: jcharArray, start: jsize, len: Option<jsize>) -> Vec<jchar> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0u16; len];
@@ -20216,7 +20250,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetShortArrayRegion_as_vec(&self, array: jshortArray, start: jsize, len: Option<jsize>) -> Vec<jshort> {
+        pub unsafe fn GetShortArrayRegion_as_vec(&self, array: jshortArray, start: jsize, len: Option<jsize>) -> Vec<jshort> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0i16; len];
@@ -20447,7 +20481,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetIntArrayRegion_as_vec(&self, array: jintArray, start: jsize, len: Option<jsize>) -> Vec<jint> {
+        pub unsafe fn GetIntArrayRegion_as_vec(&self, array: jintArray, start: jsize, len: Option<jsize>) -> Vec<jint> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0i32; len];
@@ -20678,7 +20712,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetLongArrayRegion_as_vec(&self, array: jlongArray, start: jsize, len: Option<jsize>) -> Vec<jlong> {
+        pub unsafe fn GetLongArrayRegion_as_vec(&self, array: jlongArray, start: jsize, len: Option<jsize>) -> Vec<jlong> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0i64; len];
@@ -20909,7 +20943,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetFloatArrayRegion_as_vec(&self, array: jfloatArray, start: jsize, len: Option<jsize>) -> Vec<jfloat> {
+        pub unsafe fn GetFloatArrayRegion_as_vec(&self, array: jfloatArray, start: jsize, len: Option<jsize>) -> Vec<jfloat> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0f32; len];
@@ -21140,7 +21174,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn GetDoubleArrayRegion_as_vec(&self, array: jdoubleArray, start: jsize, len: Option<jsize>) -> Vec<jdouble> {
+        pub unsafe fn GetDoubleArrayRegion_as_vec(&self, array: jdoubleArray, start: jsize, len: Option<jsize>) -> Vec<jdouble> {
         let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
         if let Ok(len) = usize::try_from(len) {
             let mut data = vec![0f64; len];
@@ -21525,7 +21559,7 @@ impl JNIEnv {
     }
 
     #[cfg(feature = "asserts")]
-    thread_local! {
+    std::thread_local! {
         //The "Critical Section" created by GetPrimitiveArrayCritical has a lot of restrictions placed upon it.
         //This attempts to track "some" of them on a best effort basis.
         static CRITICAL_POINTERS: std::cell::RefCell<std::collections::HashMap<*mut c_void, usize>> = std::cell::RefCell::new(std::collections::HashMap::new());
@@ -22902,12 +22936,12 @@ impl JNIDynamicLink {
 
     /// Get the `JNI_GetCreatedJavaVMs` function pointer
     pub fn JNI_CreateJavaVM(&self) -> JNI_CreateJavaVM {
-        unsafe { mem::transmute(self.JNI_CreateJavaVM.inner()) }
+        unsafe { core::mem::transmute(self.JNI_CreateJavaVM.inner()) }
     }
 
     /// Get the `JNI_GetCreatedJavaVMs` function pointer
     pub fn JNI_GetCreatedJavaVMs(&self) -> JNI_GetCreatedJavaVMs {
-        unsafe { mem::transmute(self.JNI_GetCreatedJavaVMs.inner()) }
+        unsafe { core::mem::transmute(self.JNI_GetCreatedJavaVMs.inner()) }
     }
 }
 
@@ -22980,30 +23014,30 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
 
     LINK.get_or_try_init(|| {
         latch.store(true, Ordering::SeqCst);
-        let lib = libloading::Library::new(path).map_err(|e| format!("Failed to load jvm from {path} reason: {e}"))?;
+        let lib = libloading::Library::new(path).map_err(|e| alloc::format!("Failed to load jvm from {path} reason: {e}"))?;
 
         let JNI_CreateJavaVM_ptr = lib
             .get::<JNI_CreateJavaVM>(b"JNI_CreateJavaVM\0")
-            .map_err(|e| format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> {e}"))?
+            .map_err(|e| alloc::format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> {e}"))?
             .try_as_raw_ptr()
-            .ok_or_else(|| format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> failed to get raw ptr"))?;
+            .ok_or_else(|| alloc::format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> failed to get raw ptr"))?;
 
         if JNI_CreateJavaVM_ptr.is_null() {
-            return Err(format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM not found"));
+            return Err(alloc::format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM not found"));
         }
 
         let JNI_GetCreatedJavaVMs_ptr = lib
             .get::<JNI_GetCreatedJavaVMs>(b"JNI_GetCreatedJavaVMs\0")
-            .map_err(|e| format!("Failed to load jvm from {path} reason: JNI_GetCreatedJavaVMs -> {e}"))?
+            .map_err(|e| alloc::format!("Failed to load jvm from {path} reason: JNI_GetCreatedJavaVMs -> {e}"))?
             .try_as_raw_ptr()
-            .ok_or_else(|| format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> failed to get raw ptr"))?;
+            .ok_or_else(|| alloc::format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> failed to get raw ptr"))?;
 
         if JNI_GetCreatedJavaVMs_ptr.is_null() {
-            return Err(format!("Failed to load jvm from {path} reason: JNI_GetCreatedJavaVMs not found"));
+            return Err(alloc::format!("Failed to load jvm from {path} reason: JNI_GetCreatedJavaVMs not found"));
         }
 
         //We are good to go!
-        mem::forget(lib);
+        core::mem::forget(lib);
         Ok(JNIDynamicLink::new(JNI_CreateJavaVM_ptr, JNI_GetCreatedJavaVMs_ptr))
     })?;
 
@@ -23016,7 +23050,7 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
 
 ///
 /// Convenience method to load the jvm from a path to libjvm.so or jvm.dll.
-///a
+///
 /// On success this method does NOT close the handle to the shared object.
 /// This is usually fine because unloading the jvm is not supported anyway.
 /// If you do not desire this then use `init_dynamic_link`.
@@ -23082,13 +23116,13 @@ pub unsafe fn load_jvm_from_java_home_folder(java_home: &str) -> Result<(), Stri
         }
 
         if buf.try_exists().unwrap_or(false) {
-            let full_path = buf.to_str().ok_or_else(|| format!("JAVA_HOME {java_home} is invalid"))?;
+            let full_path = buf.to_str().ok_or_else(|| alloc::format!("JAVA_HOME {java_home} is invalid"))?;
 
             return load_jvm_from_library(full_path);
         }
     }
 
-    Err(format!("JAVA_HOME {java_home} is invalid"))
+    Err(alloc::format!("JAVA_HOME {java_home} is invalid"))
 }
 
 /// Returns the static dynamic link or panic
@@ -23100,19 +23134,31 @@ fn get_link() -> &'static JNIDynamicLink {
 }
 
 ///
-/// Returns the created `JavaVMs`.
-/// This will only ever return 1 (or 0) `JavaVM` according to Oracle Documentation.
+/// Returns the created `JavaVMs` in the given `vms` slice.
+/// All remaining elements in the slice are set to None.
+/// The count of returned `JavaVMs` is returned in the result.
+///
+/// If the given slice is smaller than the amount of created `JavaVMs` then
+/// this function does not error and simply returns the amount
+/// of space in the slice that would have been needed.
+///
+/// If this function returns an Err then the slice is untouched.
+///
+/// # Note
+/// This will probably only ever return 1 (or 0) `JavaVM`s according to Oracle Documentation
+/// as the hotspot jvm does not support more than 1 JVM per process.
 ///
 /// # Errors
 /// JNI implementation specific error constants like `JNI_EINVAL`
 ///
 /// # Panics
 /// Will panic if the JVM shared library has not been loaded yet.
+/// If the JVM's `JNI_GetCreatedJavaVMs` method returns unexpected values
 ///
 /// # Safety
 /// The Safety of this fn is implementation dependant.
 ///
-pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
+pub unsafe fn JNI_GetCreatedJavaVMs(vms: &mut [Option<JavaVM>]) -> Result<usize, jint> {
     #[cfg(not(feature = "dynlink"))]
     let link = get_link().JNI_GetCreatedJavaVMs();
     #[cfg(feature = "dynlink")]
@@ -23129,15 +23175,44 @@ pub unsafe fn JNI_GetCreatedJavaVMs() -> Result<Vec<JavaVM>, jint> {
 
     let count = usize::try_from(count).expect("JNI_GetCreatedJavaVMs did set count to < 0");
 
-    let mut result_vec: Vec<JavaVM> = Vec::with_capacity(count);
     for (i, env) in buf.into_iter().enumerate().take(count) {
         assert!(!env.is_null(), "JNI_GetCreatedJavaVMs VM #{i} is null! count is {count}");
-
-        result_vec.push(JavaVM { vtable: env });
     }
 
-    Ok(result_vec)
+    for (i, target) in vms.iter_mut().enumerate() {
+        if i >= count {
+            *target = None;
+            continue;
+        }
+
+        *target = Some(JavaVM { vtable: buf[i] });
+    }
+
+
+    Ok(count)
 }
+///
+/// Returns the first created `JavaVM` or None in the result.
+///
+/// Usually there is only 1 created or 0 created `JavaVM`'s in any given process.
+/// This function acts as a convenience function that only returns the first and probably only `JavaVM`.
+///
+/// # Errors
+/// JNI implementation specific error constants like `JNI_EINVAL`
+///
+/// # Panics
+/// Will panic if the JVM shared library has not been loaded yet.
+/// If the JVM's `JNI_GetCreatedJavaVMs` method returns unexpected values
+///
+/// # Safety
+/// The Safety of this fn is implementation dependant.
+///
+pub unsafe fn JNI_GetCreatedJavaVMs_first() -> Result<Option<JavaVM>, jint> {
+    let mut vm = [None];
+    _= JNI_GetCreatedJavaVMs(vm.as_mut())?;
+    Ok(vm[0])
+}
+
 
 ///
 /// Directly calls `JNI_CreateJavaVM` with the provided arguments.
@@ -23199,7 +23274,7 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
 /// On Hotspot JVM's this fn cannot be called successfully more than once.
 /// Subsequent calls are undefined behaviour.
 ///
-pub unsafe fn JNI_CreateJavaVM_with_string_args(version: jint, arguments: &Vec<String>) -> Result<(JavaVM, JNIEnv), jint> {
+pub unsafe fn JNI_CreateJavaVM_with_string_args<T: AsRef<str>>(version: jint, arguments: &[T]) -> Result<(JavaVM, JNIEnv), jint> {
     /// inner helper struct to ensure that the `CStrings` are free'd in any case.
     struct DropGuard(*mut c_char);
     impl Drop for DropGuard {
@@ -23213,7 +23288,7 @@ pub unsafe fn JNI_CreateJavaVM_with_string_args(version: jint, arguments: &Vec<S
     let mut vm_args: Vec<JavaVMOption> = Vec::with_capacity(arguments.len());
     let mut dealloc_list = Vec::with_capacity(arguments.len());
     for arg in arguments {
-        let jvm_arg = CString::new(arg.as_str()).expect("Argument contains 0 byte").into_raw();
+        let jvm_arg = CString::new(arg.as_ref()).expect("Argument contains 0 byte").into_raw();
         dealloc_list.push(DropGuard(jvm_arg));
 
         vm_args.push(JavaVMOption {
@@ -23240,7 +23315,7 @@ impl JavaVM {
     /// This fn is only safe if X matches whats in the vtable of index.
     #[inline]
     unsafe fn ivk<X>(&self, index: usize) -> X {
-        unsafe { mem::transmute_copy(&(self.vtable.inner().read_volatile().add(index).read_volatile())) }
+        unsafe { core::mem::transmute_copy(&(self.vtable.inner().read_volatile().add(index).read_volatile())) }
     }
 
     ///
@@ -23253,16 +23328,11 @@ impl JavaVM {
     /// # Safety
     /// This fn must not be called on a `JavaVM` object that has been destroyed or is in the process of being destroyed.
     ///
-    pub unsafe fn AttachCurrentThread_str(&self, version: jint, thread_name: Option<&str>, thread_group: jobject) -> Result<JNIEnv, jint> {
-        if let Some(thread_name) = thread_name {
-            return private::SealedUseCString::use_as_const_c_char(thread_name, |thread_name| {
-                let mut args = JavaVMAttachArgs::new(version, thread_name, thread_group);
-                self.AttachCurrentThread(&raw mut args)
-            });
-        }
-
-        let mut args = JavaVMAttachArgs::new(version, null_mut(), thread_group);
-        self.AttachCurrentThread(&raw mut args)
+    pub unsafe fn AttachCurrentThread_str(&self, version: jint, thread_name: impl UseCString, thread_group: jobject) -> Result<JNIEnv, jint> {
+        thread_name.use_as_const_c_char(|thread_name| {
+            let mut args = JavaVMAttachArgs::new(version, thread_name, thread_group);
+            self.AttachCurrentThread(&raw mut args)
+        })
     }
 
     ///
@@ -23305,16 +23375,11 @@ impl JavaVM {
     /// # Safety
     /// This fn must not be called on a `JavaVM` object that has been destroyed or is in the process of being destroyed.
     ///
-    pub unsafe fn AttachCurrentThreadAsDaemon_str(&self, version: jint, thread_name: Option<&str>, thread_group: jobject) -> Result<JNIEnv, jint> {
-        if let Some(thread_name) = thread_name {
-            return private::SealedUseCString::use_as_const_c_char(thread_name, |thread_name| {
-                let mut args = JavaVMAttachArgs::new(version, thread_name, thread_group);
-                self.AttachCurrentThreadAsDaemon(&raw mut args)
-            });
-        }
-
-        let mut args = JavaVMAttachArgs::new(version, null_mut(), thread_group);
-        self.AttachCurrentThreadAsDaemon(&raw mut args)
+    pub unsafe fn AttachCurrentThreadAsDaemon_str(&self, version: jint, thread_name: impl UseCString, thread_group: jobject) -> Result<JNIEnv, jint> {
+        thread_name.use_as_const_c_char(|thread_name| {
+            let mut args = JavaVMAttachArgs::new(version, thread_name, thread_group);
+            self.AttachCurrentThreadAsDaemon(&raw mut args)
+        })
     }
 
     ///
@@ -23392,11 +23457,11 @@ impl JavaVM {
         let mut envptr: *mut c_void = null_mut();
         #[cfg(feature = "asserts")]
         {
-            assert!(!(jni_version & 0x30000000 == 0x30000000 && !T::can_jvmti()),
+            assert!(jni_version & 0x3000_0000 != 0x3000_0000 || T::can_jvmti(),
                     "type parameter T cannot receive a JVMTI function VTable but jni_version 0x{jni_version:X} would likely request one. Using the resulting VTable would be UB."
                 );
 
-            assert!(!(jni_version & 0x30000000 == 0x00000000 && !T::can_jni()), "type parameter T cannot receive a JNI function VTable but jni_version 0x{jni_version:X} would likely request one. Using the resulting VTable would be UB.");
+            assert!(jni_version & 0x3000_0000 != 0x0000_0000 || T::can_jni(), "type parameter T cannot receive a JNI function VTable but jni_version 0x{jni_version:X} would likely request one. Using the resulting VTable would be UB.");
         }
 
         let result = self.ivk::<extern "system" fn(JNIInvPtr, *mut *mut c_void, jint) -> jint>(6)(self.vtable, &raw mut envptr, jni_version);

@@ -93,8 +93,8 @@ pub unsafe extern "system" fn Java_org_example_JNITest_test(env: JNIEnv, _class:
         thread::sleep(Duration::from_millis(2000));
 
         //This can be done anywhere in the application at any time.
-        let vms : JavaVM = jni_simple::JNI_GetCreatedJavaVMs().unwrap() // error code is once again a jint.
-            .first().unwrap().clone(); //There can only be one JavaVM per process as per oracle spec.
+        let vms : JavaVM = jni_simple::JNI_GetCreatedJavaVMs_first().unwrap() // the error code is once again a jint.
+              .unwrap(); //There can only be one JavaVM per process as per oracle spec.
 
         //You could also provide a thread name or thread group here.
         let mut attach_args = JavaVMAttachArgs::new(JNI_VERSION_1_8, null(), null_mut());
@@ -233,8 +233,14 @@ If you encounter a bug and need an urgent fix, then open up an issue on github o
 
 ## Features
 
+### std
+This feature is enabled by default!
+Adds support for various types in the rust standard library.
+99% of jni-simple does not need the standard library.
+
 ### loadjvm
 This feature is not enabled by default!
+Requires the std feature.
 
 This feature provides functions to dynamically link the jvm using the `libloading` crate 
 from a string containing the absolute path to `libjvm.so` or `jvm.dll`.
@@ -263,6 +269,7 @@ Note: Enabling both `dynlink` and `loadjvm` makes no sense, it just adds the `li
 
 ### asserts
 This feature is not enabled by default!
+Requires the std feature.
 
 This feature enables assertions in the code. This is useful for debugging and testing purposes.
 These checks will cause a big performance hit and should not be used in production builds.

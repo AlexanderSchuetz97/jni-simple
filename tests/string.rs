@@ -13,17 +13,15 @@ pub mod test {
             load_jvm_from_java_home().expect("failed to load jvm");
         }
 
-        let thr = JNI_GetCreatedJavaVMs().expect("failed to get jvm");
-        if thr.is_empty() {
+        let thr = JNI_GetCreatedJavaVMs_first().expect("failed to get jvm");
+        if thr.is_none() {
             //let args: Vec<String> = vec!["-Xcheck:jni".to_string()];
             //let args: Vec<String> = vec!["-Xint".to_string()];
-            let args: Vec<String> = vec![];
-
-            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
+            let (_, env) = JNI_CreateJavaVM_with_string_args::<&str>(JNI_VERSION_1_8, &[]).expect("failed to create jvm");
             return env;
         }
 
-        let jvm = thr.first().unwrap().clone();
+        let jvm = thr.unwrap().clone();
         let env = jvm.GetEnv(JNI_VERSION_1_8);
         let env = env.unwrap_or_else(|c| {
             if c != JNI_EDETACHED {

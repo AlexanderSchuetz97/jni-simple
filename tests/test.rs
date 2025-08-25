@@ -12,16 +12,16 @@ pub mod test {
             jni_simple::load_jvm_from_java_home().expect("failed to load jvm");
         }
 
-        let thr = JNI_GetCreatedJavaVMs().expect("failed to get jvm");
-        if thr.is_empty() {
-            //Adjust JVM version and arguments here, args are just like the args you pass on the command line.
-            //You could provide your classpath here for example or configure the jvm heap size.
+        let thr = JNI_GetCreatedJavaVMs_first().expect("failed to get jvm");
+        if thr.is_none() {
+            //Adjust JVM version and arguments here; args are just like the args you pass on the command line.
+            //You could provide your classpath here, for example, or configure the jvm heap size.
             //Default arguments (none) will do for this example.
             let args: Vec<String> = vec![];
             return JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
         }
 
-        let jvm = thr.first().unwrap().clone();
+        let jvm = thr.unwrap().clone();
         let env = jvm.GetEnv(JNI_VERSION_1_8);
         if env.is_err() && env.unwrap_err() == JNI_EDETACHED {
             let env = jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).expect("failed to attach thread");

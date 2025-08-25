@@ -83,15 +83,15 @@ pub mod test {
             });
             assert_eq!(JNI_OK, vm_clone.DetachCurrentThread());
 
-            let n = JNI_GetCreatedJavaVMs().unwrap();
-            assert!(!n.is_empty());
+            let n = JNI_GetCreatedJavaVMs_first().unwrap();
+            assert!(!n.is_none());
 
             let (_guard, tm) = l1.2.wait_timeout(guard, Duration::from_millis(5000)).unwrap();
             assert_eq!(false, tm.timed_out());
             jh.join().unwrap();
             l1.1.notify_all();
-            let n = JNI_GetCreatedJavaVMs().unwrap();
-            assert!(n.is_empty());
+            let n = JNI_GetCreatedJavaVMs_first().unwrap();
+            assert!(n.is_none());
 
             //This is a bit of "imagination" but j8 has this behavior.
             assert_eq!(JNI_ERR, vm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).unwrap_err());

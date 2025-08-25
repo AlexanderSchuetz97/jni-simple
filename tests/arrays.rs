@@ -14,8 +14,8 @@ pub mod test {
             load_jvm_from_java_home().expect("failed to load jvm");
         }
 
-        let thr = JNI_GetCreatedJavaVMs().expect("failed to get jvm");
-        if thr.is_empty() {
+        let thr = JNI_GetCreatedJavaVMs_first().expect("failed to get jvm");
+        if thr.is_none() {
             //let args: Vec<String> = vec!["-Xcheck:jni".to_string()];
             //let args: Vec<String> = vec!["-Xint".to_string()];
             let args: Vec<String> = vec![];
@@ -24,7 +24,7 @@ pub mod test {
             return env;
         }
 
-        let jvm = thr.first().unwrap().clone();
+        let jvm = thr.unwrap().clone();
         let env = jvm.GetEnv(JNI_VERSION_1_8);
         let env = env.unwrap_or_else(|c| {
             if c != JNI_EDETACHED {
