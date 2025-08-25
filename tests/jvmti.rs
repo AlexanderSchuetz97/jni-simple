@@ -54,7 +54,7 @@ fn install_hook(env: JVMTIEnv) {
     }
 }
 
-//#[test]
+#[test]
 pub fn test() {
     unsafe {
         load_jvm_from_java_home().expect("failed to load jvm");
@@ -63,7 +63,7 @@ pub fn test() {
 
         let args: Vec<String> = vec![format!("-agentpath:jvmti_shim/target/release/libjvmti_shim.so={ptr}")];
         //let args: Vec<String> = vec![];
-        let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
+        let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create java VM");
         let jvmti = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2).expect("failed to get JVMTI environment");
         println!("{:?}", jvmti);
         let mut v: jint = 0;

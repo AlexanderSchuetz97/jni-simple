@@ -18,7 +18,7 @@ pub mod test {
             //You could provide your classpath here, for example, or configure the jvm heap size.
             //Default arguments (none) will do for this example.
             let args: Vec<String> = vec![];
-            return JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
+            return JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create jvm");
         }
 
         let jvm = thr.unwrap().clone();

@@ -9,7 +9,7 @@ pub mod test {
 
             let args: Vec<String> = vec![];
 
-            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
+            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create jvm");
 
             let array_list_class = env.FindClass("java/util/ArrayList");
             let array_list_constructor = env.GetMethodID(array_list_class, "<init>", "()V");

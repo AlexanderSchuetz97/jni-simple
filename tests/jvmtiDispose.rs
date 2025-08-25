@@ -7,7 +7,7 @@ pub fn test() {
     unsafe {
         load_jvm_from_java_home().expect("failed to load jvm");
         let args: Vec<String> = vec![];
-        let (vm, _env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
+        let (vm, _env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create java VM");
         let jvmti = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2).expect("failed to get JVMTI environment");
         let mut p = jvmtiPhase::default();
         assert!(jvmti.GetPhase(&mut p).is_ok());

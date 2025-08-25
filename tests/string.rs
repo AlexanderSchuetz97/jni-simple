@@ -17,7 +17,7 @@ pub mod test {
         if thr.is_none() {
             //let args: Vec<String> = vec!["-Xcheck:jni".to_string()];
             //let args: Vec<String> = vec!["-Xint".to_string()];
-            let (_, env) = JNI_CreateJavaVM_with_string_args::<&str>(JNI_VERSION_1_8, &[]).expect("failed to create jvm");
+            let (_, env) = JNI_CreateJavaVM_with_string_args::<&str>(JNI_VERSION_1_8, &[], false).expect("failed to create jvm");
             return env;
         }
 

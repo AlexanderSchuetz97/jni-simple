@@ -33,7 +33,7 @@ pub fn test() {
         let ptr = shim_agent as usize;
         let args: Vec<String> = vec![format!("-agentpath:jvmti_shim/target/release/libjvmti_shim.so={ptr}")];
 
-        let (_vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
+        let (_vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create java VM");
         let jvmti = DEBUGGER.get().copied().unwrap();
 
         let mut val = jvmtiEventCallbacks::default();
