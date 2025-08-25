@@ -29,7 +29,7 @@ pub mod test {
                 panic!("JVM ERROR {}", c);
             }
 
-            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).expect("failed to attach thread")
+            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, (), null_mut()).expect("failed to attach thread")
         });
 
         env

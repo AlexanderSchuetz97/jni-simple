@@ -32,7 +32,7 @@
 )]
 #![allow(clippy::cognitive_complexity)]
 #![allow(clippy::inline_always)]
-#![allow(clippy::trivially_copy_pass_by_ref)]
+//#![allow(clippy::trivially_copy_pass_by_ref)]
 
 extern crate alloc;
 #[cfg(feature = "std")]
@@ -22264,7 +22264,7 @@ impl JNIEnv {
 
     /// Checks that we are not in a critical section currently.
     #[cfg(feature = "asserts")]
-    unsafe fn check_not_critical(&self, context: &str) {
+    unsafe fn check_not_critical(self, context: &str) {
         Self::CRITICAL_POINTERS.with(|set| {
             let sz = set.borrow_mut().len();
             assert_eq!(
@@ -22285,7 +22285,7 @@ impl JNIEnv {
 
     /// Checks that obj is an array of any type
     #[cfg(feature = "asserts")]
-    unsafe fn check_is_array(&self, obj: jobject, context: &str) {
+    unsafe fn check_is_array(self, obj: jobject, context: &str) {
         assert!(!obj.is_null(), "{context} cannot check if arg is array because arg is null");
         let cl = self.GetObjectClass(obj);
         assert!(!cl.is_null(), "{context} arg.getClass() is null?");
@@ -22307,7 +22307,7 @@ impl JNIEnv {
 
     /// Checks that no exception is currently thrown
     #[cfg(feature = "asserts")]
-    unsafe fn check_no_exception(&self, context: &str) {
+    unsafe fn check_no_exception(self, context: &str) {
         if !self.ExceptionCheck() {
             return;
         }
@@ -22318,7 +22318,7 @@ impl JNIEnv {
 
     /// Checks if the object is a valid reference or null
     #[cfg(feature = "asserts")]
-    unsafe fn check_ref_obj_permit_null(&self, context: &str, obj: jobject) {
+    unsafe fn check_ref_obj_permit_null(self, context: &str, obj: jobject) {
         if obj.is_null() {
             return;
         }
@@ -22333,7 +22333,7 @@ impl JNIEnv {
 
     /// Checks if the object is a valid non-null reference
     #[cfg(feature = "asserts")]
-    unsafe fn check_ref_obj(&self, context: &str, obj: jobject) {
+    unsafe fn check_ref_obj(self, context: &str, obj: jobject) {
         assert!(!obj.is_null(), "{context} ref is null");
 
         if self.ExceptionCheck() {
@@ -22370,7 +22370,7 @@ impl JNIEnv {
 
     /// Checks if the class is a throwable
     #[cfg(feature = "asserts")]
-    unsafe fn check_is_exception_class(&self, context: &str, obj: jclass) {
+    unsafe fn check_is_exception_class(self, context: &str, obj: jclass) {
         self.check_is_class(context, obj);
         let throwable_cl = self.FindClass("java/lang/Throwable");
         assert!(!throwable_cl.is_null(), "{context} java/lang/Throwable not found???");
@@ -22380,7 +22380,7 @@ impl JNIEnv {
 
     /// Checks if the class is not abstract
     #[cfg(feature = "asserts")]
-    unsafe fn check_is_not_abstract(&self, context: &str, obj: jclass) {
+    unsafe fn check_is_not_abstract(self, context: &str, obj: jclass) {
         self.check_is_class(context, obj);
         let class_cl = self.FindClass("java/lang/Class");
         assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
@@ -22405,7 +22405,7 @@ impl JNIEnv {
 
     /// Checks if obj is a class.
     #[cfg(feature = "asserts")]
-    unsafe fn check_is_class(&self, context: &str, obj: jclass) {
+    unsafe fn check_is_class(self, context: &str, obj: jclass) {
         assert!(!obj.is_null(), "{context} class is null");
         self.check_ref_obj(context, obj);
 
@@ -22420,7 +22420,7 @@ impl JNIEnv {
 
     /// Checks if the `obj` is a classloader or null
     #[cfg(feature = "asserts")]
-    unsafe fn check_is_classloader_or_null(&self, context: &str, obj: jobject) {
+    unsafe fn check_is_classloader_or_null(self, context: &str, obj: jobject) {
         if obj.is_null() {
             return;
         }
@@ -22434,7 +22434,7 @@ impl JNIEnv {
 
     /// Checks if the argument refers toa string
     #[cfg(feature = "asserts")]
-    unsafe fn check_if_arg_is_string(&self, src: &str, jobject: jobject) {
+    unsafe fn check_if_arg_is_string(self, src: &str, jobject: jobject) {
         if jobject.is_null() {
             return;
         }
@@ -22450,7 +22450,7 @@ impl JNIEnv {
 
     /// Checks if the field type of a static field matches
     #[cfg(feature = "asserts")]
-    unsafe fn check_field_type_static(&self, context: &str, obj: jclass, fieldID: jfieldID, ty: &str) {
+    unsafe fn check_field_type_static(self, context: &str, obj: jclass, fieldID: jfieldID, ty: &str) {
         self.check_is_class(context, obj);
         assert!(!fieldID.is_null(), "{context} fieldID is null");
         let f = self.ToReflectedField(obj, fieldID, true);
@@ -22497,7 +22497,7 @@ impl JNIEnv {
 
     /// Checks if the return type of a static method matches
     #[cfg(feature = "asserts")]
-    unsafe fn check_return_type_static(&self, context: &str, obj: jclass, methodID: jmethodID, ty: &str) {
+    unsafe fn check_return_type_static(self, context: &str, obj: jclass, methodID: jmethodID, ty: &str) {
         self.check_is_class(context, obj);
         assert!(!methodID.is_null(), "{context} methodID is null");
         let m = self.ToReflectedMethod(obj, methodID, true);
@@ -22550,7 +22550,7 @@ impl JNIEnv {
 
     /// Checks if the parameter types for a static fn match
     #[cfg(feature = "asserts")]
-    unsafe fn check_parameter_types_static<T: JType>(&self, context: &str, clazz: jclass, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
+    unsafe fn check_parameter_types_static<T: JType>(self, context: &str, clazz: jclass, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
         self.check_is_class(context, clazz);
         assert!(!methodID.is_null(), "{context} methodID is null");
         let java_method = self.ToReflectedMethod(clazz, methodID, true);
@@ -22619,7 +22619,7 @@ impl JNIEnv {
 
     /// Checks if the parameter type matches the constructor
     #[cfg(feature = "asserts")]
-    unsafe fn check_parameter_types_constructor<T: JType>(&self, context: &str, clazz: jclass, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
+    unsafe fn check_parameter_types_constructor<T: JType>(self, context: &str, clazz: jclass, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
         self.check_ref_obj(context, clazz);
         assert!(!clazz.is_null(), "{context} obj.class is null??");
         assert!(!methodID.is_null(), "{context} methodID is null");
@@ -22689,7 +22689,7 @@ impl JNIEnv {
 
     /// checks if the method parameter matches the provided argument
     #[cfg(feature = "asserts")]
-    unsafe fn check_parameter_types_object<T: JType>(&self, context: &str, obj: jobject, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
+    unsafe fn check_parameter_types_object<T: JType>(self, context: &str, obj: jobject, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
         assert!(!obj.is_null(), "{context} obj is null");
         self.check_ref_obj(context, obj);
         let clazz = self.GetObjectClass(obj);
@@ -22763,7 +22763,7 @@ impl JNIEnv {
 
     /// Checks if the function returns an object
     #[cfg(feature = "asserts")]
-    unsafe fn check_return_type_object(&self, context: &str, obj: jobject, methodID: jmethodID, ty: &str) {
+    unsafe fn check_return_type_object(self, context: &str, obj: jobject, methodID: jmethodID, ty: &str) {
         assert!(!obj.is_null(), "{context} obj is null");
         self.check_ref_obj(context, obj);
         let clazz = self.GetObjectClass(obj);
@@ -22820,7 +22820,7 @@ impl JNIEnv {
 
     /// checks if the field type is any object.
     #[cfg(feature = "asserts")]
-    unsafe fn check_field_type_object(&self, context: &str, obj: jclass, fieldID: jfieldID, ty: &str) {
+    unsafe fn check_field_type_object(self, context: &str, obj: jclass, fieldID: jfieldID, ty: &str) {
         assert!(!obj.is_null(), "{context} obj is null");
         let clazz = self.GetObjectClass(obj);
         assert!(!clazz.is_null(), "{context} obj.class is null??");

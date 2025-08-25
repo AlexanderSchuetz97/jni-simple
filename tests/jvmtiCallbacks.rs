@@ -49,6 +49,9 @@ pub fn test() {
         let g = jvmti.SetEventNotificationMode(JVMTI_ENABLE, jvmtiEvent::JVMTI_EVENT_METHOD_EXIT, null_mut());
         assert!(g.is_ok(), "{}", g.into_enum());
         _ = env.CallStaticLongMethodA(sys, nano_time, null());
+        #[cfg(feature = "asserts")]
+        assert_eq!(COUNTER.load(SeqCst), 3); //The asserts also call a bunch of methods, this 3 is not set in stone and can be changed.
+        #[cfg(not(feature = "asserts"))]
         assert_eq!(COUNTER.load(SeqCst), 1);
     }
 }

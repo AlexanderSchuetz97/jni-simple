@@ -24,7 +24,7 @@ pub mod test {
         let jvm = thr.unwrap().clone();
         let env = jvm.GetEnv(JNI_VERSION_1_8);
         if env.is_err() && env.unwrap_err() == JNI_EDETACHED {
-            let env = jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).expect("failed to attach thread");
+            let env = jvm.AttachCurrentThread_str(JNI_VERSION_1_8, (), null_mut()).expect("failed to attach thread");
             return (jvm, env);
         }
         (jvm, env.unwrap())

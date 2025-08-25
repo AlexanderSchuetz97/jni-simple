@@ -25,7 +25,7 @@ pub mod test {
             let vm_clone = vm.clone();
             let jh = std::thread::spawn(move || {
                 let global: jobject = sp.into();
-                let env = vm_clone.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).unwrap();
+                let env = vm_clone.AttachCurrentThread_str(JNI_VERSION_1_8, (), null_mut()).unwrap();
                 env.MonitorEnter(global);
                 let _g2 = l2.0.lock().unwrap();
                 l2.1.notify_all();
