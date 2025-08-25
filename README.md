@@ -1,10 +1,11 @@
 # jni-simple
 
-This crate contains a simple dumb handwritten rust wrapper around the JNI (Java Native Interface) API.
+This crate contains a simple dumb handwritten rust binding for the JNI (Java Native Interface) API.
 It does absolutely no magic around the JNI Calls and lets you just use them as you would in C.
 
-In addition to JNI, this crate also provides a similar simplistic wrapper for the JVMTI (Java VM Tool Interface) API.
+In addition to JNI, this crate also provides a similar simplistic binding for the JVMTI (Java VM Tool Interface) API.
 The JVMTI Api can be used to write, for example, a Java Agent (like a Java debugger) in Rust or perform similar deep instrumentation with the JVM.
+Most applications do not need JVMTI.
 
 ## Examples
 ### Loading a JVM from a shared object file or dll
@@ -109,6 +110,8 @@ pub unsafe extern "system" fn Java_org_example_JNITest_test(env: JNIEnv, _class:
 }
 ```
 ### Writing a Java Agent (JVMTI)
+Note: this example assumes the `dynlink` feature is enabled!
+
 ```toml
 crate-type = ["cdylib"]
 ```
@@ -148,6 +151,31 @@ extern "system" unsafe fn Agent_OnLoad(vm: JavaVM, _command_line_options: *const
 }
 ```
 
+### Using JVMTI from JNI
+Note: Its probably not a good idea to do this in productive code, but can be useful in some debugging situations.
+Note: this example assumes the `dynlink` feature is enabled!
+```rust
+#![allow(non_snake_case)]
+use jni_simple::{*};
+
+//This could also be an ordinary native method invoked from java.
+#[no_mangle]
+pub unsafe extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
+  //All error codes are jint, never JNI_OK. See JNI documentation for their meaning when you handle them.
+  //This is a Result<JVMTIEnv, jint>.
+  let jvmti : JVMTIEnv = vm.GetEnv(JVMTI_VERSION_1_2).unwrap();
+  let mut cap = jvmtiCapabilities::default();
+  let _err = jvmti.GetPotentialCapabilities(&mut cap);
+  // Note that this JVMTI environment has much fewer capabilities than its agent counterpart, 
+  // as the JVM may have already performed optimizations that makes some more advanced operations impossible 
+  // by the time our jni library is loaded.
+  // ...
+  // Do what you need to do with jvmti here.
+  
+  return JNI_VERSION_1_8;
+}
+```
+
 ## Main goals of this crate
 
 ### Dont pretend that JNI is "safe"
@@ -179,6 +207,29 @@ This allows for maximum flexibility when writing a launcher app which, for examp
 may first download and extract a JVM from the internet.
 As should be obvious, when writing a native library (cdylib) that does not launch the JVM itself and 
 is instead loaded by `System.load` or `System.loadLibrary` then this is irrelevant.
+
+## Test coverage and maturity
+### JNI
+Test coverage is near 100%.
+
+This means that all functions are at least called by a test, 
+and for some even most edge cases are tested.
+
+The implementation is mature and has been used in production without any known issues.
+
+### JVMTI
+Test coverage is very low.
+
+The overall maturity of the JVMTI Api provided in the current version of jni-simple is low.
+Expect some bugs that will cause undefined behavior in functions that I have not yet tested.
+(due to human error when manually translating the jvmti specification into rust code)
+
+I have mostly prepared this JVMTI implementation ahead of time for when I need it,
+so it may take some time until everything is tested and fixed.
+Naturally, this has no impact on JNI and should not affect many people 
+as JVMTI is not needed for 99% of programs.
+
+If you encounter a bug and need an urgent fix, then open up an issue on github or make a pull request.
 
 ## Features
 

@@ -48,6 +48,9 @@ use sync_ptr::{FromMutPtr, SyncMutPtr};
 #[cfg(not(feature = "dynlink"))]
 use sync_ptr::{FromConstPtr, SyncConstPtr};
 
+pub const JNI_TRUE: jboolean = true;
+pub const JNI_FALSE: jboolean = false;
+
 pub const JNI_OK: jint = 0;
 
 pub const JNI_COMMIT: jint = 1;
@@ -132,7 +135,9 @@ pub enum jobjectRefType {
     JNIWeakGlobalRefType = 3,
 }
 
-/// Rust enum that mirrors jvmtiError, however it has a different repr C to `c_int` causing it to be incompatible outside of rust code.
+/// Rust enum that mirrors jvmtiError, however it has a different repr to `c_int` causing it to be incompatible outside of rust code.
+///
+/// It is mainly useful to use in rusts match statements.
 ///
 /// This enum can be transformed from the repr(C) jvmtiError or transformed into it via the From/Into traits.
 #[derive(Debug, Eq, Clone, Copy)]
@@ -353,6 +358,20 @@ impl From<JvmtiError> for c_int {
             JvmtiError::INVALID_ENVIRONMENT => 116,
             JvmtiError::OTHER(value) => value,
         }
+    }
+}
+
+impl JvmtiError {
+    /// Returns true if this `JvmtiError` refers to `JVMTI_ERROR_NONE`
+    #[must_use]
+    pub const fn is_ok(&self) -> bool {
+        matches!(self, Self::NONE)
+    }
+
+    /// Returns true if this `JvmtiError` does not refer to `JVMTI_ERROR_NONE`
+    #[must_use]
+    pub const fn is_err(&self) -> bool {
+        !self.is_ok()
     }
 }
 
@@ -3761,7 +3780,7 @@ impl JVMTIEnv {
     }
 
     /// Determines whether a class object reference represents an array.
-    /// The jboolean result is JNI_TRUE if the class is an array, JNI_FALSE otherwise.
+    /// The jboolean result is true if the class is an array, false otherwise.
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsArrayClass>
     ///
@@ -3774,10 +3793,10 @@ impl JVMTIEnv {
 
     /// Determines whether a class is modifiable.
     ///
-    /// If a class is modifiable (is_modifiable_class_ptr returns JNI_TRUE)
-    /// the class can be redefined with RedefineClasses (assuming the agent possesses the can_redefine_classes capability)
-    /// or retransformed with RetransformClasses (assuming the agent possesses the can_retransform_classes capability).
-    /// If a class is not modifiable (is_modifiable_class_ptr returns JNI_FALSE) the class can be neither redefined nor retransformed.
+    /// If a class is modifiable (`is_modifiable_class_ptr` returns `JNI_TRUE`)
+    /// the class can be redefined with `RedefineClasses` (assuming the agent possesses the `can_redefine_classes` capability)
+    /// or retransformed with `RetransformClasses` (assuming the agent possesses the `can_retransform_classes` capability).
+    /// If a class is not modifiable (`is_modifiable_class_ptr` returns `JNI_FALSE`) the class can be neither redefined nor retransformed.
     /// Primitive classes (for example, java.lang.Integer.TYPE), array classes, and some implementation defined classes are never modifiable.
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsModifiableClass>
@@ -3789,7 +3808,7 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(44)(self.vtable, klass, is_modifiable_class_ptr)
     }
 
-    /// For the class indicated by klass, return via classloader_ptr a reference to the class loader for the class.
+    /// For the class indicated by klass, return via `classloader_ptr` a reference to the class loader for the class.
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsModifiableClass>
     ///
@@ -3800,7 +3819,7 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jobject) -> jvmtiError>(56)(self.vtable, klass, classloader_ptr)
     }
 
-    /// For the class indicated by klass, return the debug extension via source_debug_extension_ptr.
+    /// For the class indicated by klass, return the debug extension via `source_debug_extension_ptr`.
     /// The returned string contains exactly the debug extension information present in the class file of klass.
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetSourceDebugExtension>
@@ -3816,7 +3835,7 @@ impl JVMTIEnv {
     ///
     /// To replace the class definition without reference to the existing bytecodes,
     /// as one might do when recompiling from source for fix-and-continue debugging,
-    /// RedefineClasses function should be used instead.
+    /// `RedefineClasses` function should be used instead.
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#RetransformClasses>
     ///
@@ -3830,12 +3849,12 @@ impl JVMTIEnv {
     /// All classes given are redefined according to the definitions supplied.
     ///
     /// This function is used to replace the definition of a class with a new definition, as might be needed in fix-and-continue debugging.
-    /// Where the existing class file bytes are to be transformed, for example in bytecode instrumentation, RetransformClasses should be used.
+    /// Where the existing class file bytes are to be transformed, for example in bytecode instrumentation, `RetransformClasses` should be used.
     ///
     /// Redefinition can cause new versions of methods to be installed.
     /// Old method versions may become obsolete The new method version will be used on new invokes.
     /// If a method has active stack frames, those active frames continue to run the bytecodes of the original method version.
-    /// If resetting of stack frames is desired, use PopFrame to pop frames with obsolete method versions.
+    /// If resetting of stack frames is desired, use `PopFrame` to pop frames with obsolete method versions.
     ///
     /// This function does not cause any initialization except that which would occur under the customary JVM semantics.
     /// In other words, redefining a class does not cause its initializers to be run.
@@ -3851,29 +3870,29 @@ impl JVMTIEnv {
     ///
     /// The redefinition may change method bodies, the constant pool and attributes (unless explicitly prohibited).
     /// The redefinition must not add, remove or rename fields or methods, change the signatures of methods, change modifiers, or change inheritance.
-    /// The redefinition must not change the NestHost, NestMembers, Record, or PermittedSubclasses attributes.
+    /// The redefinition must not change the `NestHost`, `NestMembers`, `Record`, or `PermittedSubclasses` attributes.
     /// These restrictions may be lifted in future versions.
     /// See the error return description for information on error codes returned if an unsupported redefinition is attempted.
-    /// The class file bytes are not verified or installed until they have passed through the chain of ClassFileLoadHook events,
-    /// thus the returned error code reflects the result of the transformations applied to the bytes passed into class_definitions.
+    /// The class file bytes are not verified or installed until they have passed through the chain of `ClassFileLoadHook` events,
+    /// thus the returned error code reflects the result of the transformations applied to the bytes passed into `class_definitions`.
     ///
-    /// If any error code is returned other than JVMTI_ERROR_NONE,
+    /// If any error code is returned other than `JVMTI_ERROR_NONE`,
     /// none of the classes to be redefined will have a new definition installed.
     ///
-    /// When this function returns (with the error code of JVMTI_ERROR_NONE)
+    /// When this function returns (with the error code of `JVMTI_ERROR_NONE`)
     /// all of the classes to be redefined will have their new definitions installed.
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#RedefineClasses>
     ///
     /// # Safety
-    /// class_count and class_definitions must form a valid array.
+    /// `class_count` and `class_definitions` must form a valid array.
     /// all pointer parameters must not be dangling.
     /// `class_definitions` must be internally consistent and valid. (no dangling pointers, size + byte pointer must match)
     pub unsafe fn RedefineClasses(&self, class_count: jint, class_definitions: *const jvmtiClassDefinition) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jvmtiClassDefinition) -> jvmtiError>(86)(self.vtable, class_count, class_definitions)
     }
 
-    /// For the object indicated by object, return via size_ptr the size of the object.
+    /// For the object indicated by object, return via `size_ptr` the size of the object.
     ///
     /// This size is an implementation-specific approximation of the amount of storage consumed by this object.
     /// It may include some or all of the object's overhead, and thus is useful for comparison within an implementation but not between implementations.
@@ -3888,7 +3907,7 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jlong) -> jvmtiError>(153)(self.vtable, object, size_ptr)
     }
 
-    /// For the object indicated by object, return via hash_code_ptr a hash code.
+    /// For the object indicated by object, return via `hash_code_ptr` a hash code.
     ///
     /// This hash code could be used to maintain a hash table of object references, however, on some implementations this can cause significant performance impacts,
     /// in most cases tags will be a more efficient means of associating information with objects.
@@ -3904,12 +3923,27 @@ impl JVMTIEnv {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint) -> jvmtiError>(57)(self.vtable, object, hash_code_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Get information about the object's monitor. The fields of the jvmtiMonitorUsage structure are filled in with information about usage of the monitor.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetObjectMonitorUsage>
+    ///
+    /// # Safety
+    /// `object` must be a valid strong reference or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetObjectMonitorUsage(&self, object: jobject, info_ptr: *mut jvmtiMonitorUsage) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jvmtiMonitorUsage) -> jvmtiError>(58)(self.vtable, object, info_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the field indicated by klass and field, return the field name via `name_ptr` and field signature via `signature_ptr`.
+    ///
+    /// Field signatures are defined in the JNI Specification and are referred to as field descriptors in The Java™ Virtual Machine Specification, Chapter 4.3.2.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetFieldName>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `field` must be a valid field reference in the class referred to by `klass`
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetFieldName(&self, klass: jclass, field: jfieldID, name_ptr: *mut *mut c_char, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut *mut c_char, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(59)(
             self.vtable,
@@ -3921,22 +3955,57 @@ impl JVMTIEnv {
         )
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the field indicated by klass and field return the class that defined it via `declaring_class_ptr`.
+    /// The declaring class will either be klass, a superclass, or an implemented interface.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetFieldDeclaringClass>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `field` must be a valid field reference in the class referred to by `klass`
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetFieldDeclaringClass(&self, klass: jclass, field: jfieldID, declaring_class_ptr: *mut jclass) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jclass) -> jvmtiError>(60)(self.vtable, klass, field, declaring_class_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the field indicated by klass and field return the access flags via `modifiers_ptr`.
+    ///
+    /// Access flags are defined in The Java™ Virtual Machine Specification, Chapter 4.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetFieldModifiers>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `field` must be a valid field reference in the class referred to by `klass`
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetFieldModifiers(&self, klass: jclass, field: jfieldID, modifiers_ptr: *mut jint) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jint) -> jvmtiError>(61)(self.vtable, klass, field, modifiers_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the field indicated by klass and field, return a value indicating whether the field is synthetic via `is_synthetic_ptr`.
+    ///
+    /// Synthetic fields are generated by the compiler but not present in the original source code.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsFieldSynthetic>
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `field` must be a valid field reference in the class referred to by `klass`
+    /// all pointer parameters must not be dangling.
     pub unsafe fn IsFieldSynthetic(&self, klass: jclass, field: jfieldID, is_synthetic_ptr: *mut jboolean) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jboolean) -> jvmtiError>(62)(self.vtable, klass, field, is_synthetic_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the method indicated by method, return the method name via `name_ptr` and method signature via `signature_ptr`.
+    ///
+    /// Method signatures are defined in the JNI Specification and are referred to as method descriptors in The Java™ Virtual Machine Specification, Chapter 4.3.3.
+    /// Note this is different than method signatures as defined in the Java Language Specification.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetMethodName>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetMethodName(&self, method: jmethodID, name_ptr: *mut *mut c_char, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut *mut c_char, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(63)(
             self.vtable,
@@ -3947,134 +4016,354 @@ impl JVMTIEnv {
         )
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the method indicated by method, return the class that defined it via `declaring_class_ptr`.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetMethodDeclaringClass>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetMethodDeclaringClass(&self, method: jmethodID, declaring_class_ptr: *mut jclass) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jclass) -> jvmtiError>(64)(self.vtable, method, declaring_class_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the method indicated by method, return the access flags via `modifiers_ptr`.
+    ///
+    /// Access flags are defined in The Java™ Virtual Machine Specification, Chapter 4.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetMethodModifiers>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetMethodModifiers(&self, method: jmethodID, modifiers_ptr: *mut jint) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(65)(self.vtable, method, modifiers_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
-    pub unsafe fn GetMaxLocals(&self, method: jmethodID, modifiers_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(67)(self.vtable, method, modifiers_ptr)
+    /// For the method indicated by method, return the number of local variable slots used by the method,
+    /// including the local variables used to pass parameters to the method on its invocation.
+    ///
+    /// See `max_locals` in The Java™ Virtual Machine Specification, Chapter 4.7.3.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetMaxLocals>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
+    pub unsafe fn GetMaxLocals(&self, method: jmethodID, max_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(67)(self.vtable, method, max_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
-    pub unsafe fn GetArgumentsSize(&self, method: jmethodID, modifiers_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(68)(self.vtable, method, modifiers_ptr)
+    /// For the method indicated by method, return via `max_ptr` the number of local variable slots used by the method's arguments.
+    ///
+    /// Note that two-word arguments use two slots.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetArgumentsSize>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
+    pub unsafe fn GetArgumentsSize(&self, method: jmethodID, max_ptr: *mut jint) -> jvmtiError {
+        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(68)(self.vtable, method, max_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the method indicated by method, return a table of source line number entries.
+    /// The size of the table is returned via `entry_count_ptr` and the table itself is returned via `table_ptr`.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetLineNumberTable>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetLineNumberTable(&self, method: jmethodID, entry_count_ptr: *mut jint, table_ptr: *mut *mut jvmtiLineNumberEntry) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut jvmtiLineNumberEntry) -> jvmtiError>(69)(self.vtable, method, entry_count_ptr, table_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the method indicated by method, return the beginning and ending addresses through `start_location_ptr` and `end_location_ptr`.
+    /// In a conventional bytecode indexing scheme, `start_location_ptr` will always point to zero and `end_location_ptr` will always point to the bytecode count minus one.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetMethodLocation>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetMethodLocation(&self, method: jmethodID, start_location_ptr: *mut jlocation, end_location_ptr: *mut jlocation) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jlocation, *mut jlocation) -> jvmtiError>(70)(self.vtable, method, start_location_ptr, end_location_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Return local variable information.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetLocalVariableTable>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetLocalVariableTable(&self, method: jmethodID, entry_count_ptr: *mut jint, table_ptr: *mut *mut jvmtiLocalVariableEntry) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut jvmtiLocalVariableEntry) -> jvmtiError>(71)(self.vtable, method, entry_count_ptr, table_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the method indicated by method, return the bytecodes that implement the method. The number of bytecodes is returned via `bytecode_count_ptr`.
+    ///
+    /// The bytecodes themselves are returned via `bytecodes_ptr`.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetBytecodes>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn GetBytecodes(&self, method: jmethodID, bytecode_count_ptr: *mut jint, bytecodes_ptr: *mut *mut c_uchar) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut c_uchar) -> jvmtiError>(74)(self.vtable, method, bytecode_count_ptr, bytecodes_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the method indicated by method, return a value indicating whether the method is native via `is_native_ptr`.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsMethodNative>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn IsMethodNative(&self, method: jmethodID, is_native_ptr: *mut jboolean) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(75)(self.vtable, method, is_native_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For the method indicated by method, return a value indicating whether the method is synthetic via `is_synthetic_ptr`.
+    ///
+    /// Synthetic methods are generated by the compiler but not present in the original source code.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsMethodSynthetic>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn IsMethodSynthetic(&self, method: jmethodID, is_synthetic_ptr: *mut jboolean) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(76)(self.vtable, method, is_synthetic_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Determine if a method ID refers to an obsolete method version.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#IsMethodObsolete>
+    ///
+    /// # Safety
+    /// `method` must be a valid methodID or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn IsMethodObsolete(&self, method: jmethodID, is_obsolete_ptr: *mut jboolean) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(90)(self.vtable, method, is_obsolete_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// This function modifies the failure handling of native method resolution by allowing retry with a prefix applied to the name.
+    ///
+    /// When used with the `ClassFileLoadHook` event, it enables native methods to be instrumented.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#SetNativeMethodPrefix>
+    ///
+    /// # Safety
+    /// `prefix` must be a rust string type or a valid zero terminated utf-8 string or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn SetNativeMethodPrefix(&self, prefix: impl UseCString) -> jvmtiError {
         prefix.use_as_const_c_char(|prefix| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(72)(self.vtable, prefix))
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// For a normal agent, `SetNativeMethodPrefix` will provide all needed native method prefixing.
+    /// For a meta-agent that performs multiple independent class file transformations (for example as a proxy for another layer of agents) this function allows each transformation to have its own prefix.
+    /// The prefixes are applied in the order supplied and are processed in the same manner as described for the application of prefixes from multiple JVM TI environments in `SetNativeMethodPrefix`.
+    ///
+    /// Any previous prefixes are replaced. Thus, calling this function with a `prefix_count` of 0 disables prefixing in this environment.
+    ///
+    /// `SetNativeMethodPrefix` and this function are the two ways to set the prefixes.
+    /// Calling `SetNativeMethodPrefix` with a prefix is the same as calling this function with `prefix_count` of 1.
+    /// Calling `SetNativeMethodPrefix` with NULL is the same as calling this function with `prefix_count` of 0.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#SetNativeMethodPrefix>
+    ///
+    /// # Safety
+    /// `prefixes` must contain valid zero terminated utf-8 strings.
+    /// `prefix_count` and `prefixes` must form a valid array.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn SetNativeMethodPrefixes(&self, prefix_count: jint, prefixes: *mut *mut c_char) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *mut *mut c_char) -> jvmtiError>(73)(self.vtable, prefix_count, prefixes)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Create a raw monitor.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#CreateRawMonitor>
+    ///
+    /// # Safety
+    /// `name` must be a rust string type or a valid zero terminated utf-8 string or null.
+    /// all pointer parameters must not be dangling.
     pub unsafe fn CreateRawMonitor(&self, name: impl UseCString, monitor_ptr: *mut jrawMonitorID) -> jvmtiError {
         name.use_as_const_c_char(|name| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *mut jrawMonitorID) -> jvmtiError>(30)(self.vtable, name, monitor_ptr))
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Destroy the raw monitor.
+    ///
+    /// If the monitor being destroyed has been entered by this thread, it will be exited before it is destroyed.
+    /// If the monitor being destroyed has been entered by another thread, an error will be returned and the monitor will not be destroyed.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#DestroyRawMonitor>
+    ///
+    /// # Safety
+    /// `monitor` must be a valid raw monitor
     pub unsafe fn DestroyRawMonitor(&self, monitor: jrawMonitorID) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(31)(self.vtable, monitor)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Gain exclusive ownership of a raw monitor.
+    ///
+    /// The same thread may enter a monitor more then once.
+    /// The thread must exit the monitor the same number of times as it is entered.
+    /// If a monitor is entered during `OnLoad` (before attached threads exist) and has not exited when attached threads come into existence,
+    /// the enter is considered to have occurred on the main thread.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#RawMonitorEnter>
+    ///
+    /// # Safety
+    /// `monitor` must be a valid raw monitor
     pub unsafe fn RawMonitorEnter(&self, monitor: jrawMonitorID) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(32)(self.vtable, monitor)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Release exclusive ownership of a raw monitor.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#RawMonitorExit>
+    ///
+    /// # Safety
+    /// `monitor` must be a valid raw monitor
     pub unsafe fn RawMonitorExit(&self, monitor: jrawMonitorID) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(33)(self.vtable, monitor)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Wait for notification of the raw monitor.
+    ///
+    /// Causes the current thread to wait until either another thread calls `RawMonitorNotify` or `RawMonitorNotifyAll` for the specified raw monitor, or the specified timeout has elapsed.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#RawMonitorWait>
+    ///
+    /// # Safety
+    /// `monitor` must be a valid raw monitor
     pub unsafe fn RawMonitorWait(&self, monitor: jrawMonitorID) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(34)(self.vtable, monitor)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Notify a single thread waiting on the raw monitor.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#RawMonitorNotify>
+    ///
+    /// # Safety
+    /// `monitor` must be a valid raw monitor
     pub unsafe fn RawMonitorNotify(&self, monitor: jrawMonitorID) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(35)(self.vtable, monitor)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Notify all threads waiting on the raw monitor.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#RawMonitorNotifyAll>
+    ///
+    /// # Safety
+    /// `monitor` must be a valid raw monitor
     pub unsafe fn RawMonitorNotifyAll(&self, monitor: jrawMonitorID) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(36)(self.vtable, monitor)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Set the JNI function table in all current and future JNI environments.
+    ///
+    /// As a result, all future JNI calls are directed to the specified functions.
+    /// Use `GetJNIFunctionTable` to get the function table to pass to this function.
+    /// For this function to take effect the updated table entries must be used by the JNI clients.
+    /// The table is copied--changes to the local copy of the table have no effect.
+    /// This function affects only the function table, all other aspects of the environment are unaffected.
+    ///
+    /// # Compiler Optimizations
+    /// Since the table is defined const in the C headers some compilers may optimize away the access to the table,
+    /// thus preventing this function from taking effect.
+    /// This is entirely dependant on the compiler and its settings that was used to compile the JNI Client.
+    /// The rust compiler settings used to compile the JVMTI agent have no effect on this.
+    ///
+    /// ## Rust Compiler Optimizations
+    /// The rust compiler does not as of rust version 1.89 perform any optimization that prevents this function from taking effect with rust JNI Clients
+    /// regardless of chosen rust compiler settings and flags.
+    /// It is very unlikely that future versions of the rust compiler will change this behavior.
+    ///
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#SetJNIFunctionTable>
+    ///
+    /// # Safety
+    /// `function_table` must be a valid initalized jni function table
     pub unsafe fn SetJNIFunctionTable(&self, function_table: jniNativeInterface) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jniNativeInterface) -> jvmtiError>(119)(self.vtable, function_table)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Get the JNI function table. The JNI function table is copied into allocated memory.
+    ///
+    /// If `SetJNIFunctionTable` has been called, the modified (not the original) function table is returned.
+    /// Only the function table is copied, no other aspects of the environment are copied.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetJNIFunctionTable>
+    ///
+    /// # Safety
+    /// `function_table` must not be dangling
     pub unsafe fn GetJNIFunctionTable(&self, function_table: *mut jniNativeInterface) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jniNativeInterface) -> jvmtiError>(120)(self.vtable, function_table)
     }
 
 
-    #[allow(clippy::style)] //TODO later
-    #[expect(clippy::cast_possible_truncation)]
+    /// Set the functions to be called for each event.
+    ///
+    /// The callbacks are specified by supplying a replacement function table.
+    ///
+    /// The function table is copied, changes to the local copy of the table have no effect.
+    /// This is an atomic action, all callbacks are set at once.
+    ///
+    /// No events are sent before this function is called.
+    /// When an entry is NULL or when the event is beyond `size_of_callbacks` no event is sent.
+    /// Details on events are described later in this document.
+    ///
+    /// An event must be enabled and have a callback in order to be sent,
+    /// the order in which this function and `SetEventNotificationMode` are called does not affect the result.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#SetEventCallbacks>
+    ///
+    /// # Safety
+    /// `callbacks` must not be dangling
+    #[expect(clippy::cast_possible_truncation)] // size_of::<jvmtiEventCallbacks>() will never be larger than jint::MAX
     #[expect(clippy::cast_possible_wrap)]
     pub unsafe fn SetEventCallbacks(&self, callbacks: *const jvmtiEventCallbacks) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiEventCallbacks, jint) -> jvmtiError>(121)(self.vtable, callbacks, size_of::<jvmtiEventCallbacks>() as jint)
     }
 
-    /// Raw variant of `SetEventCallbacks` which allows for passing an arbitary payload.
+    /// Raw variant of `SetEventCallbacks` which allows for passing an arbitrary payload.
     /// This is useful when attempting to use a jvmti version that is newer than what jni-simple supports.
     ///
     /// # Safety
-    /// The callbacks and `size_of_callbacks` must match what the jvm expects.
+    /// The `callbacks` and `size_of_callbacks` must match what the jvm expects.
     pub unsafe fn SetEventCallbacks_raw(&self, callbacks: *const c_void, size_of_callbacks: jint) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiEventCallbacks, jint) -> jvmtiError>(121)(self.vtable, callbacks.cast(), size_of_callbacks)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Control the generation of events.
+    ///
+    /// Calling this function either enables or disables future generation of specific jvmti events.
+    /// If `event_thread` is null then this control the behavior of event generation a global level.
+    /// Otherwise changes are only made for the given thread.
+    ///
+    /// The following events cannot be controlled at the thread level through this function:
+    /// - `VMInit`
+    /// - `VMStart`
+    /// - `VMDeath`
+    /// - `ThreadStart`
+    /// - `VirtualThreadStart`
+    /// - `CompiledMethodLoad`
+    /// - `CompiledMethodUnload`
+    /// - `DynamicCodeGenerated`
+    /// - `DataDumpRequest`
+    ///
+    /// Initially, no events are enabled at either the thread level or the global level.
+    /// Any needed capabilities (see Event Enabling Capabilities below) must be possessed before calling this function.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#SetEventNotificationMode>
+    ///
+    /// # Safety
+    /// `event_thread` must either be null or a valid strong reference to a jthread.
+    /// The `callbacks` and `size_of_callbacks` must match what the jvm expects.
     pub unsafe fn SetEventNotificationMode(&self, mode: jvmtiEventMode, event_type: jvmtiEvent, event_thread: jthread) -> jvmtiError {
         self.jvmti::<extern "C" fn(JVMTIEnvVTable, jvmtiEventMode, jvmtiEvent, jthread, ...) -> jvmtiError>(1)(self.vtable, mode, event_type, event_thread)
     }
@@ -4090,7 +4379,7 @@ impl JVMTIEnv {
     /// using this function requires deep knowledge of jvm implementation specific details.
     /// Use with care and only if necessary.
     ///
-    /// # example
+    /// # Example
     /// ```rust
     /// use std::ffi::{c_int, c_void};
     /// use std::ptr::null_mut;
@@ -4100,7 +4389,8 @@ impl JVMTIEnv {
     ///   unsafe {
     ///     //NOTE: jvmtiEvent with a value 5 does not exist, this is just for illustrative purposes!
     ///     //This example assumes that the hypothetical global jni event 5 would want a jint extension parameter.
-    ///     env.SetEventNotificationMode_extension::<extern "C" fn(*mut c_void, jvmtiEventMode, c_int, jthread, ...) -> jvmtiError>()(env.vtable(), jvmtiEventMode::JVMTI_ENABLE, 5, null_mut(), 4i32);
+    ///     let _err : jvmtiError = env.SetEventNotificationMode_extension::<extern "C" fn(*mut c_void, jvmtiEventMode, c_int, jthread, ...) -> jvmtiError>()
+    ///         (env.vtable(), jvmtiEventMode::JVMTI_ENABLE, 5, null_mut(), 4i32);
     ///   }
     /// }
     /// ```
@@ -4109,83 +4399,286 @@ impl JVMTIEnv {
         self.jvmti::<X>(1)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Generate events to represent the current state of the VM.
+    ///
+    /// For example, if `event_type` is `JVMTI_EVENT_COMPILED_METHOD_LOAD`, a `CompiledMethodLoad` event will be sent for each currently compiled method.
+    /// Methods that were loaded and now have been unloaded are not sent.
+    /// The history of what events have previously been sent does not effect what events are sent by this function,
+    /// for example, all currently compiled methods will be sent each time this function is called.
+    ///
+    /// This function is useful when events may have been missed due to the agent attaching after program execution begins; this function generates the missed events.
+    ///
+    /// Attempts to execute Java programming language code or JNI functions may be paused until this function returns,
+    /// so neither should be called from the thread sending the event.
+    ///
+    /// This function returns only after the missed events have been sent, processed and have returned.
+    ///
+    /// The event may be sent on a different thread than the thread on which the event occurred.
+    /// The callback for the event must be set with `SetEventCallbacks` and the event must be enabled with `SetEventNotificationMode` or the events will not occur.
+    /// If the VM no longer has the information to generate some or all of the requested events, the events are simply not sent - no error is returned.
+    ///
+    /// Only the following events are supported:
+    /// - `CompiledMethodLoad`
+    /// - `DynamicCodeGenerated`
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GenerateEvents>
+    ///
+    /// # Safety
+    /// `function_table` must not be dangling
     pub unsafe fn GenerateEvents(&self, event_type: jvmtiEvent) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiEvent) -> jvmtiError>(122)(self.vtable, event_type)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Returns the set of extension functions.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetExtensionFunctions>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetExtensionFunctions(&self, extension_count_ptr: *mut jint, extensions: *mut *mut jvmtiExtensionFunctionInfo) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jvmtiExtensionFunctionInfo) -> jvmtiError>(123)(self.vtable, extension_count_ptr, extensions)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Returns the set of extension events.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetExtensionEvents>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetExtensionEvents(&self, extension_count_ptr: *mut jint, extensions: *mut *mut jvmtiExtensionEventInfo) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jvmtiExtensionEventInfo) -> jvmtiError>(124)(self.vtable, extension_count_ptr, extensions)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Sets the callback function for an extension event and enables the event. Or, if the callback is NULL, disables the event.
+    ///
+    /// Note that unlike standard events, setting the callback and enabling the event are a single operation.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#SetExtensionEventCallback>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
+    /// `callback` must match the function signature that the jvm implementation expects.
     pub unsafe fn SetExtensionEventCallback(&self, extension_event_index: jint, callback: jvmtiExtensionEvent) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, jvmtiExtensionEvent) -> jvmtiError>(125)(self.vtable, extension_event_index, callback)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Get information about the `GetCurrentThreadCpuTime` timer.
+    ///
+    /// The fields of the jvmtiTimerInfo structure are filled in with details about the timer.
+    ///
+    /// This information is specific to the platform and the implementation of `GetCurrentThreadCpuTime` and thus does not vary by thread nor does it vary during a particular invocation of the VM.
+    ///
+    /// Note that the implementations of `GetCurrentThreadCpuTime` and `GetThreadCpuTime` may differ,
+    /// and thus the values returned by `GetCurrentThreadCpuTimerInfo` and `GetThreadCpuTimerInfo` may differ,
+    /// see `GetCurrentThreadCpuTime` for more information.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetCurrentThreadCpuTimerInfo>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetCurrentThreadCpuTimerInfo(&self, info_ptr: *mut jvmtiTimerInfo) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(133)(self.vtable, info_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Return the CPU time utilized by the current thread.
+    ///
+    /// Note that the `GetThreadCpuTime` function provides CPU time for any thread, including the current thread.
+    /// `GetCurrentThreadCpuTime` exists to support platforms which cannot supply CPU time for threads other than the current thread
+    /// or which have more accurate information for the current thread (see `GetCurrentThreadCpuTimerInfo` vs `GetThreadCpuTimerInfo`).
+    ///
+    /// An implementation is not required to support this function when the current thread is a virtual thread, in which case `JVMTI_ERROR_UNSUPPORTED_OPERATION` will be returned.
+    /// see `GetCurrentThreadCpuTime` for more information.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetCurrentThreadCpuTime>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetCurrentThreadCpuTime(&self, nanos_ptr: *mut jlong) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jlong) -> jvmtiError>(134)(self.vtable, nanos_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Get information about the `GetCurrentThreadCpuTime` timer.
+    ///
+    /// The fields of the jvmtiTimerInfo structure are filled in with details about the timer.
+    ///
+    /// This information is specific to the platform and the implementation of `GetCurrentThreadCpuTime` and thus does not vary by thread nor does it vary during a particular invocation of the VM.
+    ///
+    /// Note that the implementations of `GetCurrentThreadCpuTime` and `GetThreadCpuTime` may differ,
+    /// and thus the values returned by `GetCurrentThreadCpuTimerInfo` and `GetThreadCpuTimerInfo` may differ,
+    /// see `GetCurrentThreadCpuTime` for more information.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetCurrentThreadCpuTimerInfo>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetThreadCpuTimerInfo(&self, info_ptr: *mut jvmtiTimerInfo) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(135)(self.vtable, info_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Return the CPU time utilized by the specified thread.
+    ///
+    /// Get information about this timer with `GetThreadCpuTimerInfo`.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetThreadCpuTime>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetThreadCpuTime(&self, thread: jthread, nanos_ptr: *mut jlong) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jlong) -> jvmtiError>(136)(self.vtable, thread, nanos_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Get information about the `GetTime` timer.
+    ///
+    /// The fields of the jvmtiTimerInfo structure are filled in with details about the timer.
+    /// This information will not change during a particular invocation of the VM.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetTimerInfo>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetTimerInfo(&self, info_ptr: *mut jvmtiTimerInfo) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(137)(self.vtable, info_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Return the current value of the system timer, in nanoseconds.
+    ///
+    /// The value returned represents nanoseconds since some fixed but arbitrary time (perhaps in the future, so values may be negative).
+    ///
+    /// This function provides nanosecond precision, but not necessarily nanosecond accuracy.
+    ///
+    /// No guarantees are made about how frequently values change.
+    /// Get information about this timer with `GetTimerInfo`.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetTime>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetTime(&self, nanos_ptr: *mut jlong) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jlong) -> jvmtiError>(138)(self.vtable, nanos_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Returns the number of processors available to the Java virtual machine.
+    ///
+    /// This value may change during a particular invocation of the virtual machine.
+    /// Applications that are sensitive to the number of available processors should therefore occasionally poll this property.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetAvailableProcessors>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetAvailableProcessors(&self, processor_count_ptr: *mut jint) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint) -> jvmtiError>(143)(self.vtable, processor_count_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// This function can be used to cause instrumentation classes to be defined by the bootstrap class loader.
+    ///
+    /// See The Java™ Virtual Machine Specification, Chapter 5.3.1. After the bootstrap class loader unsuccessfully searches for a class,
+    /// the specified platform-dependent search path segment will be searched as well.
+    ///
+    /// Only one segment may be specified in the segment.
+    /// This function may be called multiple times to add multiple segments, the segments will be searched in the order that this function was called.
+    ///
+    /// In the `OnLoad` phase the function may be used to specify any platform-dependent search path segment to be searched after the bootstrap class loader unsuccessfully searches for a class.
+    /// The segment is typically a directory or JAR file.
+    ///
+    /// In the live phase the segment may be used to specify any platform-dependent path to a JAR file.
+    /// The agent should take care that the JAR file does not contain any classes or resources other than those to be defined by the bootstrap class loader for the purposes of instrumentation.
+    /// The Java™ Virtual Machine Specification specifies that a subsequent attempt to resolve a symbolic reference
+    /// that the Java virtual machine has previously unsuccessfully attempted to resolve always fails with the same error that was thrown as a result of the initial resolution attempt.
+    /// Consequently, if the JAR file contains an entry that corresponds to a class for which the Java virtual machine has unsuccessfully attempted to resolve a reference,
+    /// then subsequent attempts to resolve that reference will fail with the same error as the initial attempt.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#AddToSystemClassLoaderSearch>
+    ///
+    /// # Safety
+    /// `segment` must be a rust string, or a valid zero terminated utf-8 string or null
     pub unsafe fn AddToBootstrapClassLoaderSearch(&self, segment: impl UseCString) -> jvmtiError {
         segment.use_as_const_c_char(|segment| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(148)(self.vtable, segment))
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// This function can be used to cause instrumentation classes to be defined by the system class loader. See The Java™ Virtual Machine Specification, Chapter 5.3.2.
+    ///
+    /// After the class loader unsuccessfully searches for a class, the specified platform-dependent search path segment will be searched as well.
+    /// Only one segment may be specified in the segment. This function may be called multiple times to add multiple segments, the segments will be searched in the order that this function was called.
+    ///
+    /// In the `OnLoad` phase the function may be used to specify any platform-dependent search path segment to be searched after the system class loader unsuccessfully searches for a class.
+    /// The segment is typically a directory or JAR file.
+    ///
+    /// In the live phase the segment is a platform-dependent path to a JAR file to be searched after the system class loader unsuccessfully searches for a class.
+    /// The agent should take care that the JAR file does not contain any classes or resources other than those to be defined by the system class loader for the purposes of instrumentation.
+    ///
+    /// In the live phase the system class loader supports adding a JAR file to be searched if the system class loader implements a method name appendToClassPathForInstrumentation
+    /// which takes a single parameter of type java.lang.String. The method is not required to have public access.
+    ///
+    /// The Java™ Virtual Machine Specification specifies that a subsequent attempt to resolve a symbolic reference that the Java virtual machine has previously unsuccessfully attempted to resolve
+    /// always fails with the same error that was thrown as a result of the initial resolution attempt.
+    /// Consequently, if the JAR file contains an entry that corresponds to a class for which the Java virtual machine has unsuccessfully attempted to resolve a reference,
+    /// then subsequent attempts to resolve that reference will fail with the same error as the initial attempt.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#AddToSystemClassLoaderSearch>
+    ///
+    /// # Safety
+    /// `segment` must be a rust string, or a valid zero terminated utf-8 string or null
     pub unsafe fn AddToSystemClassLoaderSearch(&self, segment: impl UseCString) -> jvmtiError {
         segment.use_as_const_c_char(|segment| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(150)(self.vtable, segment))
     }
 
-    #[allow(clippy::style)] //TODO later
+
+    /// Provides access to system properties defined by and used by the VM.
+    ///
+    /// Properties set on the command-line are included.
+    /// This allows getting and setting of these properties before the VM even begins executing bytecodes.
+    /// Since this is a VM view of system properties, the set of available properties will usually be different than that in java.lang.System.getProperties.
+    /// JNI method invocation may be used to access java.lang.System.getProperties.
+    /// The set of properties may grow during execution.
+    ///
+    /// The list of VM system property keys which may be used with `GetSystemProperty` is returned.
+    /// It is strongly recommended that virtual machines provide the following property keys:
+    /// - java.vm.vendor
+    /// - java.vm.version
+    /// - java.vm.name
+    /// - java.vm.info
+    /// - java.library.path
+    /// - java.class.path
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetSystemProperties>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetSystemProperties(&self, count_ptr: *mut jint, property_ptr: *mut *mut *mut c_char) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut *mut c_char) -> jvmtiError>(129)(self.vtable, count_ptr, property_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Return a VM system property value given the property key.
+    ///
+    /// The function `GetSystemProperties` returns the set of property keys which may be used.
+    /// The properties which can be retrieved may grow during execution.
+    ///
+    /// Since this is a VM view of system properties, the values of properties may differ from that returned by java.lang.System.getProperty(String).
+    /// A typical VM might copy the values of the VM system properties into the Properties held by java.lang.System during the initialization of that class.
+    /// Thereafter any changes to the VM system properties (with `SetSystemProperty`) or the java.lang.System system properties (with java.lang.System.setProperty(String,String))
+    /// would cause the values to diverge.
+    /// JNI method invocation may be used to access java.lang.System.getProperty(String).
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetSystemProperty>
+    ///
+    /// # Safety
+    /// `property` must be a rust string, a valid utf-8 zero terminated string or null.
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetSystemProperty(&self, property: impl UseCString, value_ptr: *mut *mut c_char) -> jvmtiError {
         property
             .use_as_const_c_char(|property| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *mut *mut c_char) -> jvmtiError>(130)(self.vtable, property, value_ptr))
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Set a VM system property value.
+    ///
+    /// The function `GetSystemProperties` returns the set of property keys, some of these may be settable. See `GetSystemProperty`.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#SetSystemProperty>
+    ///
+    /// # Safety
+    /// `property` must be a rust string, a valid utf-8 zero terminated string or null.
+    /// all pointer parameters must not be dangling
     pub unsafe fn SetSystemProperty(&self, property: impl UseCString, value_ptr: impl UseCString) -> jvmtiError {
         property.use_as_const_c_char(|property| {
             value_ptr.use_as_const_c_char(|value_ptr| {
@@ -4194,37 +4687,109 @@ impl JVMTIEnv {
         })
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Shutdown a JVM TI connection created with JNI `GetEnv` (see JVM TI Environments).
+    ///
+    /// Dispose of any resources held by the environment.
+    /// Threads suspended by this environment are not resumed by this call, this must be done explicitly by the agent.
+    /// Memory allocated by this environment via calls to JVM TI functions is not released, this can be done explicitly by the agent by calling Deallocate.
+    /// Raw monitors created by this environment are not destroyed, this can be done explicitly by the agent by calling `DestroyRawMonitor`.
+    /// The state of threads waiting on raw monitors created by this environment are not affected.
+    /// Any native method prefixes for this environment will be unset; the agent must remove any prefixed native methods before dispose is called.
+    /// Any capabilities held by this environment are relinquished.
+    /// Events enabled by this environment will no longer be sent, however event handlers currently running will continue to run.
+    ///
+    /// Caution must be exercised in the design of event handlers whose environment may be disposed and thus become invalid during their execution.
+    /// This environment may not be used after this call. This call returns to the caller.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#DisposeEnvironment>
+    ///
+    /// # Safety
+    /// The environment must not be used anymore after this call. Any call to any other function on this environment once this method is called is undefined behavior.
     pub unsafe fn DisposeEnvironment(&self) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable) -> jvmtiError>(126)(self.vtable)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// The VM stores a pointer value associated with each environment.
+    ///
+    /// This pointer value is called environment-local storage. This value is NULL unless set with this function.
+    /// Agents can allocate memory in which they store environment specific information.
+    /// By setting environment-local storage it can then be accessed with `GetEnvironmentLocalStorage`.
+    /// Called by the agent to set the value of the JVM TI environment-local storage.
+    /// JVM TI supplies to the agent a pointer-size environment-local storage that can be used to record per-environment information.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#SetEnvironmentLocalStorage>
+    ///
+    /// # Safety
+    /// JVM implementation specific
     pub unsafe fn SetEnvironmentLocalStorage(&self, data: *const c_void) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_void) -> jvmtiError>(147)(self.vtable, data)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// The VM stores a pointer value associated with each environment.
+    ///
+    /// This pointer value is called environment-local storage. This value is NULL unless set with this function.
+    /// Agents can allocate memory in which they store environment specific information.
+    /// By setting environment-local storage it can then be accessed with `GetEnvironmentLocalStorage`.
+    /// Called by the agent to set the value of the JVM TI environment-local storage.
+    /// JVM TI supplies to the agent a pointer-size environment-local storage that can be used to record per-environment information.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetEnvironmentLocalStorage>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetEnvironmentLocalStorage(&self, data: *mut *mut c_void) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut *mut c_void) -> jvmtiError>(146)(self.vtable, data)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Return the symbolic name for an error code.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetErrorName>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetErrorName(&self, error: impl Into<jvmtiError>, name_ptr: *mut *mut c_char) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiError, *mut *mut c_char) -> jvmtiError>(127)(self.vtable, error.into(), name_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Control verbose output.
+    ///
+    /// This is the output which typically is sent to stderr.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#SetVerboseFlag>
+    ///
+    /// # Safety
+    /// jvm implementation specific
     pub unsafe fn SetVerboseFlag(&self, flag: jvmtiVerboseFlag, value: jboolean) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiVerboseFlag, jboolean) -> jvmtiError>(149)(self.vtable, flag, value)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// This function describes the representation of jlocation used in this VM.
+    ///
+    /// If the returned format is `JVMTI_JLOCATION_JVMBCI`, jlocations can be used as in indices into the array returned by `GetBytecodes`.
+    ///
+    /// Although the greatest functionality is achieved with location information referencing the virtual machine bytecode index,
+    /// the definition of jlocation has intentionally been left unconstrained to allow VM implementations that do not have this information.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetJLocationFormat>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn GetJLocationFormat(&self, format_ptr: *mut jvmtiJlocationFormat) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiJlocationFormat) -> jvmtiError>(128)(self.vtable, format_ptr)
     }
 
-    #[allow(clippy::style)] //TODO later
+    /// Generate a `SampledObjectAlloc` event when objects are allocated.
+    ///
+    /// Each thread keeps a counter of bytes allocated. The event will only be generated when that counter exceeds an average of `sampling_interval` since the last sample.
+    /// Setting `sampling_interval` to 0 will cause an event to be generated by each allocation supported by the system once the new interval is taken into account.
+    /// Note that updating the new sampling interval might take various number of allocations to provoke internal data structure updates.
+    /// Therefore it is important to consider the sampling interval as an average.
+    /// This includes the interval 0, where events might not be generated straight away for each allocation.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#SetHeapSamplingInterval>
+    ///
+    /// # Safety
+    /// all pointer parameters must not be dangling
     pub unsafe fn SetHeapSamplingInterval(&self, sampling_interval: jint) -> jvmtiError {
         self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint) -> jvmtiError>(155)(self.vtable, sampling_interval)
     }
