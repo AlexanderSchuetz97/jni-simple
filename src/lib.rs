@@ -5425,6 +5425,26 @@ impl private::SealedUseCString for *const u8 {
     }
 }
 
+impl UseCString for *mut i8 {
+
+}
+
+impl private::SealedUseCString for *mut i8 {
+    fn use_as_const_c_char<X>(self, param: impl FnOnce(*const c_char) -> X) -> X {
+        self.cast_const().use_as_const_c_char(param)
+    }
+}
+
+impl UseCString for *mut u8 {
+
+}
+
+impl private::SealedUseCString for *mut u8 {
+    fn use_as_const_c_char<X>(self, param: impl FnOnce(*const c_char) -> X) -> X {
+        self.cast_const().use_as_const_c_char(param)
+    }
+}
+
 impl UseCString for Cow<'_, str> {}
 
 impl private::SealedUseCString for Cow<'_, str> {

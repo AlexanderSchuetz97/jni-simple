@@ -11,7 +11,8 @@ readme = "README.md"
 repository = "https://github.com/AlexanderSchuetz97/jni-simple"
 exclude = [
     "example_project/*",
-    "loop_test.sh"
+    "loop_test.sh",
+    "jvmti_shim/target"
 ]
 
 [package.metadata.docs.rs]
