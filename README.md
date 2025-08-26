@@ -235,8 +235,9 @@ If you encounter a bug and need an urgent fix, then open up an issue on github o
 
 ### std
 This feature is enabled by default!
-Adds support for various types in the rust standard library.
-99% of jni-simple does not need the standard library.
+Adds support for some types in the rust standard library.
+
+If you wish to compile your library/launcher app without the rust standard library then disable default features.
 
 ### loadjvm
 This feature is not enabled by default!
@@ -331,6 +332,9 @@ The following types are supported:
 - \* const c_char
   - \* const u8
   - \* const i8
+- \* mut c_char
+  - \* mut u8
+  - \* mut i8
 
 Because JNI expects a zero terminated string, some types are copied if necessary and a zero byte is appended.
 Raw pointer types are assumed to already be zero terminated and are passed as is.
