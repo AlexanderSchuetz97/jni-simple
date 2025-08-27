@@ -29,12 +29,41 @@ jobs:
       - name: Build asserts+loadjvm
         run: cargo build --verbose --features asserts,loadjvm
 
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: cargo fmt
+        run: cargo fmt --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clippy no-std
+        run: cargo clippy --no-default-features -- --deny warnings
+      - name: Clippy no-std+dynlink
+        run: cargo clippy --no-default-features --features dynlink -- --deny warnings
+      - name: Clippy default
+        run: cargo clippy -- --deny warnings
+      - name: Clippy loadjvm
+        run: cargo clippy --features loadjvm -- --deny warnings
+      - name: Clippy dynlink
+        run: cargo clippy --features dynlink -- --deny warnings
+      - name: Clippy asserts
+        run: cargo clippy --features asserts -- --deny warnings
+      - name: Clippy asserts+loadjvm
+        run: cargo clippy --features asserts,loadjvm -- --deny warnings
+      - name: Clippy asserts+dynlink
+        run: cargo clippy --features asserts,dynlink -- --deny warnings
+
   miri:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Test with miri
         run: cargo +nightly miri test --verbose
+
 
   no-jvm-tests:
     runs-on: ubuntu-latest
