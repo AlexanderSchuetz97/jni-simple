@@ -1,5 +1,6 @@
 #[cfg(feature = "loadjvm")]
 #[cfg(feature = "asserts")]
+#[cfg(not(miri))]
 pub mod test {
     use jni_simple::*;
     use std::panic;

@@ -1,4 +1,5 @@
 #[cfg(feature = "loadjvm")]
+#[cfg(not(miri))]
 pub mod test {
     use jni_simple::*;
     use std::ptr::{null, null_mut};

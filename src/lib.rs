@@ -1006,6 +1006,7 @@ impl jtype {
         self.throwable
     }
 
+    /// Sets the jtype to a value, this is always safe.
     #[inline(always)]
     pub fn set<T: Into<Self>>(&mut self, value: T) {
         *self = value.into();
@@ -23258,8 +23259,10 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
 /// use std::ptr::null_mut;
 /// use jni_simple::*;
 ///
+///
 /// //This example fn is roughly equivalent to "java -Xint -Xmx1G -Djava.class.path={absolute_path_to_jar_file} {main_class}" on the command line.
 /// unsafe fn launch_jvm(absolute_path_to_jar_file: &str, main_class: &str) -> ! {
+///     #[cfg(feature = "loadjvm")] //Only needed due to doctest!
 ///     load_jvm_from_java_home().expect("Failed to load jvm");
 ///
 ///     let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &[
