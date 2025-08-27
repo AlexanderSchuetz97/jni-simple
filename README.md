@@ -169,18 +169,20 @@ use jni_simple::{*};
 //This could also be an ordinary native method invoked from java.
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
-  //All error codes are jint, never JNI_OK. See JNI documentation for their meaning when you handle them.
-  //This is a Result<JVMTIEnv, jint>.
-  let jvmti : JVMTIEnv = vm.GetEnv(JVMTI_VERSION_1_2).unwrap();
-  let mut cap = jvmtiCapabilities::default();
-  let _err = jvmti.GetPotentialCapabilities(&mut cap);
-  // Note that this JVMTI environment has much fewer capabilities than its agent counterpart, 
-  // as the JVM may have already performed optimizations that makes some more advanced operations impossible 
-  // by the time our jni library is loaded.
-  // ...
-  // Do what you need to do with jvmti here.
-  
-  return JNI_VERSION_1_8;
+  unsafe {
+    //All error codes are jint, never JNI_OK. See JNI documentation for their meaning when you handle them.
+    //This is a Result<JVMTIEnv, jint>.
+    let jvmti : JVMTIEnv = vm.GetEnv(JVMTI_VERSION_1_2).unwrap();
+    let mut cap = jvmtiCapabilities::default();
+    let _err = jvmti.GetPotentialCapabilities(&mut cap);
+    // Note that this JVMTI environment has much fewer capabilities than its agent counterpart, 
+    // as the JVM may have already performed optimizations that makes some more advanced operations impossible 
+    // by the time our jni library is loaded.
+    // ...
+    // Do what you need to do with jvmti here.
+
+    return JNI_VERSION_1_8;
+  }
 }
 ```
 
