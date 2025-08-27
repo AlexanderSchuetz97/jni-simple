@@ -14,7 +14,9 @@ exclude = [
     "example_project/*",
     "loop_test.sh",
     "jvmti_shim/target",
-    "bitfield_gen/*"
+    "bitfield_gen/*",
+    "java_testcode/*.java",
+    "java_testcode/*.sh",
 ]
 
 [package.metadata.docs.rs]
