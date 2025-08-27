@@ -2,13 +2,15 @@
 #[cfg(not(miri))]
 pub mod test {
     use jni_simple::*;
-    use std::ffi::{c_void, CString};
+    use std::ffi::{CString, c_void};
     use std::ptr::null_mut;
 
     unsafe extern "system" fn t1(env: JNIEnv, _: jclass, param: jobject) {
-        assert!(!param.is_null());
-        let data = env.GetStringUTFChars_as_string(param).unwrap();
-        assert_eq!(data.as_str(), "test_string");
+        unsafe {
+            assert!(!param.is_null());
+            let data = env.GetStringUTFChars_as_string(param).unwrap();
+            assert_eq!(data.as_str(), "test_string");
+        }
     }
 
     unsafe extern "system" fn t2(_env: JNIEnv, _: jclass, param: jdouble) {

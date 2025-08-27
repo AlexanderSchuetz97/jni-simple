@@ -3,27 +3,29 @@
 pub mod test {
     use jni_simple::jvmtiEventMode::JVMTI_ENABLE;
     use jni_simple::{
-        jboolean, jmethodID, jthread, jvalue, jvmtiCapabilities, jvmtiEvent, jvmtiEventCallbacks, load_jvm_from_java_home, JNIEnv, JNI_CreateJavaVM_with_string_args, JVMTIEnv,
-        JavaVM, JNI_VERSION_1_8, JVMTI_VERSION_1_2,
+        JNI_CreateJavaVM_with_string_args, JNI_VERSION_1_8, JNIEnv, JVMTI_VERSION_1_2, JVMTIEnv, JavaVM, jboolean, jmethodID, jthread, jvalue, jvmtiCapabilities, jvmtiEvent,
+        jvmtiEventCallbacks, load_jvm_from_java_home,
     };
-    use std::ffi::{c_void, CStr};
+    use std::ffi::{CStr, c_void};
     use std::ptr::{null, null_mut};
+    use std::sync::OnceLock;
     use std::sync::atomic::Ordering::SeqCst;
     use std::sync::atomic::{AtomicI64, AtomicUsize};
-    use std::sync::OnceLock;
 
     static DEBUGGER: OnceLock<JVMTIEnv> = OnceLock::new();
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
     static LAST_VALUE: AtomicI64 = AtomicI64::new(0);
 
     unsafe extern "C" fn shim_agent(vm: JavaVM, _options: *const char, _reserved: *mut c_void) -> i32 {
-        let jvmti = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2).expect("failed to get JVMTI environment");
+        unsafe {
+            let jvmti = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2).expect("failed to get JVMTI environment");
 
-        let mut cap = jvmtiCapabilities::default();
-        cap.set_can_generate_method_exit_events(true);
-        assert!(jvmti.AddCapabilities(&cap).is_ok());
-        _ = DEBUGGER.set(jvmti);
-        0
+            let mut cap = jvmtiCapabilities::default();
+            cap.set_can_generate_method_exit_events(true);
+            assert!(jvmti.AddCapabilities(&cap).is_ok());
+            _ = DEBUGGER.set(jvmti);
+            0
+        }
     }
     extern "system" fn blah(jvmti_env: JVMTIEnv, _jni_env: JNIEnv, _thread: jthread, method: jmethodID, _was_popped_by_exception: jboolean, return_value: jvalue) {
         unsafe {

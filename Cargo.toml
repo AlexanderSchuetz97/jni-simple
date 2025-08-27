@@ -1,7 +1,8 @@
 [package]
 name = "jni-simple"
 version = "0.3.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.87.0"
 license = "MIT OR Apache-2.0"
 authors = ["Alexander Schütz <aschuetz@protonmail.com>"]
 keywords = ["jni", "java", "ffi", "jvmti"]

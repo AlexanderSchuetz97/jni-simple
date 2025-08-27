@@ -9,67 +9,75 @@ pub mod test {
     static MUTEX: Mutex<()> = Mutex::new(());
 
     unsafe fn get_env() -> JNIEnv {
-        if !is_jvm_loaded() {
-            load_jvm_from_java_home().expect("failed to load jvm");
-        }
-
-        let thr = JNI_GetCreatedJavaVMs_first().expect("failed to get jvm");
-        if thr.is_none() {
-            //let args: Vec<String> = vec!["-Xcheck:jni".to_string()];
-            //let args: Vec<String> = vec!["-Xint".to_string()];
-            let args: Vec<String> = vec![];
-
-            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create jvm");
-            return env;
-        }
-
-        let jvm = thr.unwrap().clone();
-        let env = jvm.GetEnv(JNI_VERSION_1_8);
-        let env = env.unwrap_or_else(|c| {
-            if c != JNI_EDETACHED {
-                panic!("JVM ERROR {}", c);
+        unsafe {
+            if !is_jvm_loaded() {
+                load_jvm_from_java_home().expect("failed to load jvm");
             }
 
-            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, (), null_mut()).expect("failed to attach thread")
-        });
+            let thr = JNI_GetCreatedJavaVMs_first().expect("failed to get jvm");
+            if thr.is_none() {
+                //let args: Vec<String> = vec!["-Xcheck:jni".to_string()];
+                //let args: Vec<String> = vec!["-Xint".to_string()];
+                let args: Vec<String> = vec![];
 
-        env
+                let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create jvm");
+                return env;
+            }
+
+            let jvm = thr.unwrap().clone();
+            let env = jvm.GetEnv(JNI_VERSION_1_8);
+            let env = env.unwrap_or_else(|c| {
+                if c != JNI_EDETACHED {
+                    panic!("JVM ERROR {}", c);
+                }
+
+                jvm.AttachCurrentThread_str(JNI_VERSION_1_8, (), null_mut()).expect("failed to attach thread")
+            });
+
+            env
+        }
     }
 
     unsafe fn get_test_class() -> jclass {
-        let env = get_env();
-        let class_loaded = env.FindClass("FieldTests");
-        if !class_loaded.is_null() {
+        unsafe {
+            let env = get_env();
+            let class_loaded = env.FindClass("FieldTests");
+            if !class_loaded.is_null() {
+                let class_global = env.NewGlobalRef(class_loaded);
+                env.DeleteLocalRef(class_loaded);
+                return class_global;
+            }
+
+            env.ExceptionClear(); //Clear ClassNotFoundException
+            let class_blob = include_bytes!("../java_testcode/FieldTests.class");
+            let class_loaded = env.DefineClass_from_slice("FieldTests", null_mut(), class_blob);
+            if class_loaded.is_null() {
+                env.ExceptionDescribe();
+                env.FatalError("failed to load class");
+            }
+
             let class_global = env.NewGlobalRef(class_loaded);
             env.DeleteLocalRef(class_loaded);
-            return class_global;
+            class_global
         }
-
-        env.ExceptionClear(); //Clear ClassNotFoundException
-        let class_blob = include_bytes!("../java_testcode/FieldTests.class");
-        let class_loaded = env.DefineClass_from_slice("FieldTests", null_mut(), class_blob);
-        if class_loaded.is_null() {
-            env.ExceptionDescribe();
-            env.FatalError("failed to load class");
-        }
-
-        let class_global = env.NewGlobalRef(class_loaded);
-        env.DeleteLocalRef(class_loaded);
-        class_global
     }
     unsafe fn get_test_obj() -> jobject {
-        let env = get_env();
-        let tc = get_test_class();
-        let local_obj = env.GetStaticFieldID(tc, "staticInstance", "LFieldTests;");
-        let test_obj = env.GetStaticObjectField(tc, local_obj);
-        test_obj
+        unsafe {
+            let env = get_env();
+            let tc = get_test_class();
+            let local_obj = env.GetStaticFieldID(tc, "staticInstance", "LFieldTests;");
+            let test_obj = env.GetStaticObjectField(tc, local_obj);
+            test_obj
+        }
     }
     unsafe fn reset_it() {
-        let env = get_env();
-        let class = get_test_class();
-        let reset = env.GetStaticMethodID(class, "reset", "()V");
-        env.CallStaticVoidMethod0(class, reset);
-        env.DeleteGlobalRef(class);
+        unsafe {
+            let env = get_env();
+            let class = get_test_class();
+            let reset = env.GetStaticMethodID(class, "reset", "()V");
+            env.CallStaticVoidMethod0(class, reset);
+            env.DeleteGlobalRef(class);
+        }
     }
     //unsafe fn dump_it() {
     //    let env = get_env();
@@ -80,21 +88,25 @@ pub mod test {
     //}
 
     unsafe fn add_it() {
-        let env = get_env();
-        let class = get_test_class();
-        let reset = env.GetStaticMethodID(class, "add", "()V");
-        env.CallStaticVoidMethod0(class, reset);
-        env.DeleteGlobalRef(class);
+        unsafe {
+            let env = get_env();
+            let class = get_test_class();
+            let reset = env.GetStaticMethodID(class, "add", "()V");
+            env.CallStaticVoidMethod0(class, reset);
+            env.DeleteGlobalRef(class);
+        }
     }
     unsafe fn new_global_obj() -> jobject {
-        let env = get_env();
-        let class = env.FindClass("java/lang/Object");
-        let meth = env.GetMethodID(class, "<init>", "()V");
-        let obj = env.NewObjectA(class, meth, null_mut());
-        let gref = env.NewGlobalRef(obj);
-        env.DeleteLocalRef(obj);
-        env.DeleteLocalRef(class);
-        gref
+        unsafe {
+            let env = get_env();
+            let class = env.FindClass("java/lang/Object");
+            let meth = env.GetMethodID(class, "<init>", "()V");
+            let obj = env.NewObjectA(class, meth, null_mut());
+            let gref = env.NewGlobalRef(obj);
+            env.DeleteLocalRef(obj);
+            env.DeleteLocalRef(class);
+            gref
+        }
     }
 
     #[test]

@@ -61,26 +61,29 @@ use std::thread;
 use std::time::Duration;
 use std::io::stdout;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
-    //All error codes are jint, never JNI_OK. See JNI documentation for their meaning when you handle them.
-    //This is a Result<JNIEnv, jint>.
-    let env : JNIEnv = vm.GetEnv(JNI_VERSION_1_8).unwrap();
+    unsafe {
+        //All error codes are jint, never JNI_OK. See JNI documentation for their meaning when you handle them.
+        //This is a Result<JNIEnv, jint>.
+        let env: JNIEnv = vm.GetEnv(JNI_VERSION_1_8).unwrap();
 
 
-    //This code does not check for failure or exceptions checks or "checks" for success in general.
-    let sys = env.FindClass("java/lang/System");
-    let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
-    let nanos = env.CallStaticLongMethodA(sys, nano_time, null());
-    println!("RUST: JNI_OnLoad {}", nanos);
-    stdout().flush().unwrap();
+        //This code does not check for failure or exceptions checks or "checks" for success in general.
+        let sys = env.FindClass("java/lang/System");
+        let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
+        let nanos = env.CallStaticLongMethodA(sys, nano_time, null());
+        println!("RUST: JNI_OnLoad {}", nanos);
+        stdout().flush().unwrap();
 
-    return JNI_VERSION_1_8;
+        return JNI_VERSION_1_8;
+    }
 }
 
 //Would be called from java. the signature in java is org.example.JNITest#test()
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_org_example_JNITest_test(env: JNIEnv, _class: jclass) {
+  unsafe {
     //This code does not check for failure or exceptions checks or "checks" for success in general.
     let sys = env.FindClass("java/lang/System");
     let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
@@ -89,24 +92,25 @@ pub unsafe extern "system" fn Java_org_example_JNITest_test(env: JNIEnv, _class:
     stdout().flush().unwrap();
 
 
-    thread::spawn(|| {
-        thread::sleep(Duration::from_millis(2000));
+    thread::spawn(|| unsafe {
+      thread::sleep(Duration::from_millis(2000));
 
-        //This can be done anywhere in the application at any time.
-        let vms : JavaVM = jni_simple::JNI_GetCreatedJavaVMs_first().unwrap() // the error code is once again a jint.
+      //This can be done anywhere in the application at any time.
+      let vms : JavaVM = jni_simple::JNI_GetCreatedJavaVMs_first().unwrap() // the error code is once again a jint.
               .unwrap(); //There can only be one JavaVM per process as per oracle spec.
 
-        //You could also provide a thread name or thread group here.
-        let mut attach_args = JavaVMAttachArgs::new(JNI_VERSION_1_8, null(), null_mut());
-        vms.AttachCurrentThread(&mut attach_args).unwrap();
-        let env = vms.GetEnv::<JNIEnv>(JNI_VERSION_1_8).unwrap();
-        let sys = env.FindClass("java/lang/System");
-        let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
-        let nanos = env.CallStaticLongMethodA(sys, nano_time, null());
-        println!("RUST thread delayed: Java_org_example_JNITest_test {}", nanos);
-        stdout().flush().unwrap();
-        vms.DetachCurrentThread();
+      //You could also provide a thread name or thread group here.
+      let mut attach_args = JavaVMAttachArgs::new(JNI_VERSION_1_8, null(), null_mut());
+      vms.AttachCurrentThread(&mut attach_args).unwrap();
+      let env = vms.GetEnv::<JNIEnv>(JNI_VERSION_1_8).unwrap();
+      let sys = env.FindClass("java/lang/System");
+      let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
+      let nanos = env.CallStaticLongMethodA(sys, nano_time, null());
+      println!("RUST thread delayed: Java_org_example_JNITest_test {}", nanos);
+      stdout().flush().unwrap();
+      vms.DetachCurrentThread();
     });
+  }
 }
 ```
 ### Writing a Java Agent (JVMTI)
@@ -128,26 +132,28 @@ use jni_simple::*;
 
 #[unsafe(no_mangle)]
 unsafe extern "system" fn Agent_OnLoad(vm: JavaVM, _command_line_options: *const char, _: *mut c_void) -> i32 {
-  let Ok(jvmti) = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2) else {
-    eprintln!("Agent_OnLoad failed to get JVMTI_VERSION_1_2 environment");
-    return -1;
-  };
+  unsafe {
+    let Ok(jvmti) = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2) else {
+      eprintln!("Agent_OnLoad failed to get JVMTI_VERSION_1_2 environment");
+      return -1;
+    };
 
-  /// This is just an example, do whatever you want to do with JVMTI here.
-  let mut cap = jvmtiCapabilities::default();
-  let err = jvmti.GetPotentialCapabilities(&mut cap);
-  if err != JVMTI_ERROR_NONE {
-    eprintln!("Agent_OnLoad failed to get potential capabilities error {err}");
-    return -1;
+    /// This is just an example, do whatever you want to do with JVMTI here.
+    let mut cap = jvmtiCapabilities::default();
+    let err = jvmti.GetPotentialCapabilities(&mut cap);
+    if err != JVMTI_ERROR_NONE {
+      eprintln!("Agent_OnLoad failed to get potential capabilities error {err}");
+      return -1;
+    }
+
+    if !cap.can_redefine_any_class() {
+      eprintln!("Agent_OnLoad error: JavaVM cannot redefine classes");
+      return -1;
+    }
+
+    //....
+    0
   }
-
-  if !cap.can_redefine_any_class() {
-    eprintln!("Agent_OnLoad error: JavaVM cannot redefine classes");
-    return -1;
-  }
-
-  //....
-  0
 }
 ```
 
@@ -161,7 +167,7 @@ use std::ffi::c_void;
 use jni_simple::{*};
 
 //This could also be an ordinary native method invoked from java.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
   //All error codes are jint, never JNI_OK. See JNI documentation for their meaning when you handle them.
   //This is a Result<JVMTIEnv, jint>.
@@ -347,31 +353,34 @@ in the middle of the string, then this 0-byte effectively truncates the string a
 
 Example:
 ```rust
+#![allow(non_snake_case)]
 use std::ptr::null;
 use std::ffi::c_char;
 use jni_simple::{*};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_some_package_ClassName_method(env: JNIEnv, class: jclass) {
+  unsafe {
     env.FindClass("java/lang/String");
     env.FindClass("java/lang/String".as_bytes());
     env.FindClass("java/lang/String".to_string());
     env.FindClass("java/lang/String\0".as_ptr());
     env.FindClass("java/lang/String\0garbage data that is ignored");
-    
+
     let exception = env.FindClass("java/lang/Exception");
     env.ThrowNew(exception, "This is a message");
-    
+
     //This fn accepts different types of raw pointers, so we unfortunately have to specify the type here.
     env.ThrowNew(exception, null::<c_char>());
     //To make this a bit shorter, you can also use the unit type.
     //This is equivalent to passing null::<c_char>()
     env.ThrowNew(exception, ());
-    
-    
+
+
     // !!! WARNING THIS WOULD BE UB !!!
     //This is UB because the string is not zero terminated and passed as a raw pointer and therefore assumed to be zero terminated.
     env.FindClass("java/lang/String".as_ptr());
+  }
 }
 ```
 
@@ -405,10 +414,11 @@ As you can see below, calling Variant 2 is a bit unwieldy,
 so it is probably the better choice to use Variant 1 of up-calling for most smaller functions.
 Example:
 ```rust
+#![allow(non_snake_case)]
 use std::ptr::null;
 use jni_simple::{*};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_some_package_ClassName_method(env: JNIEnv, class: jclass) {
     let meth0 = env.GetStaticMethodID(class, "methodWith0IntParams", "()V");
     let meth1 = env.GetStaticMethodID(class, "methodWith1IntParams", "(I)V");

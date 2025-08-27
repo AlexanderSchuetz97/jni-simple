@@ -47,7 +47,7 @@ use alloc::vec::Vec;
 
 use crate::private::{SealedAsJNILinkage, SealedEnvVTable};
 use core::cmp::Ordering;
-use core::ffi::{c_char, c_int, c_uchar, c_void, CStr};
+use core::ffi::{CStr, c_char, c_int, c_uchar, c_void};
 use core::fmt::{Debug, Display, Formatter};
 use core::hash::{Hash, Hasher};
 use core::ptr::null;
@@ -913,7 +913,7 @@ impl jtype {
     #[inline(always)]
     #[must_use]
     pub const unsafe fn long(&self) -> jlong {
-        self.long
+        unsafe { self.long }
     }
 
     /// read this jtype as jint
@@ -922,7 +922,7 @@ impl jtype {
     #[inline(always)]
     #[must_use]
     pub const unsafe fn int(&self) -> jint {
-        self.int
+        unsafe { self.int }
     }
 
     /// read this jtype as jshort
@@ -931,7 +931,7 @@ impl jtype {
     #[inline(always)]
     #[must_use]
     pub const unsafe fn short(&self) -> jshort {
-        self.short
+        unsafe { self.short }
     }
 
     /// read this jtype as jchar
@@ -940,7 +940,7 @@ impl jtype {
     #[inline(always)]
     #[must_use]
     pub const unsafe fn char(&self) -> jchar {
-        self.char
+        unsafe { self.char }
     }
 
     /// read this jtype as jbyte
@@ -949,7 +949,7 @@ impl jtype {
     #[inline(always)]
     #[must_use]
     pub const unsafe fn byte(&self) -> jbyte {
-        self.byte
+        unsafe { self.byte }
     }
 
     /// read this jtype as jboolean
@@ -958,7 +958,7 @@ impl jtype {
     #[inline(always)]
     #[must_use]
     pub const unsafe fn boolean(&self) -> jboolean {
-        self.boolean
+        unsafe { self.boolean }
     }
 
     /// read this jtype as jfloat
@@ -967,7 +967,7 @@ impl jtype {
     #[inline(always)]
     #[must_use]
     pub const unsafe fn float(&self) -> jfloat {
-        self.float
+        unsafe { self.float }
     }
 
     /// read this jtype as jdouble
@@ -976,7 +976,7 @@ impl jtype {
     #[inline(always)]
     #[must_use]
     pub const unsafe fn double(&self) -> jdouble {
-        self.double
+        unsafe { self.double }
     }
 
     /// read this jtype as jobject
@@ -985,7 +985,7 @@ impl jtype {
     #[inline(always)]
     #[must_use]
     pub const unsafe fn object(&self) -> jobject {
-        self.object
+        unsafe { self.object }
     }
 
     /// read this jtype as jclass
@@ -994,7 +994,7 @@ impl jtype {
     #[inline(always)]
     #[must_use]
     pub const unsafe fn class(&self) -> jclass {
-        self.class
+        unsafe { self.class }
     }
 
     /// read this jtype as jthrowable
@@ -1003,7 +1003,7 @@ impl jtype {
     #[inline(always)]
     #[must_use]
     pub const unsafe fn throwable(&self) -> jthrowable {
-        self.throwable
+        unsafe { self.throwable }
     }
 
     /// Sets the jtype to a value, this is always safe.
@@ -2414,7 +2414,7 @@ impl JVMTIEnv {
     ///
     #[inline(always)]
     unsafe fn jvmti<X>(&self, index: usize) -> X {
-        core::mem::transmute_copy(&(self.vtable.read_volatile().add(index).read_volatile()))
+        unsafe { core::mem::transmute_copy(&(self.vtable.read_volatile().add(index).read_volatile())) }
     }
 
     /// Returns the raw jvmti vtable.
@@ -2435,7 +2435,7 @@ impl JVMTIEnv {
     /// JVM Implementation dependant
     ///
     pub unsafe fn GetVersionNumber(&self, version_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint) -> jvmtiError>(87)(self.vtable, version_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint) -> jvmtiError>(87)(self.vtable, version_ptr) }
     }
 
     /// Return the current phase of VM execution.
@@ -2459,7 +2459,7 @@ impl JVMTIEnv {
     /// JVM Implementation dependant
     ///
     pub unsafe fn GetPhase(&self, phase: *mut jvmtiPhase) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut c_int) -> jvmtiError>(132)(self.vtable, phase)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut c_int) -> jvmtiError>(132)(self.vtable, phase) }
     }
 
     /// Allocate an area of memory through the JVM TI allocator.
@@ -2472,7 +2472,7 @@ impl JVMTIEnv {
     /// The receiver pointer must not be dangling.
     ///
     pub unsafe fn Allocate(&self, size: jlong, mem_ptr: *mut *mut c_uchar) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jlong, *mut *mut c_uchar) -> jvmtiError>(45)(self.vtable, size, mem_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jlong, *mut *mut c_uchar) -> jvmtiError>(45)(self.vtable, size, mem_ptr) }
     }
 
     /// Deallocate mem using the JVM TI allocator.
@@ -2487,7 +2487,7 @@ impl JVMTIEnv {
     /// Naturally use after free problems may arise if the memory is used after this function is called.
     ///
     pub unsafe fn Deallocate<T>(&self, mem: *const T) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_uchar) -> jvmtiError>(46)(self.vtable, mem.cast())
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_uchar) -> jvmtiError>(46)(self.vtable, mem.cast()) }
     }
 
     /// Get the state of a thread.
@@ -2499,7 +2499,7 @@ impl JVMTIEnv {
     /// The `thread_state_ptr` must not be a dangling pointer.
     ///
     pub unsafe fn GetThreadState(&self, thread: jthread, thread_state_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jint) -> jvmtiError>(16)(self.vtable, thread, thread_state_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jint) -> jvmtiError>(16)(self.vtable, thread, thread_state_ptr) }
     }
 
     /// Get the current thread.
@@ -2514,7 +2514,7 @@ impl JVMTIEnv {
     /// The thread receiver pointer must not be dangling.
     ///
     pub unsafe fn GetCurrentThread(&self, thread: *mut jthread) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jthread) -> jvmtiError>(17)(self.vtable, thread)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jthread) -> jvmtiError>(17)(self.vtable, thread) }
     }
 
     /// Get all live platform threads that are attached to the VM.
@@ -2530,7 +2530,7 @@ impl JVMTIEnv {
     /// All pointer parameters must not be dangling.
     ///
     pub unsafe fn GetAllThreads(&self, threads_count_ptr: *mut jint, threads_ptr: *mut *mut jthread) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jthread) -> jvmtiError>(3)(self.vtable, threads_count_ptr, threads_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jthread) -> jvmtiError>(3)(self.vtable, threads_count_ptr, threads_ptr) }
     }
 
     /// Suspend the specified thread.
@@ -2545,7 +2545,7 @@ impl JVMTIEnv {
     /// The thread must be a valid strong reference to a thread.
     ///
     pub unsafe fn SuspendThread(&self, thread: jthread) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread) -> jvmtiError>(4)(self.vtable, thread)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread) -> jvmtiError>(4)(self.vtable, thread) }
     }
 
     /// Suspend the `request_count` threads specified in the `request_list` array.
@@ -2563,7 +2563,7 @@ impl JVMTIEnv {
     /// None of the pointer parameters must be dangling.
     ///
     pub unsafe fn SuspendThreadList(&self, request_count: jint, request_list: *const jthread, results: *mut jvmtiError) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jthread, *mut jvmtiError) -> jvmtiError>(91)(self.vtable, request_count, request_list, results)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jthread, *mut jvmtiError) -> jvmtiError>(91)(self.vtable, request_count, request_list, results) }
     }
 
     /// Suspend all virtual threads except those in the exception list.
@@ -2578,7 +2578,7 @@ impl JVMTIEnv {
     /// `except_list` must not be a dangling pointer.
     ///
     pub unsafe fn SuspendAllVirtualThreads(&self, except_count: jint, except_list: *const jthread) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jthread) -> jvmtiError>(117)(self.vtable, except_count, except_list)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jthread) -> jvmtiError>(117)(self.vtable, except_count, except_list) }
     }
 
     /// Resume a suspended thread.
@@ -2592,7 +2592,7 @@ impl JVMTIEnv {
     /// thread must refer to a valid strong reference to a thread.
     ///
     pub unsafe fn ResumeThread(&self, thread: jthread) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread) -> jvmtiError>(5)(self.vtable, thread)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread) -> jvmtiError>(5)(self.vtable, thread) }
     }
 
     /// Resume the `request_count` threads specified in the `request_list` array.
@@ -2606,7 +2606,7 @@ impl JVMTIEnv {
     /// None of the pointer parameters must be dangling.
     ///
     pub unsafe fn ResumeThreadList(&self, request_count: jint, request_list: *const jthread, results: *mut jvmtiError) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jthread, *mut jvmtiError) -> jvmtiError>(92)(self.vtable, request_count, request_list, results)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jthread, *mut jvmtiError) -> jvmtiError>(92)(self.vtable, request_count, request_list, results) }
     }
 
     /// Resume all virtual threads except those in the exception list.
@@ -2621,7 +2621,7 @@ impl JVMTIEnv {
     /// `except_list` must not be a dangling pointer.
     ///
     pub unsafe fn ResumeAllVirtualThreads(&self, except_count: jint, except_list: *const jthread) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jthread) -> jvmtiError>(118)(self.vtable, except_count, except_list)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jthread) -> jvmtiError>(118)(self.vtable, except_count, except_list) }
     }
 
     /// Send the specified asynchronous exception to the specified thread.
@@ -2633,7 +2633,7 @@ impl JVMTIEnv {
     /// exception must refer to a valid strong reference to a object.
     ///
     pub unsafe fn StopThread(&self, thread: jthread, exception: jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jobject) -> jvmtiError>(6)(self.vtable, thread, exception)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jobject) -> jvmtiError>(6)(self.vtable, thread, exception) }
     }
 
     /// Interrupt the specified thread (similar to java.lang.Thread.interrupt).
@@ -2644,7 +2644,7 @@ impl JVMTIEnv {
     /// thread must refer to a valid strong reference to a thread.
     ///
     pub unsafe fn InterruptThread(&self, thread: jthread) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread) -> jvmtiError>(7)(self.vtable, thread)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread) -> jvmtiError>(7)(self.vtable, thread) }
     }
 
     /// Get thread information. The fields of the jvmtiThreadInfo structure are filled in with details of the specified thread.
@@ -2656,7 +2656,7 @@ impl JVMTIEnv {
     /// `info_ptr` must not be dangling.
     ///
     pub unsafe fn GetThreadInfo(&self, thread: jthread, info_ptr: *mut jvmtiThreadInfo) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jvmtiThreadInfo) -> jvmtiError>(8)(self.vtable, thread, info_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jvmtiThreadInfo) -> jvmtiError>(8)(self.vtable, thread, info_ptr) }
     }
 
     /// Get information about the monitors owned by the specified thread.
@@ -2668,12 +2668,14 @@ impl JVMTIEnv {
     /// pointer parameters must not be dangling.
     ///
     pub unsafe fn GetOwnedMonitorInfo(&self, thread: jthread, owned_monitor_count_ptr: *mut jint, owned_monitors_ptr: *mut *mut jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, crate::jthread, *mut jint, *mut *mut jobject) -> jvmtiError>(9)(
-            self.vtable,
-            thread,
-            owned_monitor_count_ptr,
-            owned_monitors_ptr,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, crate::jthread, *mut jint, *mut *mut jobject) -> jvmtiError>(9)(
+                self.vtable,
+                thread,
+                owned_monitor_count_ptr,
+                owned_monitors_ptr,
+            )
+        }
     }
 
     /// Get information about the monitors owned by the specified thread and the depth of the stack frame which locked them.
@@ -2685,12 +2687,14 @@ impl JVMTIEnv {
     /// pointer parameters must not be dangling.
     ///
     pub unsafe fn GetOwnedMonitorStackDepthInfo(&self, thread: jthread, monitor_info_count_ptr: *mut jint, monitor_info_ptr: *mut *mut jvmtiMonitorStackDepthInfo) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jint, *mut *mut jvmtiMonitorStackDepthInfo) -> jvmtiError>(152)(
-            self.vtable,
-            thread,
-            monitor_info_count_ptr,
-            monitor_info_ptr,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jint, *mut *mut jvmtiMonitorStackDepthInfo) -> jvmtiError>(152)(
+                self.vtable,
+                thread,
+                monitor_info_count_ptr,
+                monitor_info_ptr,
+            )
+        }
     }
 
     /// Get the object, if any, whose monitor the specified thread is waiting to enter or waiting to regain through java.lang.Object.wait.
@@ -2702,7 +2706,7 @@ impl JVMTIEnv {
     /// `monitor_ptr` parameter must not be dangling.
     ///
     pub unsafe fn GetCurrentContendedMonitor(&self, thread: jthread, monitor_ptr: *mut jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jobject) -> jvmtiError>(10)(self.vtable, thread, monitor_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jobject) -> jvmtiError>(10)(self.vtable, thread, monitor_ptr) }
     }
 
     /// Starts the execution of an agent thread. with the specified native function.
@@ -2719,7 +2723,7 @@ impl JVMTIEnv {
     /// `proc` must refer to a extern system fn with a matching signature.
     ///
     pub unsafe fn RunAgentThread(&self, thread: jthread, proc: jvmtiStartFunction, arg: *mut c_void, priority: jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jvmtiStartFunction, *mut c_void, jint) -> jvmtiError>(11)(self.vtable, thread, proc, arg, priority)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jvmtiStartFunction, *mut c_void, jint) -> jvmtiError>(11)(self.vtable, thread, proc, arg, priority) }
     }
 
     /// The VM stores a pointer value associated with each environment-thread pair.
@@ -2737,7 +2741,7 @@ impl JVMTIEnv {
     /// `thread` must refer to a valid strong reference to a thread.
     ///
     pub unsafe fn SetThreadLocalStorage(&self, thread: jthread, data: *mut c_void) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *const c_void) -> jvmtiError>(102)(self.vtable, thread, data)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *const c_void) -> jvmtiError>(102)(self.vtable, thread, data) }
     }
 
     /// Called by the agent to get the value of the JVM TI thread-local storage.
@@ -2749,7 +2753,7 @@ impl JVMTIEnv {
     /// `data_ptr` must not be dangling.
     ///
     pub unsafe fn GetThreadLocalStorage(&self, thread: jthread, data_ptr: *mut *mut c_void) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut *mut c_void) -> jvmtiError>(101)(self.vtable, thread, data_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut *mut c_void) -> jvmtiError>(101)(self.vtable, thread, data_ptr) }
     }
 
     /// Return all top-level (parentless) thread groups in the VM.
@@ -2760,7 +2764,7 @@ impl JVMTIEnv {
     /// all pointer parameters must not be dangling.
     ///
     pub unsafe fn GetTopThreadGroups(&self, group_count_ptr: *mut jint, groups_ptr: *mut *mut jthreadGroup) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jthreadGroup) -> jvmtiError>(12)(self.vtable, group_count_ptr, groups_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jthreadGroup) -> jvmtiError>(12)(self.vtable, group_count_ptr, groups_ptr) }
     }
 
     /// Return all top-level (parentless) thread groups in the VM.
@@ -2771,7 +2775,7 @@ impl JVMTIEnv {
     /// all pointer parameters must not be dangling.
     ///
     pub unsafe fn GetThreadGroupInfo(&self, group: jthreadGroup, info_ptr: *mut jvmtiThreadGroupInfo) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthreadGroup, *mut jvmtiThreadGroupInfo) -> jvmtiError>(13)(self.vtable, group, info_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthreadGroup, *mut jvmtiThreadGroupInfo) -> jvmtiError>(13)(self.vtable, group, info_ptr) }
     }
 
     /// Get the live platform threads and the child thread groups in this thread group. Virtual threads are not returned by this function.
@@ -2789,14 +2793,16 @@ impl JVMTIEnv {
         group_count_ptr: *mut jint,
         groups_ptr: *mut *mut jthreadGroup,
     ) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthreadGroup, *mut jint, *mut *mut jthread, *mut jint, *mut *mut jthreadGroup) -> jvmtiError>(14)(
-            self.vtable,
-            group,
-            thread_count_ptr,
-            threads_ptr,
-            group_count_ptr,
-            groups_ptr,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthreadGroup, *mut jint, *mut *mut jthread, *mut jint, *mut *mut jthreadGroup) -> jvmtiError>(14)(
+                self.vtable,
+                group,
+                thread_count_ptr,
+                threads_ptr,
+                group_count_ptr,
+                groups_ptr,
+            )
+        }
     }
 
     /// Returns via `capabilities_ptr` the JVM TI features that can potentially be possessed by this environment at this time.
@@ -2817,7 +2823,7 @@ impl JVMTIEnv {
     /// `capabilities_ptr` pointer must not be dangling.
     ///
     pub unsafe fn GetPotentialCapabilities(&self, capabilities_ptr: *mut jvmtiCapabilities) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiCapabilities) -> jvmtiError>(139)(self.vtable, capabilities_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiCapabilities) -> jvmtiError>(139)(self.vtable, capabilities_ptr) }
     }
 
     /// Returns via `capabilities_ptr` the optional JVM TI features which this environment currently possesses.
@@ -2833,7 +2839,7 @@ impl JVMTIEnv {
     /// `capabilities_ptr` pointer must not be dangling.
     ///
     pub unsafe fn GetCapabilities(&self, capabilities_ptr: *mut jvmtiCapabilities) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiCapabilities) -> jvmtiError>(88)(self.vtable, capabilities_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiCapabilities) -> jvmtiError>(88)(self.vtable, capabilities_ptr) }
     }
 
     /// Set new capabilities by adding the capabilities whose values are set to one in `capabilities_ptr`.
@@ -2847,7 +2853,7 @@ impl JVMTIEnv {
     /// `capabilities_ptr` pointer must not be dangling.
     ///
     pub unsafe fn AddCapabilities(&self, capabilities_ptr: *const jvmtiCapabilities) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiCapabilities) -> jvmtiError>(141)(self.vtable, capabilities_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiCapabilities) -> jvmtiError>(141)(self.vtable, capabilities_ptr) }
     }
 
     /// Relinquish the capabilities whose values are set to one in `capabilities_ptr`.
@@ -2862,7 +2868,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `capabilities_ptr` pointer must not be dangling.
     pub unsafe fn RelinquishCapabilities(&self, capabilities_ptr: *const jvmtiCapabilities) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiCapabilities) -> jvmtiError>(142)(self.vtable, capabilities_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiCapabilities) -> jvmtiError>(142)(self.vtable, capabilities_ptr) }
     }
 
     /// Get the number of frames currently in the specified thread's call stack.
@@ -2876,7 +2882,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `count_ptr` pointer must not be dangling.
     pub unsafe fn GetFrameCount(&self, thread: jthread, count_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jint) -> jvmtiError>(15)(self.vtable, thread, count_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jint) -> jvmtiError>(15)(self.vtable, thread, count_ptr) }
     }
 
     /// Pop the current frame of thread's stack. Popping a frame takes you to the previous frame.
@@ -2907,7 +2913,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `thread` must refer to a valid strong reference to a thread.
     pub unsafe fn PopFrame(&self, thread: jthread) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread) -> jvmtiError>(79)(self.vtable, thread)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread) -> jvmtiError>(79)(self.vtable, thread) }
     }
 
     /// For a Java programming language frame, return the location of the instruction currently executing.
@@ -2917,7 +2923,9 @@ impl JVMTIEnv {
     /// # Safety
     /// `method_ptr` and `location_ptr` pointer must not be dangling.
     pub unsafe fn GetFrameLocation(&self, thread: jthread, depth: jint, method_ptr: *mut jmethodID, location_ptr: *mut jlocation) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, *mut jmethodID, *mut jlocation) -> jvmtiError>(18)(self.vtable, thread, depth, method_ptr, location_ptr)
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, *mut jmethodID, *mut jlocation) -> jvmtiError>(18)(self.vtable, thread, depth, method_ptr, location_ptr)
+        }
     }
 
     /// When the frame that is currently at depth is popped from the stack,
@@ -2931,7 +2939,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `thread` must refer to a valid strong reference to a thread.
     pub unsafe fn NotifyFramePop(&self, thread: jthread, depth: jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint) -> jvmtiError>(19)(self.vtable, thread, depth)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint) -> jvmtiError>(19)(self.vtable, thread, depth) }
     }
 
     /// This function can be used to return from a method whose result type is Object or a subclass of Object.
@@ -2942,7 +2950,7 @@ impl JVMTIEnv {
     /// `thread` must refer to a valid strong reference to a thread.
     /// `value` must be a valid strong reference to a object or null.
     pub unsafe fn ForceEarlyReturnObject(&self, thread: jthread, value: jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jobject) -> jvmtiError>(80)(self.vtable, thread, value)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jobject) -> jvmtiError>(80)(self.vtable, thread, value) }
     }
 
     /// This function can be used to return from a method whose result type is int, short, char, byte, or boolean.
@@ -2952,7 +2960,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `thread` must refer to a valid strong reference to a thread.
     pub unsafe fn ForceEarlyReturnInt(&self, thread: jthread, value: jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint) -> jvmtiError>(81)(self.vtable, thread, value)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint) -> jvmtiError>(81)(self.vtable, thread, value) }
     }
 
     /// This function can be used to return from a method whose result type is long.
@@ -2962,7 +2970,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `thread` must refer to a valid strong reference to a thread.
     pub unsafe fn ForceEarlyReturnLong(&self, thread: jthread, value: jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jlong) -> jvmtiError>(82)(self.vtable, thread, value)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jlong) -> jvmtiError>(82)(self.vtable, thread, value) }
     }
 
     /// This function can be used to return from a method whose result type is float.
@@ -2972,7 +2980,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `thread` must refer to a valid strong reference to a thread.
     pub unsafe fn ForceEarlyReturnFloat(&self, thread: jthread, value: jfloat) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jfloat) -> jvmtiError>(83)(self.vtable, thread, value)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jfloat) -> jvmtiError>(83)(self.vtable, thread, value) }
     }
 
     /// This function can be used to return from a method whose result type is double.
@@ -2982,7 +2990,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `thread` must refer to a valid strong reference to a thread.
     pub unsafe fn ForceEarlyReturnDouble(&self, thread: jthread, value: jdouble) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jdouble) -> jvmtiError>(84)(self.vtable, thread, value)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jdouble) -> jvmtiError>(84)(self.vtable, thread, value) }
     }
 
     /// This function can be used to return from a method with no result type. That is, the called method must be declared void.
@@ -2992,7 +3000,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `thread` must refer to a valid strong reference to a thread.
     pub unsafe fn ForceEarlyReturnVoid(&self, thread: jthread) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread) -> jvmtiError>(85)(self.vtable, thread)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread) -> jvmtiError>(85)(self.vtable, thread) }
     }
 
     /// This function initiates a traversal over the objects that are directly and indirectly reachable from the specified object or, if `initial_object` is not specified, all objects reachable from the heap roots.
@@ -3006,14 +3014,16 @@ impl JVMTIEnv {
     /// `inital_object` must be a valid strong reference to a object.
     /// `callbacks` must not be a dangling pointer.
     pub unsafe fn FollowReferences(&self, heap_filter: jint, klass: jclass, initial_object: jobject, callbacks: *const jvmtiHeapCallbacks, user_data: *const c_void) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, jclass, jobject, *const jvmtiHeapCallbacks, *const c_void) -> jvmtiError>(114)(
-            self.vtable,
-            heap_filter,
-            klass,
-            initial_object,
-            callbacks,
-            user_data,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, jclass, jobject, *const jvmtiHeapCallbacks, *const c_void) -> jvmtiError>(114)(
+                self.vtable,
+                heap_filter,
+                klass,
+                initial_object,
+                callbacks,
+                user_data,
+            )
+        }
     }
 
     /// Initiate an iteration over all objects in the heap. This includes both reachable and unreachable objects.
@@ -3026,13 +3036,15 @@ impl JVMTIEnv {
     /// `klass` must refer to a valid strong reference to a class.
     /// `callbacks` must not be a dangling pointer.
     pub unsafe fn IterateThroughHeap(&self, heap_filter: jint, klass: jclass, callbacks: *const jvmtiHeapCallbacks, user_data: *const c_void) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, jclass, *const jvmtiHeapCallbacks, *const c_void) -> jvmtiError>(115)(
-            self.vtable,
-            heap_filter,
-            klass,
-            callbacks,
-            user_data,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, jclass, *const jvmtiHeapCallbacks, *const c_void) -> jvmtiError>(115)(
+                self.vtable,
+                heap_filter,
+                klass,
+                callbacks,
+                user_data,
+            )
+        }
     }
 
     /// Retrieve the tag associated with an object.
@@ -3046,7 +3058,7 @@ impl JVMTIEnv {
     /// `object` must refer to a valid strong reference to a class.
     /// `tag_ptr` must not be a dangling pointer.
     pub unsafe fn GetTag(&self, object: jobject, tag_ptr: *mut jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jlong) -> jvmtiError>(105)(self.vtable, object, tag_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jlong) -> jvmtiError>(105)(self.vtable, object, tag_ptr) }
     }
 
     /// Set the tag associated with an object.
@@ -3058,7 +3070,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `object` must refer to a valid strong reference to a class.
     pub unsafe fn SetTag(&self, object: jobject, tag: jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jlong) -> jvmtiError>(106)(self.vtable, object, tag)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jlong) -> jvmtiError>(106)(self.vtable, object, tag) }
     }
 
     /// Return objects in the heap with the specified tags.
@@ -3078,14 +3090,16 @@ impl JVMTIEnv {
         object_result_ptr: *mut *mut jobject,
         tag_result_ptr: *mut *mut jlong,
     ) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jlong, *mut jint, *mut *mut jobject, *mut *mut jlong) -> jvmtiError>(113)(
-            self.vtable,
-            tag_count,
-            tags,
-            count_ptr,
-            object_result_ptr,
-            tag_result_ptr,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jlong, *mut jint, *mut *mut jobject, *mut *mut jlong) -> jvmtiError>(113)(
+                self.vtable,
+                tag_count,
+                tags,
+                count_ptr,
+                object_result_ptr,
+                tag_result_ptr,
+            )
+        }
     }
 
     /// Force the VM to perform a garbage collection.
@@ -3103,7 +3117,7 @@ impl JVMTIEnv {
     /// # Safety
     /// JVM Implementation dependant
     pub unsafe fn ForceGarbageCollection(&self) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable) -> jvmtiError>(107)(self.vtable)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable) -> jvmtiError>(107)(self.vtable) }
     }
 
     /// This function iterates over all objects that are directly and indirectly reachable from the specified object.
@@ -3126,12 +3140,14 @@ impl JVMTIEnv {
         note = "This function was introduced in the original JVM TI version 1.0. It has been superseded in JVM TI version 1.2 (Java SE 6) and will be changed to return an error in a future release."
     )]
     pub unsafe fn IterateOverObjectsReachableFromObject(&self, object: jobject, object_reference_callback: jvmtiObjectReferenceCallback, user_data: *const c_void) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jvmtiObjectReferenceCallback, *const c_void) -> jvmtiError>(108)(
-            self.vtable,
-            object,
-            object_reference_callback,
-            user_data,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jvmtiObjectReferenceCallback, *const c_void) -> jvmtiError>(108)(
+                self.vtable,
+                object,
+                object_reference_callback,
+                user_data,
+            )
+        }
     }
 
     /// This function iterates over the root objects and all objects that are directly and indirectly reachable from the root objects.
@@ -3175,13 +3191,15 @@ impl JVMTIEnv {
         object_ref_callback: Option<jvmtiObjectReferenceCallback>,
         user_data: *const c_void,
     ) -> jvmtiError {
-        self.jvmti::<extern "system" fn(
-            JVMTIEnvVTable,
-            Option<jvmtiHeapRootCallback>,
-            Option<jvmtiStackReferenceCallback>,
-            Option<jvmtiObjectReferenceCallback>,
-            *const c_void,
-        ) -> jvmtiError>(109)(self.vtable, heap_root_callback, stack_ref_callback, object_ref_callback, user_data)
+        unsafe {
+            self.jvmti::<extern "system" fn(
+                JVMTIEnvVTable,
+                Option<jvmtiHeapRootCallback>,
+                Option<jvmtiStackReferenceCallback>,
+                Option<jvmtiObjectReferenceCallback>,
+                *const c_void,
+            ) -> jvmtiError>(109)(self.vtable, heap_root_callback, stack_ref_callback, object_ref_callback, user_data)
+        }
     }
 
     /// Iterate over all objects in the heap. This includes both reachable and unreachable objects.
@@ -3207,12 +3225,14 @@ impl JVMTIEnv {
         note = "This function was introduced in the original JVM TI version 1.0. It has been superseded in JVM TI version 1.2 (Java SE 6) and will be changed to return an error in a future release."
     )]
     pub unsafe fn IterateOverHeap(&self, object_filter: jvmtiHeapObjectFilter, heap_object_callback: jvmtiHeapObjectCallback, user_data: *const c_void) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiHeapObjectFilter, jvmtiHeapObjectCallback, *const c_void) -> jvmtiError>(110)(
-            self.vtable,
-            object_filter,
-            heap_object_callback,
-            user_data,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiHeapObjectFilter, jvmtiHeapObjectCallback, *const c_void) -> jvmtiError>(110)(
+                self.vtable,
+                object_filter,
+                heap_object_callback,
+                user_data,
+            )
+        }
     }
 
     /// Iterate over all objects in the heap that are instances of the specified class.
@@ -3246,13 +3266,15 @@ impl JVMTIEnv {
         heap_object_callback: jvmtiHeapObjectCallback,
         user_data: *const c_void,
     ) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jvmtiHeapObjectFilter, jvmtiHeapObjectCallback, *const c_void) -> jvmtiError>(111)(
-            self.vtable,
-            klass,
-            object_filter,
-            heap_object_callback,
-            user_data,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jvmtiHeapObjectFilter, jvmtiHeapObjectCallback, *const c_void) -> jvmtiError>(111)(
+                self.vtable,
+                klass,
+                object_filter,
+                heap_object_callback,
+                user_data,
+            )
+        }
     }
 
     /// This function can be used to retrieve the value of a local variable whose type is Object or a subclass of Object.
@@ -3265,7 +3287,7 @@ impl JVMTIEnv {
     /// `thread` is a valid strong reference to a thread.
     /// `value_ptr` is not a dangling pointer.
     pub unsafe fn GetLocalObject(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jobject) -> jvmtiError>(20)(self.vtable, thread, depth, slot, value_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jobject) -> jvmtiError>(20)(self.vtable, thread, depth, slot, value_ptr) }
     }
 
     /// This function can be used to retrieve the value of the local object variable at slot 0 (the "this" object) from non-static frames.
@@ -3279,7 +3301,7 @@ impl JVMTIEnv {
     /// `thread` is a valid strong reference to a thread.
     /// `value_ptr` is not a dangling pointer.
     pub unsafe fn GetLocalInstance(&self, thread: jthread, depth: jint, value_ptr: *mut jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, *mut jobject) -> jvmtiError>(154)(self.vtable, thread, depth, value_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, *mut jobject) -> jvmtiError>(154)(self.vtable, thread, depth, value_ptr) }
     }
 
     /// This function can be used to retrieve the value of a local variable whose type is int, short, char, byte, or boolean.
@@ -3292,7 +3314,7 @@ impl JVMTIEnv {
     /// `thread` is a valid strong reference to a thread.
     /// `value_ptr` is not a dangling pointer.
     pub unsafe fn GetLocalInt(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jint) -> jvmtiError>(21)(self.vtable, thread, depth, slot, value_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jint) -> jvmtiError>(21)(self.vtable, thread, depth, slot, value_ptr) }
     }
 
     /// This function can be used to retrieve the value of a local variable whose type is long.
@@ -3305,7 +3327,7 @@ impl JVMTIEnv {
     /// `thread` is a valid strong reference to a thread.
     /// `value_ptr` is not a dangling pointer.
     pub unsafe fn GetLocalLong(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jlong) -> jvmtiError>(22)(self.vtable, thread, depth, slot, value_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jlong) -> jvmtiError>(22)(self.vtable, thread, depth, slot, value_ptr) }
     }
 
     /// This function can be used to retrieve the value of a local variable whose type is float.
@@ -3318,7 +3340,7 @@ impl JVMTIEnv {
     /// `thread` is a valid strong reference to a thread.
     /// `value_ptr` is not a dangling pointer.
     pub unsafe fn GetLocalFloat(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jfloat) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jfloat) -> jvmtiError>(23)(self.vtable, thread, depth, slot, value_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jfloat) -> jvmtiError>(23)(self.vtable, thread, depth, slot, value_ptr) }
     }
 
     /// This function can be used to retrieve the value of a local variable whose type is double.
@@ -3331,7 +3353,7 @@ impl JVMTIEnv {
     /// `thread` is a valid strong reference to a thread.
     /// `value_ptr` is not a dangling pointer.
     pub unsafe fn GetLocalDouble(&self, thread: jthread, depth: jint, slot: jint, value_ptr: *mut jdouble) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jdouble) -> jvmtiError>(24)(self.vtable, thread, depth, slot, value_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, *mut jdouble) -> jvmtiError>(24)(self.vtable, thread, depth, slot, value_ptr) }
     }
 
     /// This function can be used to set the value of a local variable whose type is Object or a subclass of Object.
@@ -3344,7 +3366,7 @@ impl JVMTIEnv {
     /// `thread` is a valid strong reference to a thread.
     /// `value` is a valid strong reference or null.
     pub unsafe fn SetLocalObject(&self, thread: jthread, depth: jint, slot: jint, value: jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jobject) -> jvmtiError>(25)(self.vtable, thread, depth, slot, value)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jobject) -> jvmtiError>(25)(self.vtable, thread, depth, slot, value) }
     }
 
     /// This function can be used to set the value of a local variable whose type is int, short, char, byte, or boolean.
@@ -3356,7 +3378,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `thread` is a valid strong reference to a thread.
     pub unsafe fn SetLocalInt(&self, thread: jthread, depth: jint, slot: jint, value: jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jint) -> jvmtiError>(26)(self.vtable, thread, depth, slot, value)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jint) -> jvmtiError>(26)(self.vtable, thread, depth, slot, value) }
     }
 
     /// This function can be used to set the value of a local variable whose type is long.
@@ -3368,7 +3390,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `thread` is a valid strong reference to a thread.
     pub unsafe fn SetLocalLong(&self, thread: jthread, depth: jint, slot: jint, value: jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jlong) -> jvmtiError>(27)(self.vtable, thread, depth, slot, value)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jlong) -> jvmtiError>(27)(self.vtable, thread, depth, slot, value) }
     }
 
     /// This function can be used to set the value of a local variable whose type is float.
@@ -3380,7 +3402,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `thread` is a valid strong reference to a thread.
     pub unsafe fn SetLocalFloat(&self, thread: jthread, depth: jint, slot: jint, value: jfloat) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jfloat) -> jvmtiError>(28)(self.vtable, thread, depth, slot, value)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jfloat) -> jvmtiError>(28)(self.vtable, thread, depth, slot, value) }
     }
 
     /// This function can be used to set the value of a local variable whose type is double.
@@ -3392,7 +3414,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `thread` is a valid strong reference to a thread.
     pub unsafe fn SetLocalDouble(&self, thread: jthread, depth: jint, slot: jint, value: jdouble) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jdouble) -> jvmtiError>(29)(self.vtable, thread, depth, slot, value)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jint, jint, jdouble) -> jvmtiError>(29)(self.vtable, thread, depth, slot, value) }
     }
 
     /// Set a breakpoint at the instruction indicated by method and location. An instruction can only have one breakpoint.
@@ -3403,7 +3425,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `method` must be valid
     pub unsafe fn SetBreakpoint(&self, method: jmethodID, location: jlocation) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, jlocation) -> jvmtiError>(37)(self.vtable, method, location)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, jlocation) -> jvmtiError>(37)(self.vtable, method, location) }
     }
 
     /// Clear the breakpoint at the bytecode indicated by method and location.
@@ -3413,7 +3435,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `method` must be valid
     pub unsafe fn ClearBreakpoint(&self, method: jmethodID, location: jlocation) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, jlocation) -> jvmtiError>(37)(self.vtable, method, location)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, jlocation) -> jvmtiError>(37)(self.vtable, method, location) }
     }
 
     /// Generate a `FieldAccess` event when the field specified by klass and field is about to be accessed.
@@ -3430,7 +3452,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference to a class.
     /// `field` must be valid
     pub unsafe fn SetFieldAccessWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(40)(self.vtable, klass, field)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(40)(self.vtable, klass, field) }
     }
 
     /// Cancel a field access watch previously set by `SetFieldAccessWatch`, on the field specified by klass and field.
@@ -3441,7 +3463,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference to a class.
     /// `field` must be valid
     pub unsafe fn ClearFieldAccessWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(41)(self.vtable, klass, field)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(41)(self.vtable, klass, field) }
     }
 
     /// Cancel a field modification watch previously set by `SetFieldModificationWatch`, on the field specified by klass and field.
@@ -3452,7 +3474,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference to a class.
     /// `field` must be valid
     pub unsafe fn SetFieldModificationWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(42)(self.vtable, klass, field)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(42)(self.vtable, klass, field) }
     }
 
     /// Cancel a field modification watch previously set by `SetFieldModificationWatch`, on the field specified by klass and field.
@@ -3463,7 +3485,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference to a class.
     /// `field` must be valid
     pub unsafe fn ClearFieldModificationWatch(&self, klass: jclass, field: jfieldID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(43)(self.vtable, klass, field)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID) -> jvmtiError>(43)(self.vtable, klass, field) }
     }
 
     /// Return an array of all modules loaded in the virtual machine.
@@ -3475,7 +3497,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetAllModules(&self, module_count_ptr: *mut jint, modules_ptr: *mut *mut jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jobject) -> jvmtiError>(2)(self.vtable, module_count_ptr, modules_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jobject) -> jvmtiError>(2)(self.vtable, module_count_ptr, modules_ptr) }
     }
 
     /// Return the java.lang.Module object for a named module defined to a class loader that contains a given package.
@@ -3489,9 +3511,11 @@ impl JVMTIEnv {
     /// `class_loader` must be a valid strong reference or null
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetNamedModule(&self, class_loader: jobject, package_name: impl UseCString, module_ptr: *mut jobject) -> jvmtiError {
-        package_name.use_as_const_c_char(|package_name| {
-            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, *mut jobject) -> jvmtiError>(39)(self.vtable, class_loader, package_name, module_ptr)
-        })
+        unsafe {
+            package_name.use_as_const_c_char(|package_name| {
+                self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, *mut jobject) -> jvmtiError>(39)(self.vtable, class_loader, package_name, module_ptr)
+            })
+        }
     }
 
     /// Update a module to read another module.
@@ -3505,7 +3529,7 @@ impl JVMTIEnv {
     /// `module` must be a valid strong reference or null
     /// `to_module` must be a valid strong reference or null
     pub unsafe fn AddModuleReads(&self, module: jobject, to_module: jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jobject) -> jvmtiError>(93)(self.vtable, module, to_module)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jobject) -> jvmtiError>(93)(self.vtable, module, to_module) }
     }
 
     /// Update a module to export a package to another module.
@@ -3520,9 +3544,11 @@ impl JVMTIEnv {
     /// `to_module` must be a valid strong reference or null
     /// all pointer parameters must not be dangling.
     pub unsafe fn AddModuleExports(&self, module: jobject, pkg_name: impl UseCString, to_module: jobject) -> jvmtiError {
-        pkg_name.use_as_const_c_char(|pkg_name| {
-            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(94)(self.vtable, module, pkg_name, to_module)
-        })
+        unsafe {
+            pkg_name.use_as_const_c_char(|pkg_name| {
+                self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(94)(self.vtable, module, pkg_name, to_module)
+            })
+        }
     }
 
     /// Update a module to open a package to another module.
@@ -3537,9 +3563,11 @@ impl JVMTIEnv {
     /// `to_module` must be a valid strong reference or null
     /// all pointer parameters must not be dangling.
     pub unsafe fn AddModuleOpens(&self, module: jobject, pkg_name: impl UseCString, to_module: jobject) -> jvmtiError {
-        pkg_name.use_as_const_c_char(|pkg_name| {
-            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(95)(self.vtable, module, pkg_name, to_module)
-        })
+        unsafe {
+            pkg_name.use_as_const_c_char(|pkg_name| {
+                self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *const c_char, jobject) -> jvmtiError>(95)(self.vtable, module, pkg_name, to_module)
+            })
+        }
     }
 
     /// Updates a module to add a service to the set of services that a module uses.
@@ -3553,7 +3581,7 @@ impl JVMTIEnv {
     /// `module` must be a valid strong reference or null
     /// `service` must be a valid strong reference or null
     pub unsafe fn AddModuleUses(&self, module: jobject, service: jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass) -> jvmtiError>(96)(self.vtable, module, service)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass) -> jvmtiError>(96)(self.vtable, module, service) }
     }
 
     /// Updates a module to add a service to the set of services that a module provides.
@@ -3568,7 +3596,7 @@ impl JVMTIEnv {
     /// `service` must be a valid strong reference or null
     /// `impl_class` must be a valid strong reference or null
     pub unsafe fn AddModuleProvides(&self, module: jobject, service: jclass, impl_class: jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass, jclass) -> jvmtiError>(97)(self.vtable, module, service, impl_class)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, jclass, jclass) -> jvmtiError>(97)(self.vtable, module, service, impl_class) }
     }
 
     /// Determines whether a module is modifiable.
@@ -3584,7 +3612,7 @@ impl JVMTIEnv {
     /// `service` must be a valid strong reference or null
     /// `impl_class` must be a valid strong reference or null
     pub unsafe fn IsModifiableModule(&self, module: jobject, is_modifiable_module_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jboolean) -> jvmtiError>(98)(self.vtable, module, is_modifiable_module_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jboolean) -> jvmtiError>(98)(self.vtable, module, is_modifiable_module_ptr) }
     }
 
     /// Return an array of all classes loaded in the virtual machine.
@@ -3604,7 +3632,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetLoadedClasses(&self, count_ptr: *mut jint, classes_ptr: *mut *mut jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jclass) -> jvmtiError>(77)(self.vtable, count_ptr, classes_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jclass) -> jvmtiError>(77)(self.vtable, count_ptr, classes_ptr) }
     }
 
     /// Returns an array of all classes which this class loader can find by name via `ClassLoader::loadClass`, `Class::forName` and bytecode linkage.
@@ -3622,7 +3650,7 @@ impl JVMTIEnv {
     /// `initiating_loader` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetClassLoaderClasses(&self, initiating_loader: jobject, count_ptr: *mut jint, classes_ptr: *mut *mut jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint, *mut *mut jclass) -> jvmtiError>(78)(self.vtable, initiating_loader, count_ptr, classes_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint, *mut *mut jclass) -> jvmtiError>(78)(self.vtable, initiating_loader, count_ptr, classes_ptr) }
     }
 
     /// Returns an array of all classes which this class loader can find by name via `ClassLoader::loadClass`, `Class::forName` and bytecode linkage.
@@ -3639,7 +3667,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetClassSignature(&self, klass: jclass, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(47)(self.vtable, klass, signature_ptr, generic_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(47)(self.vtable, klass, signature_ptr, generic_ptr) }
     }
 
     /// Get the status of the class. Zero or more of the following bits can be set.
@@ -3650,7 +3678,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// `status_ptr` must not be dangling.
     pub unsafe fn GetClassStatus(&self, klass: jclass, status_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(48)(self.vtable, klass, status_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(48)(self.vtable, klass, status_ptr) }
     }
 
     /// For the class indicated by klass, return the source file name via `source_name_ptr`.
@@ -3665,7 +3693,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// `source_name_ptr` must not be dangling.
     pub unsafe fn GetSourceFileName(&self, klass: jclass, source_name_ptr: *mut *mut c_char) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(49)(self.vtable, klass, source_name_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(49)(self.vtable, klass, source_name_ptr) }
     }
 
     /// For the class indicated by klass, return the access flags via `modifiers_ptr`.
@@ -3684,7 +3712,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// `modifiers_ptr` must not be dangling.
     pub unsafe fn GetClassModifiers(&self, klass: jclass, modifiers_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(50)(self.vtable, klass, modifiers_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(50)(self.vtable, klass, modifiers_ptr) }
     }
 
     /// For the class indicated by klass, return a count of methods via `method_count_ptr` and a list of method IDs via `methods_ptr`.
@@ -3699,7 +3727,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// `method_count_ptr` and `methods_ptr` must not be dangling.
     pub unsafe fn GetClassMethods(&self, klass: jclass, method_count_ptr: *mut jint, methods_ptr: *mut *mut jmethodID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jmethodID) -> jvmtiError>(51)(self.vtable, klass, method_count_ptr, methods_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jmethodID) -> jvmtiError>(51)(self.vtable, klass, method_count_ptr, methods_ptr) }
     }
 
     /// For the class indicated by klass, return a count of fields via `field_count_ptr` and a list of field IDs via `fields_ptr`.
@@ -3715,7 +3743,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// `field_count_ptr` and `fields_ptr` must not be dangling.
     pub unsafe fn GetClassFields(&self, klass: jclass, field_count_ptr: *mut jint, fields_ptr: *mut *mut jfieldID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jfieldID) -> jvmtiError>(52)(self.vtable, klass, field_count_ptr, fields_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jfieldID) -> jvmtiError>(52)(self.vtable, klass, field_count_ptr, fields_ptr) }
     }
 
     /// Return the direct super-interfaces of this class. For a class, this function returns the interfaces declared in its implements clause.
@@ -3729,7 +3757,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// `interface_count_ptr` and `interfaces_ptr` must not be dangling.
     pub unsafe fn GetImplementedInterfaces(&self, klass: jclass, interface_count_ptr: *mut jint, interfaces_ptr: *mut *mut jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jclass) -> jvmtiError>(53)(self.vtable, klass, interface_count_ptr, interfaces_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jclass) -> jvmtiError>(53)(self.vtable, klass, interface_count_ptr, interfaces_ptr) }
     }
 
     /// For the class indicated by klass, return the minor and major version numbers, as defined in The Java™ Virtual Machine Specification, Chapter 4.
@@ -3740,7 +3768,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// `minor_version_ptr` and `major_version_ptr` must not be dangling.
     pub unsafe fn GetClassVersionNumbers(&self, klass: jclass, minor_version_ptr: *mut jint, major_version_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint) -> jvmtiError>(54)(self.vtable, klass, minor_version_ptr, major_version_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint) -> jvmtiError>(54)(self.vtable, klass, minor_version_ptr, major_version_ptr) }
     }
 
     /// For the class indicated by klass, return the raw bytes of the constant pool in the format of the `constant_pool` item of The Java™ Virtual Machine Specification, Chapter 4.
@@ -3768,13 +3796,15 @@ impl JVMTIEnv {
         constant_pool_byte_count_ptr: *mut jint,
         constant_pool_bytes_ptr: *mut *mut c_uchar,
     ) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint, *mut *mut c_uchar) -> jvmtiError>(54)(
-            self.vtable,
-            klass,
-            constant_pool_count_ptr,
-            constant_pool_byte_count_ptr,
-            constant_pool_bytes_ptr,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint, *mut *mut c_uchar) -> jvmtiError>(54)(
+                self.vtable,
+                klass,
+                constant_pool_count_ptr,
+                constant_pool_byte_count_ptr,
+                constant_pool_bytes_ptr,
+            )
+        }
     }
 
     /// Determines whether a class object reference represents an interface.
@@ -3787,7 +3817,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn IsInterface(&self, klass: jclass, is_interface_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(54)(self.vtable, klass, is_interface_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(54)(self.vtable, klass, is_interface_ptr) }
     }
 
     /// Determines whether a class object reference represents an array.
@@ -3799,7 +3829,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn IsArrayClass(&self, klass: jclass, is_array_class_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(55)(self.vtable, klass, is_array_class_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(55)(self.vtable, klass, is_array_class_ptr) }
     }
 
     /// Determines whether a class is modifiable.
@@ -3816,7 +3846,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn IsModifiableClass(&self, klass: jclass, is_modifiable_class_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(44)(self.vtable, klass, is_modifiable_class_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(44)(self.vtable, klass, is_modifiable_class_ptr) }
     }
 
     /// For the class indicated by klass, return via `classloader_ptr` a reference to the class loader for the class.
@@ -3827,7 +3857,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetClassLoader(&self, klass: jclass, classloader_ptr: *mut jobject) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jobject) -> jvmtiError>(56)(self.vtable, klass, classloader_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jobject) -> jvmtiError>(56)(self.vtable, klass, classloader_ptr) }
     }
 
     /// For the class indicated by klass, return the debug extension via `source_debug_extension_ptr`.
@@ -3839,7 +3869,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetSourceDebugExtension(&self, klass: jclass, source_debug_extension_ptr: *mut *mut c_char) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(89)(self.vtable, klass, source_debug_extension_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(89)(self.vtable, klass, source_debug_extension_ptr) }
     }
 
     /// This function facilitates the bytecode instrumentation of already loaded classes.
@@ -3854,7 +3884,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn RetransformClasses(&self, class_count: jint, classes: *const jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jclass) -> jvmtiError>(151)(self.vtable, class_count, classes)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jclass) -> jvmtiError>(151)(self.vtable, class_count, classes) }
     }
 
     /// All classes given are redefined according to the definitions supplied.
@@ -3900,7 +3930,7 @@ impl JVMTIEnv {
     /// all pointer parameters must not be dangling.
     /// `class_definitions` must be internally consistent and valid. (no dangling pointers, size + byte pointer must match)
     pub unsafe fn RedefineClasses(&self, class_count: jint, class_definitions: *const jvmtiClassDefinition) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jvmtiClassDefinition) -> jvmtiError>(86)(self.vtable, class_count, class_definitions)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *const jvmtiClassDefinition) -> jvmtiError>(86)(self.vtable, class_count, class_definitions) }
     }
 
     /// For the object indicated by object, return via `size_ptr` the size of the object.
@@ -3915,7 +3945,7 @@ impl JVMTIEnv {
     /// `object` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetObjectSize(&self, object: jobject, size_ptr: *mut jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jlong) -> jvmtiError>(153)(self.vtable, object, size_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jlong) -> jvmtiError>(153)(self.vtable, object, size_ptr) }
     }
 
     /// For the object indicated by object, return via `hash_code_ptr` a hash code.
@@ -3931,7 +3961,7 @@ impl JVMTIEnv {
     /// `object` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetObjectHashCode(&self, object: jobject, hash_code_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint) -> jvmtiError>(57)(self.vtable, object, hash_code_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint) -> jvmtiError>(57)(self.vtable, object, hash_code_ptr) }
     }
 
     /// Get information about the object's monitor. The fields of the jvmtiMonitorUsage structure are filled in with information about usage of the monitor.
@@ -3942,7 +3972,7 @@ impl JVMTIEnv {
     /// `object` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetObjectMonitorUsage(&self, object: jobject, info_ptr: *mut jvmtiMonitorUsage) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jvmtiMonitorUsage) -> jvmtiError>(58)(self.vtable, object, info_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jvmtiMonitorUsage) -> jvmtiError>(58)(self.vtable, object, info_ptr) }
     }
 
     /// For the field indicated by klass and field, return the field name via `name_ptr` and field signature via `signature_ptr`.
@@ -3956,14 +3986,16 @@ impl JVMTIEnv {
     /// `field` must be a valid field reference in the class referred to by `klass`
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetFieldName(&self, klass: jclass, field: jfieldID, name_ptr: *mut *mut c_char, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut *mut c_char, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(59)(
-            self.vtable,
-            klass,
-            field,
-            name_ptr,
-            signature_ptr,
-            generic_ptr,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut *mut c_char, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(59)(
+                self.vtable,
+                klass,
+                field,
+                name_ptr,
+                signature_ptr,
+                generic_ptr,
+            )
+        }
     }
 
     /// For the field indicated by klass and field return the class that defined it via `declaring_class_ptr`.
@@ -3976,7 +4008,7 @@ impl JVMTIEnv {
     /// `field` must be a valid field reference in the class referred to by `klass`
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetFieldDeclaringClass(&self, klass: jclass, field: jfieldID, declaring_class_ptr: *mut jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jclass) -> jvmtiError>(60)(self.vtable, klass, field, declaring_class_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jclass) -> jvmtiError>(60)(self.vtable, klass, field, declaring_class_ptr) }
     }
 
     /// For the field indicated by klass and field return the access flags via `modifiers_ptr`.
@@ -3990,7 +4022,7 @@ impl JVMTIEnv {
     /// `field` must be a valid field reference in the class referred to by `klass`
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetFieldModifiers(&self, klass: jclass, field: jfieldID, modifiers_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jint) -> jvmtiError>(61)(self.vtable, klass, field, modifiers_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jint) -> jvmtiError>(61)(self.vtable, klass, field, modifiers_ptr) }
     }
 
     /// For the field indicated by klass and field, return a value indicating whether the field is synthetic via `is_synthetic_ptr`.
@@ -4004,7 +4036,7 @@ impl JVMTIEnv {
     /// `field` must be a valid field reference in the class referred to by `klass`
     /// all pointer parameters must not be dangling.
     pub unsafe fn IsFieldSynthetic(&self, klass: jclass, field: jfieldID, is_synthetic_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jboolean) -> jvmtiError>(62)(self.vtable, klass, field, is_synthetic_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jboolean) -> jvmtiError>(62)(self.vtable, klass, field, is_synthetic_ptr) }
     }
 
     /// For the method indicated by method, return the method name via `name_ptr` and method signature via `signature_ptr`.
@@ -4018,13 +4050,15 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetMethodName(&self, method: jmethodID, name_ptr: *mut *mut c_char, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut *mut c_char, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(63)(
-            self.vtable,
-            method,
-            name_ptr,
-            signature_ptr,
-            generic_ptr,
-        )
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut *mut c_char, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(63)(
+                self.vtable,
+                method,
+                name_ptr,
+                signature_ptr,
+                generic_ptr,
+            )
+        }
     }
 
     /// For the method indicated by method, return the class that defined it via `declaring_class_ptr`.
@@ -4035,7 +4069,7 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetMethodDeclaringClass(&self, method: jmethodID, declaring_class_ptr: *mut jclass) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jclass) -> jvmtiError>(64)(self.vtable, method, declaring_class_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jclass) -> jvmtiError>(64)(self.vtable, method, declaring_class_ptr) }
     }
 
     /// For the method indicated by method, return the access flags via `modifiers_ptr`.
@@ -4048,7 +4082,7 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetMethodModifiers(&self, method: jmethodID, modifiers_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(65)(self.vtable, method, modifiers_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(65)(self.vtable, method, modifiers_ptr) }
     }
 
     /// For the method indicated by method, return the number of local variable slots used by the method,
@@ -4062,7 +4096,7 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetMaxLocals(&self, method: jmethodID, max_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(67)(self.vtable, method, max_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(67)(self.vtable, method, max_ptr) }
     }
 
     /// For the method indicated by method, return via `max_ptr` the number of local variable slots used by the method's arguments.
@@ -4075,7 +4109,7 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetArgumentsSize(&self, method: jmethodID, max_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(68)(self.vtable, method, max_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint) -> jvmtiError>(68)(self.vtable, method, max_ptr) }
     }
 
     /// For the method indicated by method, return a table of source line number entries.
@@ -4087,7 +4121,14 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetLineNumberTable(&self, method: jmethodID, entry_count_ptr: *mut jint, table_ptr: *mut *mut jvmtiLineNumberEntry) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut jvmtiLineNumberEntry) -> jvmtiError>(69)(self.vtable, method, entry_count_ptr, table_ptr)
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut jvmtiLineNumberEntry) -> jvmtiError>(69)(
+                self.vtable,
+                method,
+                entry_count_ptr,
+                table_ptr,
+            )
+        }
     }
 
     /// For the method indicated by method, return the beginning and ending addresses through `start_location_ptr` and `end_location_ptr`.
@@ -4099,7 +4140,9 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetMethodLocation(&self, method: jmethodID, start_location_ptr: *mut jlocation, end_location_ptr: *mut jlocation) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jlocation, *mut jlocation) -> jvmtiError>(70)(self.vtable, method, start_location_ptr, end_location_ptr)
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jlocation, *mut jlocation) -> jvmtiError>(70)(self.vtable, method, start_location_ptr, end_location_ptr)
+        }
     }
 
     /// Return local variable information.
@@ -4110,7 +4153,14 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetLocalVariableTable(&self, method: jmethodID, entry_count_ptr: *mut jint, table_ptr: *mut *mut jvmtiLocalVariableEntry) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut jvmtiLocalVariableEntry) -> jvmtiError>(71)(self.vtable, method, entry_count_ptr, table_ptr)
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut jvmtiLocalVariableEntry) -> jvmtiError>(71)(
+                self.vtable,
+                method,
+                entry_count_ptr,
+                table_ptr,
+            )
+        }
     }
 
     /// For the method indicated by method, return the bytecodes that implement the method. The number of bytecodes is returned via `bytecode_count_ptr`.
@@ -4123,7 +4173,9 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetBytecodes(&self, method: jmethodID, bytecode_count_ptr: *mut jint, bytecodes_ptr: *mut *mut c_uchar) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut c_uchar) -> jvmtiError>(74)(self.vtable, method, bytecode_count_ptr, bytecodes_ptr)
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jint, *mut *mut c_uchar) -> jvmtiError>(74)(self.vtable, method, bytecode_count_ptr, bytecodes_ptr)
+        }
     }
 
     /// For the method indicated by method, return a value indicating whether the method is native via `is_native_ptr`.
@@ -4134,7 +4186,7 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn IsMethodNative(&self, method: jmethodID, is_native_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(75)(self.vtable, method, is_native_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(75)(self.vtable, method, is_native_ptr) }
     }
 
     /// For the method indicated by method, return a value indicating whether the method is synthetic via `is_synthetic_ptr`.
@@ -4147,7 +4199,7 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn IsMethodSynthetic(&self, method: jmethodID, is_synthetic_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(76)(self.vtable, method, is_synthetic_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(76)(self.vtable, method, is_synthetic_ptr) }
     }
 
     /// Determine if a method ID refers to an obsolete method version.
@@ -4158,7 +4210,7 @@ impl JVMTIEnv {
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn IsMethodObsolete(&self, method: jmethodID, is_obsolete_ptr: *mut jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(90)(self.vtable, method, is_obsolete_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(90)(self.vtable, method, is_obsolete_ptr) }
     }
 
     /// This function modifies the failure handling of native method resolution by allowing retry with a prefix applied to the name.
@@ -4171,7 +4223,7 @@ impl JVMTIEnv {
     /// `prefix` must be a rust string type or a valid zero terminated utf-8 string or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn SetNativeMethodPrefix(&self, prefix: impl UseCString) -> jvmtiError {
-        prefix.use_as_const_c_char(|prefix| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(72)(self.vtable, prefix))
+        unsafe { prefix.use_as_const_c_char(|prefix| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(72)(self.vtable, prefix)) }
     }
 
     /// For a normal agent, `SetNativeMethodPrefix` will provide all needed native method prefixing.
@@ -4191,7 +4243,7 @@ impl JVMTIEnv {
     /// `prefix_count` and `prefixes` must form a valid array.
     /// all pointer parameters must not be dangling.
     pub unsafe fn SetNativeMethodPrefixes(&self, prefix_count: jint, prefixes: *mut *mut c_char) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *mut *mut c_char) -> jvmtiError>(73)(self.vtable, prefix_count, prefixes)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, *mut *mut c_char) -> jvmtiError>(73)(self.vtable, prefix_count, prefixes) }
     }
 
     /// Create a raw monitor.
@@ -4202,7 +4254,9 @@ impl JVMTIEnv {
     /// `name` must be a rust string type or a valid zero terminated utf-8 string or null.
     /// all pointer parameters must not be dangling.
     pub unsafe fn CreateRawMonitor(&self, name: impl UseCString, monitor_ptr: *mut jrawMonitorID) -> jvmtiError {
-        name.use_as_const_c_char(|name| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *mut jrawMonitorID) -> jvmtiError>(30)(self.vtable, name, monitor_ptr))
+        unsafe {
+            name.use_as_const_c_char(|name| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *mut jrawMonitorID) -> jvmtiError>(30)(self.vtable, name, monitor_ptr))
+        }
     }
 
     /// Destroy the raw monitor.
@@ -4215,7 +4269,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `monitor` must be a valid raw monitor
     pub unsafe fn DestroyRawMonitor(&self, monitor: jrawMonitorID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(31)(self.vtable, monitor)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(31)(self.vtable, monitor) }
     }
 
     /// Gain exclusive ownership of a raw monitor.
@@ -4230,7 +4284,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `monitor` must be a valid raw monitor
     pub unsafe fn RawMonitorEnter(&self, monitor: jrawMonitorID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(32)(self.vtable, monitor)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(32)(self.vtable, monitor) }
     }
 
     /// Release exclusive ownership of a raw monitor.
@@ -4240,7 +4294,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `monitor` must be a valid raw monitor
     pub unsafe fn RawMonitorExit(&self, monitor: jrawMonitorID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(33)(self.vtable, monitor)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(33)(self.vtable, monitor) }
     }
 
     /// Wait for notification of the raw monitor.
@@ -4252,7 +4306,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `monitor` must be a valid raw monitor
     pub unsafe fn RawMonitorWait(&self, monitor: jrawMonitorID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(34)(self.vtable, monitor)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(34)(self.vtable, monitor) }
     }
 
     /// Notify a single thread waiting on the raw monitor.
@@ -4262,7 +4316,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `monitor` must be a valid raw monitor
     pub unsafe fn RawMonitorNotify(&self, monitor: jrawMonitorID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(35)(self.vtable, monitor)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(35)(self.vtable, monitor) }
     }
 
     /// Notify all threads waiting on the raw monitor.
@@ -4272,7 +4326,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `monitor` must be a valid raw monitor
     pub unsafe fn RawMonitorNotifyAll(&self, monitor: jrawMonitorID) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(36)(self.vtable, monitor)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(36)(self.vtable, monitor) }
     }
 
     /// Set the JNI function table in all current and future JNI environments.
@@ -4300,7 +4354,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `function_table` must be a valid initalized jni function table
     pub unsafe fn SetJNIFunctionTable(&self, function_table: jniNativeInterface) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jniNativeInterface) -> jvmtiError>(119)(self.vtable, function_table)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jniNativeInterface) -> jvmtiError>(119)(self.vtable, function_table) }
     }
 
     /// Get the JNI function table. The JNI function table is copied into allocated memory.
@@ -4313,7 +4367,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `function_table` must not be dangling
     pub unsafe fn GetJNIFunctionTable(&self, function_table: *mut jniNativeInterface) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jniNativeInterface) -> jvmtiError>(120)(self.vtable, function_table)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jniNativeInterface) -> jvmtiError>(120)(self.vtable, function_table) }
     }
 
     /// Set the functions to be called for each event.
@@ -4337,7 +4391,9 @@ impl JVMTIEnv {
     #[expect(clippy::cast_possible_truncation)] // size_of::<jvmtiEventCallbacks>() will never be larger than jint::MAX
     #[expect(clippy::cast_possible_wrap)]
     pub unsafe fn SetEventCallbacks(&self, callbacks: *const jvmtiEventCallbacks) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiEventCallbacks, jint) -> jvmtiError>(121)(self.vtable, callbacks, size_of::<jvmtiEventCallbacks>() as jint)
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiEventCallbacks, jint) -> jvmtiError>(121)(self.vtable, callbacks, size_of::<jvmtiEventCallbacks>() as jint)
+        }
     }
 
     /// Raw variant of `SetEventCallbacks` which allows for passing an arbitrary payload.
@@ -4346,7 +4402,7 @@ impl JVMTIEnv {
     /// # Safety
     /// The `callbacks` and `size_of_callbacks` must match what the jvm expects.
     pub unsafe fn SetEventCallbacks_raw(&self, callbacks: *const c_void, size_of_callbacks: jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiEventCallbacks, jint) -> jvmtiError>(121)(self.vtable, callbacks.cast(), size_of_callbacks)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const jvmtiEventCallbacks, jint) -> jvmtiError>(121)(self.vtable, callbacks.cast(), size_of_callbacks) }
     }
 
     /// Control the generation of events.
@@ -4375,7 +4431,7 @@ impl JVMTIEnv {
     /// `event_thread` must either be null or a valid strong reference to a jthread.
     /// The `callbacks` and `size_of_callbacks` must match what the jvm expects.
     pub unsafe fn SetEventNotificationMode(&self, mode: jvmtiEventMode, event_type: jvmtiEvent, event_thread: jthread) -> jvmtiError {
-        self.jvmti::<extern "C" fn(JVMTIEnvVTable, jvmtiEventMode, jvmtiEvent, jthread, ...) -> jvmtiError>(1)(self.vtable, mode, event_type, event_thread)
+        unsafe { self.jvmti::<extern "C" fn(JVMTIEnvVTable, jvmtiEventMode, jvmtiEvent, jthread, ...) -> jvmtiError>(1)(self.vtable, mode, event_type, event_thread) }
     }
 
     /// Allows for calling undocumented variadic extensions.
@@ -4406,7 +4462,7 @@ impl JVMTIEnv {
     /// ```
     #[must_use]
     pub unsafe fn SetEventNotificationMode_extension<X>(&self) -> X {
-        self.jvmti::<X>(1)
+        unsafe { self.jvmti::<X>(1) }
     }
 
     /// Generate events to represent the current state of the VM.
@@ -4436,7 +4492,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `function_table` must not be dangling
     pub unsafe fn GenerateEvents(&self, event_type: jvmtiEvent) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiEvent) -> jvmtiError>(122)(self.vtable, event_type)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiEvent) -> jvmtiError>(122)(self.vtable, event_type) }
     }
 
     /// Returns the set of extension functions.
@@ -4446,7 +4502,9 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetExtensionFunctions(&self, extension_count_ptr: *mut jint, extensions: *mut *mut jvmtiExtensionFunctionInfo) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jvmtiExtensionFunctionInfo) -> jvmtiError>(123)(self.vtable, extension_count_ptr, extensions)
+        unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jvmtiExtensionFunctionInfo) -> jvmtiError>(123)(self.vtable, extension_count_ptr, extensions)
+        }
     }
 
     /// Returns the set of extension events.
@@ -4456,7 +4514,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetExtensionEvents(&self, extension_count_ptr: *mut jint, extensions: *mut *mut jvmtiExtensionEventInfo) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jvmtiExtensionEventInfo) -> jvmtiError>(124)(self.vtable, extension_count_ptr, extensions)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jvmtiExtensionEventInfo) -> jvmtiError>(124)(self.vtable, extension_count_ptr, extensions) }
     }
 
     /// Sets the callback function for an extension event and enables the event. Or, if the callback is NULL, disables the event.
@@ -4469,7 +4527,7 @@ impl JVMTIEnv {
     /// all pointer parameters must not be dangling
     /// `callback` must match the function signature that the jvm implementation expects.
     pub unsafe fn SetExtensionEventCallback(&self, extension_event_index: jint, callback: jvmtiExtensionEvent) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, jvmtiExtensionEvent) -> jvmtiError>(125)(self.vtable, extension_event_index, callback)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint, jvmtiExtensionEvent) -> jvmtiError>(125)(self.vtable, extension_event_index, callback) }
     }
 
     /// Get information about the `GetCurrentThreadCpuTime` timer.
@@ -4487,7 +4545,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetCurrentThreadCpuTimerInfo(&self, info_ptr: *mut jvmtiTimerInfo) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(133)(self.vtable, info_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(133)(self.vtable, info_ptr) }
     }
 
     /// Return the CPU time utilized by the current thread.
@@ -4504,7 +4562,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetCurrentThreadCpuTime(&self, nanos_ptr: *mut jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jlong) -> jvmtiError>(134)(self.vtable, nanos_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jlong) -> jvmtiError>(134)(self.vtable, nanos_ptr) }
     }
 
     /// Get information about the `GetCurrentThreadCpuTime` timer.
@@ -4522,7 +4580,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetThreadCpuTimerInfo(&self, info_ptr: *mut jvmtiTimerInfo) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(135)(self.vtable, info_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(135)(self.vtable, info_ptr) }
     }
 
     /// Return the CPU time utilized by the specified thread.
@@ -4534,7 +4592,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetThreadCpuTime(&self, thread: jthread, nanos_ptr: *mut jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jlong) -> jvmtiError>(136)(self.vtable, thread, nanos_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, *mut jlong) -> jvmtiError>(136)(self.vtable, thread, nanos_ptr) }
     }
 
     /// Get information about the `GetTime` timer.
@@ -4547,7 +4605,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetTimerInfo(&self, info_ptr: *mut jvmtiTimerInfo) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(137)(self.vtable, info_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiTimerInfo) -> jvmtiError>(137)(self.vtable, info_ptr) }
     }
 
     /// Return the current value of the system timer, in nanoseconds.
@@ -4564,7 +4622,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetTime(&self, nanos_ptr: *mut jlong) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jlong) -> jvmtiError>(138)(self.vtable, nanos_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jlong) -> jvmtiError>(138)(self.vtable, nanos_ptr) }
     }
 
     /// Returns the number of processors available to the Java virtual machine.
@@ -4577,7 +4635,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetAvailableProcessors(&self, processor_count_ptr: *mut jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint) -> jvmtiError>(143)(self.vtable, processor_count_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint) -> jvmtiError>(143)(self.vtable, processor_count_ptr) }
     }
 
     /// This function can be used to cause instrumentation classes to be defined by the bootstrap class loader.
@@ -4603,7 +4661,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `segment` must be a rust string, or a valid zero terminated utf-8 string or null
     pub unsafe fn AddToBootstrapClassLoaderSearch(&self, segment: impl UseCString) -> jvmtiError {
-        segment.use_as_const_c_char(|segment| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(148)(self.vtable, segment))
+        unsafe { segment.use_as_const_c_char(|segment| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(148)(self.vtable, segment)) }
     }
 
     /// This function can be used to cause instrumentation classes to be defined by the system class loader. See The Java™ Virtual Machine Specification, Chapter 5.3.2.
@@ -4630,7 +4688,7 @@ impl JVMTIEnv {
     /// # Safety
     /// `segment` must be a rust string, or a valid zero terminated utf-8 string or null
     pub unsafe fn AddToSystemClassLoaderSearch(&self, segment: impl UseCString) -> jvmtiError {
-        segment.use_as_const_c_char(|segment| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(150)(self.vtable, segment))
+        unsafe { segment.use_as_const_c_char(|segment| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char) -> jvmtiError>(150)(self.vtable, segment)) }
     }
 
     /// Provides access to system properties defined by and used by the VM.
@@ -4655,7 +4713,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetSystemProperties(&self, count_ptr: *mut jint, property_ptr: *mut *mut *mut c_char) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut *mut c_char) -> jvmtiError>(129)(self.vtable, count_ptr, property_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut *mut c_char) -> jvmtiError>(129)(self.vtable, count_ptr, property_ptr) }
     }
 
     /// Return a VM system property value given the property key.
@@ -4675,8 +4733,11 @@ impl JVMTIEnv {
     /// `property` must be a rust string, a valid utf-8 zero terminated string or null.
     /// all pointer parameters must not be dangling
     pub unsafe fn GetSystemProperty(&self, property: impl UseCString, value_ptr: *mut *mut c_char) -> jvmtiError {
-        property
-            .use_as_const_c_char(|property| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *mut *mut c_char) -> jvmtiError>(130)(self.vtable, property, value_ptr))
+        unsafe {
+            property.use_as_const_c_char(|property| {
+                self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *mut *mut c_char) -> jvmtiError>(130)(self.vtable, property, value_ptr)
+            })
+        }
     }
 
     /// Set a VM system property value.
@@ -4689,11 +4750,13 @@ impl JVMTIEnv {
     /// `property` must be a rust string, a valid utf-8 zero terminated string or null.
     /// all pointer parameters must not be dangling
     pub unsafe fn SetSystemProperty(&self, property: impl UseCString, value_ptr: impl UseCString) -> jvmtiError {
-        property.use_as_const_c_char(|property| {
-            value_ptr.use_as_const_c_char(|value_ptr| {
-                self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *const c_char) -> jvmtiError>(131)(self.vtable, property, value_ptr)
+        unsafe {
+            property.use_as_const_c_char(|property| {
+                value_ptr.use_as_const_c_char(|value_ptr| {
+                    self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *const c_char) -> jvmtiError>(131)(self.vtable, property, value_ptr)
+                })
             })
-        })
+        }
     }
 
     /// Shutdown a JVM TI connection created with JNI `GetEnv` (see JVM TI Environments).
@@ -4715,7 +4778,7 @@ impl JVMTIEnv {
     /// # Safety
     /// The environment must not be used anymore after this call. Any call to any other function on this environment once this method is called is undefined behavior.
     pub unsafe fn DisposeEnvironment(&self) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable) -> jvmtiError>(126)(self.vtable)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable) -> jvmtiError>(126)(self.vtable) }
     }
 
     /// The VM stores a pointer value associated with each environment.
@@ -4731,7 +4794,7 @@ impl JVMTIEnv {
     /// # Safety
     /// JVM implementation specific
     pub unsafe fn SetEnvironmentLocalStorage(&self, data: *const c_void) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_void) -> jvmtiError>(147)(self.vtable, data)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_void) -> jvmtiError>(147)(self.vtable, data) }
     }
 
     /// The VM stores a pointer value associated with each environment.
@@ -4747,7 +4810,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetEnvironmentLocalStorage(&self, data: *mut *mut c_void) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut *mut c_void) -> jvmtiError>(146)(self.vtable, data)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut *mut c_void) -> jvmtiError>(146)(self.vtable, data) }
     }
 
     /// Return the symbolic name for an error code.
@@ -4757,7 +4820,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetErrorName(&self, error: impl Into<jvmtiError>, name_ptr: *mut *mut c_char) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiError, *mut *mut c_char) -> jvmtiError>(127)(self.vtable, error.into(), name_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiError, *mut *mut c_char) -> jvmtiError>(127)(self.vtable, error.into(), name_ptr) }
     }
 
     /// Control verbose output.
@@ -4769,7 +4832,7 @@ impl JVMTIEnv {
     /// # Safety
     /// jvm implementation specific
     pub unsafe fn SetVerboseFlag(&self, flag: jvmtiVerboseFlag, value: jboolean) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiVerboseFlag, jboolean) -> jvmtiError>(149)(self.vtable, flag, value)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jvmtiVerboseFlag, jboolean) -> jvmtiError>(149)(self.vtable, flag, value) }
     }
 
     /// This function describes the representation of jlocation used in this VM.
@@ -4784,7 +4847,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn GetJLocationFormat(&self, format_ptr: *mut jvmtiJlocationFormat) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiJlocationFormat) -> jvmtiError>(128)(self.vtable, format_ptr)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jvmtiJlocationFormat) -> jvmtiError>(128)(self.vtable, format_ptr) }
     }
 
     /// Generate a `SampledObjectAlloc` event when objects are allocated.
@@ -4800,7 +4863,7 @@ impl JVMTIEnv {
     /// # Safety
     /// all pointer parameters must not be dangling
     pub unsafe fn SetHeapSamplingInterval(&self, sampling_interval: jint) -> jvmtiError {
-        self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint) -> jvmtiError>(155)(self.vtable, sampling_interval)
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jint) -> jvmtiError>(155)(self.vtable, sampling_interval) }
     }
 }
 
@@ -4835,7 +4898,7 @@ impl jniNativeInterface {
     /// then the using the resulting `jniNativeInterface` in any way is UB.
     #[must_use]
     pub const unsafe fn from_raw_ptr(ptr: *mut c_void) -> Self {
-        Self(SyncMutPtr::new(ptr.cast()))
+        unsafe { Self(SyncMutPtr::new(ptr.cast())) }
     }
 
     ///
@@ -4865,7 +4928,9 @@ impl jniNativeInterface {
     /// ```
     ///
     pub unsafe fn set(&self, linkage: impl AsJNILinkage, value: *mut c_void) {
-        self.0.add(linkage.linkage()).write_volatile(value);
+        unsafe {
+            self.0.add(linkage.linkage()).write_volatile(value);
+        }
     }
 
     ///
@@ -4914,7 +4979,7 @@ impl jniNativeInterface {
     /// ```
     ///
     pub unsafe fn get<X>(&self, linkage: impl AsJNILinkage) -> X {
-        core::mem::transmute_copy(&self.0.add(linkage.linkage()).read_volatile())
+        unsafe { core::mem::transmute_copy(&self.0.add(linkage.linkage()).read_volatile()) }
     }
 }
 
@@ -5606,8 +5671,10 @@ impl JNIEnv {
     ///
     #[inline(always)]
     unsafe fn jni<X>(&self, index: usize) -> X {
-        //We need the read_volatile because a java debugger may at any point in time exchange the jni function table at its convenience.
-        core::mem::transmute_copy(&(self.vtable.read_volatile().0.add(index).read_volatile()))
+        unsafe {
+            //We need the read_volatile because a java debugger may at any point in time exchange the jni function table at its convenience.
+            core::mem::transmute_copy(&(self.vtable.read_volatile().0.add(index).read_volatile()))
+        }
     }
 
     ///
@@ -5649,7 +5716,7 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn index_vtable<X>(&self, index: impl AsJNILinkage) -> X {
-        self.jni::<X>(index.linkage())
+        unsafe { self.jni::<X>(index.linkage()) }
     }
 
     /// Returns the raw jni vtable.
@@ -5694,12 +5761,14 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn GetVersion(&self) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetVersion");
-            self.check_no_exception("GetVersion");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetVersion");
+                self.check_no_exception("GetVersion");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable) -> jint>(4)(self.vtable)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable) -> jint>(4)(self.vtable)
     }
 
     ///
@@ -5765,19 +5834,21 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn DefineClass(&self, name: impl UseCString, classloader: jobject, data: *const jbyte, len: jsize) -> jclass {
-        name.use_as_const_c_char(|name| {
-            #[cfg(feature = "asserts")]
-            {
-                self.check_not_critical("DefineClass");
-                self.check_no_exception("DefineClass");
-                assert!(!name.is_null(), "DefineClass name is null");
-                self.check_is_classloader_or_null("DefineClass", classloader);
-                assert!(!data.is_null(), "DefineClass data is null");
-                assert!(len >= 0, "DefineClass len is negative {len}");
-            }
+        unsafe {
+            name.use_as_const_c_char(|name| {
+                #[cfg(feature = "asserts")]
+                {
+                    self.check_not_critical("DefineClass");
+                    self.check_no_exception("DefineClass");
+                    assert!(!name.is_null(), "DefineClass name is null");
+                    self.check_is_classloader_or_null("DefineClass", classloader);
+                    assert!(!data.is_null(), "DefineClass data is null");
+                    assert!(len >= 0, "DefineClass len is negative {len}");
+                }
 
-            self.jni::<extern "system" fn(JNIEnvVTable, *const c_char, jobject, *const jbyte, i32) -> jclass>(5)(self.vtable, name, classloader, data, len)
-        })
+                self.jni::<extern "system" fn(JNIEnvVTable, *const c_char, jobject, *const jbyte, i32) -> jclass>(5)(self.vtable, name, classloader, data, len)
+            })
+        }
     }
 
     ///
@@ -5839,13 +5910,15 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn DefineClass_from_slice(&self, name: impl UseCString, classloader: jobject, data: impl AsRef<[u8]>) -> jclass {
-        let slice = data.as_ref();
-        self.DefineClass(
-            name,
-            classloader,
-            slice.as_ptr().cast::<jbyte>(),
-            jsize::try_from(slice.len()).expect("data.len() > jsize::MAX"),
-        )
+        unsafe {
+            let slice = data.as_ref();
+            self.DefineClass(
+                name,
+                classloader,
+                slice.as_ptr().cast::<jbyte>(),
+                jsize::try_from(slice.len()).expect("data.len() > jsize::MAX"),
+            )
+        }
     }
 
     ///
@@ -5905,15 +5978,17 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn FindClass(&self, name: impl UseCString) -> jclass {
-        name.use_as_const_c_char(|name| {
-            #[cfg(feature = "asserts")]
-            {
-                self.check_not_critical("FindClass");
-                self.check_no_exception("FindClass");
-                assert!(!name.is_null(), "FindClass name is null");
-            }
-            self.jni::<extern "system" fn(JNIEnvVTable, *const c_char) -> jclass>(6)(self.vtable, name)
-        })
+        unsafe {
+            name.use_as_const_c_char(|name| {
+                #[cfg(feature = "asserts")]
+                {
+                    self.check_not_critical("FindClass");
+                    self.check_no_exception("FindClass");
+                    assert!(!name.is_null(), "FindClass name is null");
+                }
+                self.jni::<extern "system" fn(JNIEnvVTable, *const c_char) -> jclass>(6)(self.vtable, name)
+            })
+        }
     }
 
     ///
@@ -5966,13 +6041,15 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetSuperclass(&self, class: jclass) -> jclass {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetSuperclass");
-            self.check_no_exception("GetSuperclass");
-            self.check_is_class("GetSuperclass", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetSuperclass");
+                self.check_no_exception("GetSuperclass");
+                self.check_is_class("GetSuperclass", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jclass>(10)(self.vtable, class)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jclass>(10)(self.vtable, class)
     }
 
     ///
@@ -6029,14 +6106,16 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn IsAssignableFrom(&self, class1: jclass, class2: jclass) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("IsAssignableFrom");
-            self.check_no_exception("IsAssignableFrom");
-            self.check_is_class("IsAssignableFrom", class1);
-            self.check_is_class("IsAssignableFrom", class2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("IsAssignableFrom");
+                self.check_no_exception("IsAssignableFrom");
+                self.check_is_class("IsAssignableFrom", class1);
+                self.check_is_class("IsAssignableFrom", class2);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jclass, jclass) -> jboolean>(11)(self.vtable, class1, class2)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass, jclass) -> jboolean>(11)(self.vtable, class1, class2)
     }
 
     ///
@@ -6118,13 +6197,15 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn Throw(&self, throwable: jthrowable) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("Throw");
-            self.check_no_exception("Throw");
-            assert!(!throwable.is_null(), "Throw throwable is null");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("Throw");
+                self.check_no_exception("Throw");
+                assert!(!throwable.is_null(), "Throw throwable is null");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jthrowable) -> jint>(13)(self.vtable, throwable)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jthrowable) -> jint>(13)(self.vtable, throwable)
     }
 
     ///
@@ -6212,16 +6293,18 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn ThrowNew(&self, class: jclass, message: impl UseCString) -> jint {
-        message.use_as_const_c_char(|message| {
-            #[cfg(feature = "asserts")]
-            {
-                self.check_not_critical("ThrowNew");
-                self.check_no_exception("ThrowNew");
-                self.check_is_exception_class("ThrowNew", class);
-                self.check_is_not_abstract("ThrowNew", class);
-            }
-            self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char) -> jint>(14)(self.vtable, class, message)
-        })
+        unsafe {
+            message.use_as_const_c_char(|message| {
+                #[cfg(feature = "asserts")]
+                {
+                    self.check_not_critical("ThrowNew");
+                    self.check_no_exception("ThrowNew");
+                    self.check_is_exception_class("ThrowNew", class);
+                    self.check_is_not_abstract("ThrowNew", class);
+                }
+                self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char) -> jint>(14)(self.vtable, class, message)
+            })
+        }
     }
 
     ///
@@ -6280,11 +6363,13 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn ExceptionOccurred(&self) -> jthrowable {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ExceptionOccurred");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ExceptionOccurred");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable) -> jthrowable>(15)(self.vtable)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable) -> jthrowable>(15)(self.vtable)
     }
 
     ///
@@ -6323,11 +6408,13 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn ExceptionDescribe(&self) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ExceptionDescribe");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ExceptionDescribe");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable)>(16)(self.vtable);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable)>(16)(self.vtable);
     }
 
     ///
@@ -6366,11 +6453,13 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn ExceptionClear(&self) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ExceptionClear");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ExceptionClear");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable)>(17)(self.vtable);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable)>(17)(self.vtable);
     }
 
     ///
@@ -6392,14 +6481,16 @@ impl JNIEnv {
     /// `msg` must be a non-null pointer to a valid 0 terminated utf-8 string.
     ///
     pub unsafe fn FatalError(&self, msg: impl UseCString) -> ! {
-        msg.use_as_const_c_char(|msg| {
-            #[cfg(feature = "asserts")]
-            {
-                assert!(!msg.is_null(), "FatalError msg is null");
-            }
-            self.jni::<extern "system" fn(JNIEnvVTable, *const c_char)>(18)(self.vtable, msg);
-            unreachable!("FatalError");
-        })
+        unsafe {
+            msg.use_as_const_c_char(|msg| {
+                #[cfg(feature = "asserts")]
+                {
+                    assert!(!msg.is_null(), "FatalError msg is null");
+                }
+                self.jni::<extern "system" fn(JNIEnvVTable, *const c_char)>(18)(self.vtable, msg);
+                unreachable!("FatalError");
+            })
+        }
     }
 
     ///
@@ -6445,11 +6536,13 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn ExceptionCheck(&self) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ExceptionCheck");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ExceptionCheck");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable) -> jboolean>(228)(self.vtable)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable) -> jboolean>(228)(self.vtable)
     }
 
     ///
@@ -6484,12 +6577,14 @@ impl JNIEnv {
     /// `obj` must not refer to a reference that has already been deleted by calling `DeleteLocalRef`, `DeleteGlobalRef`, `DeleteWeakGlobalRef`
     ///
     pub unsafe fn NewGlobalRef(&self, obj: jobject) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewGlobalRef");
-            self.check_no_exception("NewGlobalRef");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewGlobalRef");
+                self.check_no_exception("NewGlobalRef");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(21)(self.vtable, obj)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(21)(self.vtable, obj)
     }
 
     ///
@@ -6520,18 +6615,20 @@ impl JNIEnv {
     /// `obj` must not refer to an already deleted global reference. (Double free)
     ///
     pub unsafe fn DeleteGlobalRef(&self, obj: jobject) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("DeleteGlobalRef");
-            assert!(!obj.is_null(), "DeleteGlobalRef obj is null");
-            match self.GetObjectRefType(obj) {
-                jobjectRefType::JNIInvalidRefType => panic!("DeleteGlobalRef invalid non null reference"),
-                jobjectRefType::JNILocalRefType => panic!("DeleteGlobalRef local reference passed"),
-                jobjectRefType::JNIWeakGlobalRefType => panic!("DeleteGlobalRef weak global reference passed"),
-                jobjectRefType::JNIGlobalRefType => {}
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("DeleteGlobalRef");
+                assert!(!obj.is_null(), "DeleteGlobalRef obj is null");
+                match self.GetObjectRefType(obj) {
+                    jobjectRefType::JNIInvalidRefType => panic!("DeleteGlobalRef invalid non null reference"),
+                    jobjectRefType::JNILocalRefType => panic!("DeleteGlobalRef local reference passed"),
+                    jobjectRefType::JNIWeakGlobalRefType => panic!("DeleteGlobalRef weak global reference passed"),
+                    jobjectRefType::JNIGlobalRefType => {}
+                }
             }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(22)(self.vtable, obj);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(22)(self.vtable, obj);
     }
 
     ///
@@ -6562,20 +6659,22 @@ impl JNIEnv {
     /// `obj` must not refer to an already deleted local reference. (Double free)
     ///
     pub unsafe fn DeleteLocalRef(&self, obj: jobject) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("DeleteLocalRef");
-            assert!(!obj.is_null(), "DeleteLocalRef obj is null");
-            if !self.ExceptionCheck() {
-                match self.GetObjectRefType(obj) {
-                    jobjectRefType::JNIInvalidRefType => panic!("DeleteLocalRef invalid non null reference"),
-                    jobjectRefType::JNILocalRefType => {}
-                    jobjectRefType::JNIGlobalRefType => panic!("DeleteLocalRef global reference passed"),
-                    jobjectRefType::JNIWeakGlobalRefType => panic!("DeleteLocalRef weak global reference passed"),
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("DeleteLocalRef");
+                assert!(!obj.is_null(), "DeleteLocalRef obj is null");
+                if !self.ExceptionCheck() {
+                    match self.GetObjectRefType(obj) {
+                        jobjectRefType::JNIInvalidRefType => panic!("DeleteLocalRef invalid non null reference"),
+                        jobjectRefType::JNILocalRefType => {}
+                        jobjectRefType::JNIGlobalRefType => panic!("DeleteLocalRef global reference passed"),
+                        jobjectRefType::JNIWeakGlobalRefType => panic!("DeleteLocalRef weak global reference passed"),
+                    }
                 }
             }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(23)(self.vtable, obj);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(23)(self.vtable, obj);
     }
 
     ///
@@ -6622,13 +6721,15 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn EnsureLocalCapacity(&self, capacity: jint) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("EnsureLocalCapacity");
-            self.check_no_exception("EnsureLocalCapacity");
-            assert!(capacity >= 0, "EnsureLocalCapacity capacity is negative");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("EnsureLocalCapacity");
+                self.check_no_exception("EnsureLocalCapacity");
+                assert!(capacity >= 0, "EnsureLocalCapacity capacity is negative");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jint) -> jint>(26)(self.vtable, capacity)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jint) -> jint>(26)(self.vtable, capacity)
     }
 
     ///
@@ -6677,11 +6778,13 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn PushLocalFrame(&self, capacity: jint) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("PushLocalFrame");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("PushLocalFrame");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jint) -> jint>(19)(self.vtable, capacity)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jint) -> jint>(19)(self.vtable, capacity)
     }
 
     ///
@@ -6714,12 +6817,14 @@ impl JNIEnv {
     ///
     ///
     pub unsafe fn PopLocalFrame(&self, result: jobject) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("PopLocalFrame");
-            self.check_ref_obj_permit_null("PopLocalFrame", result);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("PopLocalFrame");
+                self.check_ref_obj_permit_null("PopLocalFrame", result);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(20)(self.vtable, result)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(20)(self.vtable, result)
     }
 
     ///
@@ -6749,13 +6854,15 @@ impl JNIEnv {
     /// `obj` must be a valid reference or null
     ///
     pub unsafe fn NewLocalRef(&self, obj: jobject) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewLocalRef");
-            self.check_no_exception("NewLocalRef");
-            self.check_ref_obj_permit_null("NewLocalRef", obj);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewLocalRef");
+                self.check_no_exception("NewLocalRef");
+                self.check_ref_obj_permit_null("NewLocalRef", obj);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(25)(self.vtable, obj)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(25)(self.vtable, obj)
     }
 
     ///
@@ -6788,12 +6895,14 @@ impl JNIEnv {
     /// `obj` must be a valid reference or null
     ///
     pub unsafe fn NewWeakGlobalRef(&self, obj: jobject) -> jweak {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewWeakGlobalRef");
-            self.check_no_exception("NewWeakGlobalRef");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewWeakGlobalRef");
+                self.check_no_exception("NewWeakGlobalRef");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jweak>(226)(self.vtable, obj)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jweak>(226)(self.vtable, obj)
     }
 
     ///
@@ -6824,21 +6933,23 @@ impl JNIEnv {
     /// `obj` must not be null and be a valid weak reference that has not yet been deleted.
     ///
     pub unsafe fn DeleteWeakGlobalRef(&self, obj: jweak) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("DeleteWeakGlobalRef");
-            assert!(!obj.is_null(), "DeleteWeakGlobalRef obj is null");
-            if !self.ExceptionCheck() {
-                match self.GetObjectRefType(obj) {
-                    jobjectRefType::JNIInvalidRefType => panic!("DeleteWeakGlobalRef invalid non null reference"),
-                    jobjectRefType::JNILocalRefType => panic!("DeleteWeakGlobalRef local reference passed"),
-                    jobjectRefType::JNIGlobalRefType => panic!("DeleteWeakGlobalRef strong global reference passed"),
-                    jobjectRefType::JNIWeakGlobalRefType => {}
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("DeleteWeakGlobalRef");
+                assert!(!obj.is_null(), "DeleteWeakGlobalRef obj is null");
+                if !self.ExceptionCheck() {
+                    match self.GetObjectRefType(obj) {
+                        jobjectRefType::JNIInvalidRefType => panic!("DeleteWeakGlobalRef invalid non null reference"),
+                        jobjectRefType::JNILocalRefType => panic!("DeleteWeakGlobalRef local reference passed"),
+                        jobjectRefType::JNIGlobalRefType => panic!("DeleteWeakGlobalRef strong global reference passed"),
+                        jobjectRefType::JNIWeakGlobalRefType => {}
+                    }
                 }
             }
-        }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(227)(self.vtable, obj);
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject)>(227)(self.vtable, obj);
+        }
     }
 
     ///
@@ -6902,14 +7013,16 @@ impl JNIEnv {
     ///
     ///
     pub unsafe fn AllocObject(&self, clazz: jclass) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            assert!(!clazz.is_null(), "AllocObject clazz is null");
-            self.check_not_critical("AllocObject");
-            self.check_no_exception("AllocObject");
-            self.check_is_class("AllocObject", clazz);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                assert!(!clazz.is_null(), "AllocObject clazz is null");
+                self.check_not_critical("AllocObject");
+                self.check_no_exception("AllocObject");
+                self.check_is_class("AllocObject", clazz);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jobject>(27)(self.vtable, clazz)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jobject>(27)(self.vtable, clazz)
     }
 
     ///
@@ -6962,16 +7075,18 @@ impl JNIEnv {
     /// * for example calling a java constructor that needs a String as parameter, with an 'int' instead is UB.
     ///
     pub unsafe fn NewObjectA(&self, clazz: jclass, constructor: jmethodID, args: *const jtype) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewObjectA");
-            self.check_no_exception("NewObjectA");
-            assert!(!constructor.is_null(), "NewObjectA constructor is null");
-            self.check_is_class("NewObjectA", clazz);
-            //TODO check if constructor is actually constructor or just a normal method.
-            //TODO check arguments match constructor
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewObjectA");
+                self.check_no_exception("NewObjectA");
+                assert!(!constructor.is_null(), "NewObjectA constructor is null");
+                self.check_is_class("NewObjectA", clazz);
+                //TODO check if constructor is actually constructor or just a normal method.
+                //TODO check arguments match constructor
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jclass, jmethodID, *const jtype) -> jobject>(30)(self.vtable, clazz, constructor, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass, jmethodID, *const jtype) -> jobject>(30)(self.vtable, clazz, constructor, args)
     }
 
     ///
@@ -7018,16 +7133,18 @@ impl JNIEnv {
     /// `constructor` must have 0 arguments.
     ///
     pub unsafe fn NewObject0(&self, clazz: jclass, constructor: jmethodID) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewObject0");
-            self.check_no_exception("NewObject0");
-            assert!(!constructor.is_null(), "NewObject0 constructor is null");
-            self.check_is_class("NewObject0", clazz);
-            //TODO check if constructor is actually constructor or just a normal method.
-            //TODO check zero arg.
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewObject0");
+                self.check_no_exception("NewObject0");
+                assert!(!constructor.is_null(), "NewObject0 constructor is null");
+                self.check_is_class("NewObject0", clazz);
+                //TODO check if constructor is actually constructor or just a normal method.
+                //TODO check zero arg.
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID) -> jobject>(28)(self.vtable, clazz, constructor)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID) -> jobject>(28)(self.vtable, clazz, constructor)
     }
 
     ///
@@ -7082,16 +7199,18 @@ impl JNIEnv {
     ///     * ex: calling a constructor that expects a jlong with a jint is UB.
     ///
     pub unsafe fn NewObject1<A: JType>(&self, clazz: jclass, constructor: jmethodID, arg1: A) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewObject1");
-            self.check_no_exception("NewObject1");
-            assert!(!constructor.is_null(), "NewObject1 constructor is null");
-            self.check_is_class("NewObject1", clazz);
-            //TODO check if constructor is actually constructor or just a normal method.
-            self.check_parameter_types_constructor("NewObject1", clazz, constructor, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewObject1");
+                self.check_no_exception("NewObject1");
+                assert!(!constructor.is_null(), "NewObject1 constructor is null");
+                self.check_is_class("NewObject1", clazz);
+                //TODO check if constructor is actually constructor or just a normal method.
+                self.check_parameter_types_constructor("NewObject1", clazz, constructor, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1)
     }
 
     ///
@@ -7145,17 +7264,19 @@ impl JNIEnv {
     ///     * ex: calling a constructor that expects a jlong with a jint is UB.
     ///
     pub unsafe fn NewObject2<A: JType, B: JType>(&self, clazz: jclass, constructor: jmethodID, arg1: A, arg2: B) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewObject2");
-            self.check_no_exception("NewObject2");
-            assert!(!constructor.is_null(), "NewObject2 constructor is null");
-            self.check_is_class("NewObject2", clazz);
-            //TODO check if constructor is actually constructor or just a normal method.
-            self.check_parameter_types_constructor("NewObject2", clazz, constructor, arg1, 0, 2);
-            self.check_parameter_types_constructor("NewObject2", clazz, constructor, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewObject2");
+                self.check_no_exception("NewObject2");
+                assert!(!constructor.is_null(), "NewObject2 constructor is null");
+                self.check_is_class("NewObject2", clazz);
+                //TODO check if constructor is actually constructor or just a normal method.
+                self.check_parameter_types_constructor("NewObject2", clazz, constructor, arg1, 0, 2);
+                self.check_parameter_types_constructor("NewObject2", clazz, constructor, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1, arg2)
     }
 
     ///
@@ -7210,18 +7331,20 @@ impl JNIEnv {
     ///     * ex: calling a constructor that expects a jlong with a jint is UB.
     ///
     pub unsafe fn NewObject3<A: JType, B: JType, C: JType>(&self, clazz: jclass, constructor: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewObject3");
-            self.check_no_exception("NewObject3");
-            assert!(!constructor.is_null(), "NewObject3 constructor is null");
-            self.check_is_class("NewObject3", clazz);
-            //TODO check if constructor is actually constructor or just a normal method.
-            self.check_parameter_types_constructor("NewObject3", clazz, constructor, arg1, 0, 3);
-            self.check_parameter_types_constructor("NewObject3", clazz, constructor, arg2, 1, 3);
-            self.check_parameter_types_constructor("NewObject3", clazz, constructor, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewObject3");
+                self.check_no_exception("NewObject3");
+                assert!(!constructor.is_null(), "NewObject3 constructor is null");
+                self.check_is_class("NewObject3", clazz);
+                //TODO check if constructor is actually constructor or just a normal method.
+                self.check_parameter_types_constructor("NewObject3", clazz, constructor, arg1, 0, 3);
+                self.check_parameter_types_constructor("NewObject3", clazz, constructor, arg2, 1, 3);
+                self.check_parameter_types_constructor("NewObject3", clazz, constructor, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jclass, jmethodID, ...) -> jobject>(28)(self.vtable, clazz, constructor, arg1, arg2, arg3)
     }
 
     ///
@@ -7255,13 +7378,15 @@ impl JNIEnv {
     /// `obj` must not be null and be a valid reference that has not yet been deleted or garbage collected.
     ///
     pub unsafe fn GetObjectClass(&self, obj: jobject) -> jclass {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetObjectClass");
-            self.check_no_exception("GetObjectClass");
-            self.check_ref_obj("GetObjectClass", obj);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetObjectClass");
+                self.check_no_exception("GetObjectClass");
+                self.check_ref_obj("GetObjectClass", obj);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(31)(self.vtable, obj)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(31)(self.vtable, obj)
     }
 
     ///
@@ -7296,12 +7421,14 @@ impl JNIEnv {
     /// Calling this fn with an obj that has already been manually deleted using `DeleteLocalRef` for example is UB.
     ///
     pub unsafe fn GetObjectRefType(&self, obj: jobject) -> jobjectRefType {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetObjectRefType");
-            self.check_no_exception("GetObjectRefType");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetObjectRefType");
+                self.check_no_exception("GetObjectRefType");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobjectRefType>(232)(self.vtable, obj)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobjectRefType>(232)(self.vtable, obj)
     }
 
     ///
@@ -7340,14 +7467,16 @@ impl JNIEnv {
     /// `clazz` must be a valid non-null reference to a class that is not already garbage collected.
     ///
     pub unsafe fn IsInstanceOf(&self, obj: jobject, clazz: jclass) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("IsInstanceOf");
-            self.check_no_exception("IsInstanceOf");
-            self.check_is_class("IsInstanceOf", clazz);
-            self.check_ref_obj_permit_null("IsInstanceOf", obj);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("IsInstanceOf");
+                self.check_no_exception("IsInstanceOf");
+                self.check_is_class("IsInstanceOf", clazz);
+                self.check_ref_obj_permit_null("IsInstanceOf", obj);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass) -> jboolean>(32)(self.vtable, obj, clazz)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass) -> jboolean>(32)(self.vtable, obj, clazz)
     }
 
     ///
@@ -7387,14 +7516,16 @@ impl JNIEnv {
     /// `obj2` must be null or a valid reference that is not already garbage collected.
     ///
     pub unsafe fn IsSameObject(&self, obj1: jobject, obj2: jobject) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("IsSameObject");
-            self.check_no_exception("IsSameObject");
-            self.check_ref_obj_permit_null("IsSameObject obj1", obj1);
-            self.check_ref_obj_permit_null("IsSameObject obj2", obj2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("IsSameObject");
+                self.check_no_exception("IsSameObject");
+                self.check_ref_obj_permit_null("IsSameObject obj1", obj1);
+                self.check_ref_obj_permit_null("IsSameObject obj2", obj2);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jobject) -> jboolean>(24)(self.vtable, obj1, obj2)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jobject) -> jboolean>(24)(self.vtable, obj1, obj2)
     }
 
     ///
@@ -7443,19 +7574,21 @@ impl JNIEnv {
     /// `sig` must be non-null and zero terminated utf-8.
     ///
     pub unsafe fn GetFieldID(&self, clazz: jclass, name: impl UseCString, sig: impl UseCString) -> jfieldID {
-        name.use_as_const_c_char(|name| {
-            sig.use_as_const_c_char(|sig| {
-                #[cfg(feature = "asserts")]
-                {
-                    self.check_not_critical("GetFieldID");
-                    self.check_no_exception("GetFieldID");
-                    assert!(!name.is_null(), "GetFieldID name is null");
-                    assert!(!sig.is_null(), "GetFieldID sig is null");
-                    self.check_is_class("GetFieldID", clazz);
-                }
-                self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char, *const c_char) -> jfieldID>(94)(self.vtable, clazz, name, sig)
+        unsafe {
+            name.use_as_const_c_char(|name| {
+                sig.use_as_const_c_char(|sig| {
+                    #[cfg(feature = "asserts")]
+                    {
+                        self.check_not_critical("GetFieldID");
+                        self.check_no_exception("GetFieldID");
+                        assert!(!name.is_null(), "GetFieldID name is null");
+                        assert!(!sig.is_null(), "GetFieldID sig is null");
+                        self.check_is_class("GetFieldID", clazz);
+                    }
+                    self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char, *const c_char) -> jfieldID>(94)(self.vtable, clazz, name, sig)
+                })
             })
-        })
+        }
     }
 
     ///
@@ -7495,13 +7628,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is an object and not a primitive.
     ///
     pub unsafe fn GetObjectField(&self, obj: jobject, fieldID: jfieldID) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetObjectField");
-            self.check_no_exception("GetObjectField");
-            self.check_field_type_object("GetObjectField", obj, fieldID, "object");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetObjectField");
+                self.check_no_exception("GetObjectField");
+                self.check_field_type_object("GetObjectField", obj, fieldID, "object");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jobject>(95)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jobject>(95)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -7541,13 +7676,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a boolean and not something else.
     ///
     pub unsafe fn GetBooleanField(&self, obj: jobject, fieldID: jfieldID) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetBooleanField");
-            self.check_no_exception("GetBooleanField");
-            self.check_field_type_object("GetBooleanField", obj, fieldID, "boolean");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetBooleanField");
+                self.check_no_exception("GetBooleanField");
+                self.check_field_type_object("GetBooleanField", obj, fieldID, "boolean");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jboolean>(96)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jboolean>(96)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -7587,13 +7724,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a byte and not something else.
     ///
     pub unsafe fn GetByteField(&self, obj: jobject, fieldID: jfieldID) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetByteField");
-            self.check_no_exception("GetByteField");
-            self.check_field_type_object("GetByteField", obj, fieldID, "byte");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetByteField");
+                self.check_no_exception("GetByteField");
+                self.check_field_type_object("GetByteField", obj, fieldID, "byte");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jbyte>(97)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jbyte>(97)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -7633,13 +7772,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a char and not something else.
     ///
     pub unsafe fn GetCharField(&self, obj: jobject, fieldID: jfieldID) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetCharField");
-            self.check_no_exception("GetCharField");
-            self.check_field_type_object("GetCharField", obj, fieldID, "char");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetCharField");
+                self.check_no_exception("GetCharField");
+                self.check_field_type_object("GetCharField", obj, fieldID, "char");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jchar>(98)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jchar>(98)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -7679,13 +7820,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a short and not something else.
     ///
     pub unsafe fn GetShortField(&self, obj: jobject, fieldID: jfieldID) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetShortField");
-            self.check_no_exception("GetShortField");
-            self.check_field_type_object("GetShortField", obj, fieldID, "short");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetShortField");
+                self.check_no_exception("GetShortField");
+                self.check_field_type_object("GetShortField", obj, fieldID, "short");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jshort>(99)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jshort>(99)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -7725,13 +7868,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a int and not something else.
     ///
     pub unsafe fn GetIntField(&self, obj: jobject, fieldID: jfieldID) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetIntField");
-            self.check_no_exception("GetIntField");
-            self.check_field_type_object("GetIntField", obj, fieldID, "int");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetIntField");
+                self.check_no_exception("GetIntField");
+                self.check_field_type_object("GetIntField", obj, fieldID, "int");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jint>(100)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jint>(100)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -7771,13 +7916,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a long and not something else.
     ///
     pub unsafe fn GetLongField(&self, obj: jobject, fieldID: jfieldID) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetLongField");
-            self.check_no_exception("GetLongField");
-            self.check_field_type_object("GetLongField", obj, fieldID, "long");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetLongField");
+                self.check_no_exception("GetLongField");
+                self.check_field_type_object("GetLongField", obj, fieldID, "long");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jlong>(101)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jlong>(101)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -7817,13 +7964,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a float and not something else.
     ///
     pub unsafe fn GetFloatField(&self, obj: jobject, fieldID: jfieldID) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetFloatField");
-            self.check_no_exception("GetFloatField");
-            self.check_field_type_object("GetFloatField", obj, fieldID, "float");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetFloatField");
+                self.check_no_exception("GetFloatField");
+                self.check_field_type_object("GetFloatField", obj, fieldID, "float");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jfloat>(102)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jfloat>(102)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -7863,13 +8012,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a double and not something else.
     ///
     pub unsafe fn GetDoubleField(&self, obj: jobject, fieldID: jfieldID) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetDoubleField");
-            self.check_no_exception("GetDoubleField");
-            self.check_field_type_object("GetDoubleField", obj, fieldID, "double");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetDoubleField");
+                self.check_no_exception("GetDoubleField");
+                self.check_field_type_object("GetDoubleField", obj, fieldID, "double");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jdouble>(103)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jdouble>(103)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -7914,14 +8065,16 @@ impl JNIEnv {
     /// `value` must be assignable to the field type (i.e. if it's a String field setting to an `ArrayList` for example is UB)
     ///
     pub unsafe fn SetObjectField(&self, obj: jobject, fieldID: jfieldID, value: jobject) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetObjectField");
-            self.check_no_exception("SetObjectField");
-            self.check_field_type_object("SetObjectField", obj, fieldID, "object");
-            self.check_ref_obj_permit_null("SetObjectField", value);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetObjectField");
+                self.check_no_exception("SetObjectField");
+                self.check_field_type_object("SetObjectField", obj, fieldID, "object");
+                self.check_ref_obj_permit_null("SetObjectField", value);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jobject)>(104)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jobject)>(104)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -7961,13 +8114,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a boolean.
     ///
     pub unsafe fn SetBooleanField(&self, obj: jobject, fieldID: jfieldID, value: jboolean) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetBooleanField");
-            self.check_no_exception("SetBooleanField");
-            self.check_field_type_object("SetBooleanField", obj, fieldID, "boolean");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetBooleanField");
+                self.check_no_exception("SetBooleanField");
+                self.check_field_type_object("SetBooleanField", obj, fieldID, "boolean");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(105)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(105)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -8007,13 +8162,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a byte.
     ///
     pub unsafe fn SetByteField(&self, obj: jobject, fieldID: jfieldID, value: jbyte) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetByteField");
-            self.check_no_exception("SetByteField");
-            self.check_field_type_object("SetByteField", obj, fieldID, "byte");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetByteField");
+                self.check_no_exception("SetByteField");
+                self.check_field_type_object("SetByteField", obj, fieldID, "byte");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jbyte)>(106)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jbyte)>(106)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -8053,13 +8210,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a char.
     ///
     pub unsafe fn SetCharField(&self, obj: jobject, fieldID: jfieldID, value: jchar) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetCharField");
-            self.check_no_exception("SetCharField");
-            self.check_field_type_object("SetCharField", obj, fieldID, "char");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetCharField");
+                self.check_no_exception("SetCharField");
+                self.check_field_type_object("SetCharField", obj, fieldID, "char");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jchar)>(107)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jchar)>(107)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -8099,13 +8258,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a short.
     ///
     pub unsafe fn SetShortField(&self, obj: jobject, fieldID: jfieldID, value: jshort) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetShortField");
-            self.check_no_exception("SetShortField");
-            self.check_field_type_object("SetShortField", obj, fieldID, "short");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetShortField");
+                self.check_no_exception("SetShortField");
+                self.check_field_type_object("SetShortField", obj, fieldID, "short");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jshort)>(108)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jshort)>(108)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -8145,13 +8306,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a int.
     ///
     pub unsafe fn SetIntField(&self, obj: jobject, fieldID: jfieldID, value: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetIntField");
-            self.check_no_exception("SetIntField");
-            self.check_field_type_object("SetIntField", obj, fieldID, "int");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetIntField");
+                self.check_no_exception("SetIntField");
+                self.check_field_type_object("SetIntField", obj, fieldID, "int");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jint)>(109)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jint)>(109)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -8191,13 +8354,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a long.
     ///
     pub unsafe fn SetLongField(&self, obj: jobject, fieldID: jfieldID, value: jlong) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetLongField");
-            self.check_no_exception("SetLongField");
-            self.check_field_type_object("SetLongField", obj, fieldID, "long");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetLongField");
+                self.check_no_exception("SetLongField");
+                self.check_field_type_object("SetLongField", obj, fieldID, "long");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jlong)>(110)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jlong)>(110)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -8237,13 +8402,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a float.
     ///
     pub unsafe fn SetFloatField(&self, obj: jobject, fieldID: jfieldID, value: jfloat) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetFloatField");
-            self.check_no_exception("SetFloatField");
-            self.check_field_type_object("SetFloatField", obj, fieldID, "float");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetFloatField");
+                self.check_no_exception("SetFloatField");
+                self.check_field_type_object("SetFloatField", obj, fieldID, "float");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jfloat)>(111)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jfloat)>(111)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -8283,13 +8450,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a double.
     ///
     pub unsafe fn SetDoubleField(&self, obj: jobject, fieldID: jfieldID, value: jdouble) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetDoubleField");
-            self.check_no_exception("SetDoubleField");
-            self.check_field_type_object("SetDoubleField", obj, fieldID, "double");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetDoubleField");
+                self.check_no_exception("SetDoubleField");
+                self.check_field_type_object("SetDoubleField", obj, fieldID, "double");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(112)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(112)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -8338,19 +8507,21 @@ impl JNIEnv {
     /// `sig` must be non-null and zero terminated utf-8.
     ///
     pub unsafe fn GetMethodID(&self, class: jclass, name: impl UseCString, sig: impl UseCString) -> jmethodID {
-        name.use_as_const_c_char(|name| {
-            sig.use_as_const_c_char(|sig| {
-                #[cfg(feature = "asserts")]
-                {
-                    self.check_not_critical("GetMethodID");
-                    self.check_no_exception("GetMethodID");
-                    assert!(!name.is_null(), "GetMethodID name is null");
-                    assert!(!sig.is_null(), "GetMethodID sig is null");
-                    self.check_is_class("GetMethodID", class);
-                }
-                self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(33)(self.vtable, class, name, sig)
+        unsafe {
+            name.use_as_const_c_char(|name| {
+                sig.use_as_const_c_char(|sig| {
+                    #[cfg(feature = "asserts")]
+                    {
+                        self.check_not_critical("GetMethodID");
+                        self.check_no_exception("GetMethodID");
+                        assert!(!name.is_null(), "GetMethodID name is null");
+                        assert!(!sig.is_null(), "GetMethodID sig is null");
+                        self.check_is_class("GetMethodID", class);
+                    }
+                    self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(33)(self.vtable, class, name, sig)
+                })
             })
-        })
+        }
     }
 
     ///
@@ -8398,13 +8569,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallVoidMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallVoidMethodA");
-            self.check_no_exception("CallVoidMethodA");
-            self.check_return_type_object("CallVoidMethodA", obj, methodID, "void");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallVoidMethodA");
+                self.check_no_exception("CallVoidMethodA");
+                self.check_return_type_object("CallVoidMethodA", obj, methodID, "void");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype)>(63)(self.vtable, obj, methodID, args);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype)>(63)(self.vtable, obj, methodID, args);
     }
 
     ///
@@ -8446,13 +8619,15 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have no parameters
     ///
     pub unsafe fn CallVoidMethod0(&self, obj: jobject, methodID: jmethodID) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallVoidMethod");
-            self.check_no_exception("CallVoidMethod");
-            self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallVoidMethod");
+                self.check_no_exception("CallVoidMethod");
+                self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(61)(self.vtable, obj, methodID);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(61)(self.vtable, obj, methodID);
     }
 
     ///
@@ -8494,14 +8669,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 1 arguments
     ///
     pub unsafe fn CallVoidMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallVoidMethod");
-            self.check_no_exception("CallVoidMethod");
-            self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
-            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallVoidMethod");
+                self.check_no_exception("CallVoidMethod");
+                self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
+                self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1);
     }
 
     ///
@@ -8543,15 +8720,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 2 arguments
     ///
     pub unsafe fn CallVoidMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallVoidMethod");
-            self.check_no_exception("CallVoidMethod");
-            self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
-            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallVoidMethod");
+                self.check_no_exception("CallVoidMethod");
+                self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
+                self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2);
     }
 
     ///
@@ -8593,16 +8772,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 3 arguments
     ///
     pub unsafe fn CallVoidMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallVoidMethod");
-            self.check_no_exception("CallVoidMethod");
-            self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
-            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallVoidMethod");
+                self.check_no_exception("CallVoidMethod");
+                self.check_return_type_object("CallVoidMethod", obj, methodID, "void");
+                self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallVoidMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2, arg3);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(61)(self.vtable, obj, methodID, arg1, arg2, arg3);
     }
 
     ///
@@ -8653,13 +8834,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallObjectMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallObjectMethodA");
-            self.check_no_exception("CallObjectMethodA");
-            self.check_return_type_object("CallObjectMethodA", obj, methodID, "object");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallObjectMethodA");
+                self.check_no_exception("CallObjectMethodA");
+                self.check_return_type_object("CallObjectMethodA", obj, methodID, "object");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -8704,13 +8887,15 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have no parameters
     ///
     pub unsafe fn CallObjectMethod0(&self, obj: jobject, methodID: jmethodID) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallObjectMethod");
-            self.check_no_exception("CallObjectMethod");
-            self.check_return_type_object("CallObjectMethod", obj, methodID, "object");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallObjectMethod");
+                self.check_no_exception("CallObjectMethod");
+                self.check_return_type_object("CallObjectMethod", obj, methodID, "object");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jobject>(34)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jobject>(34)(self.vtable, obj, methodID)
     }
 
     ///
@@ -8755,14 +8940,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 1 arguments
     ///
     pub unsafe fn CallObjectMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallObjectMethod");
-            self.check_no_exception("CallObjectMethod");
-            self.check_return_type_object("CallObjectMethod", obj, methodID, "object");
-            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallObjectMethod");
+                self.check_no_exception("CallObjectMethod");
+                self.check_return_type_object("CallObjectMethod", obj, methodID, "object");
+                self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -8807,15 +8994,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 2 arguments
     ///
     pub unsafe fn CallObjectMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallObjectMethod");
-            self.check_no_exception("CallObjectMethod");
-            self.check_return_type_object("CallObjectMethod", obj, methodID, "object");
-            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallObjectMethod");
+                self.check_no_exception("CallObjectMethod");
+                self.check_return_type_object("CallObjectMethod", obj, methodID, "object");
+                self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -8860,16 +9049,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 3 arguments
     ///
     pub unsafe fn CallObjectMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallObjectMethod");
-            self.check_no_exception("CallObjectMethod");
-            self.check_return_type_object("CallObjectMethod", obj, methodID, "object");
-            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallObjectMethod");
+                self.check_no_exception("CallObjectMethod");
+                self.check_return_type_object("CallObjectMethod", obj, methodID, "object");
+                self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallObjectMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(34)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -8920,13 +9111,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallBooleanMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallBooleanMethodA");
-            self.check_no_exception("CallBooleanMethodA");
-            self.check_return_type_object("CallBooleanMethodA", obj, methodID, "boolean");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallBooleanMethodA");
+                self.check_no_exception("CallBooleanMethodA");
+                self.check_return_type_object("CallBooleanMethodA", obj, methodID, "boolean");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -8971,13 +9164,15 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have no parameters
     ///
     pub unsafe fn CallBooleanMethod0(&self, obj: jobject, methodID: jmethodID) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallBooleanMethod");
-            self.check_no_exception("CallBooleanMethod");
-            self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallBooleanMethod");
+                self.check_no_exception("CallBooleanMethod");
+                self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jboolean>(37)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jboolean>(37)(self.vtable, obj, methodID)
     }
 
     ///
@@ -9023,14 +9218,16 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallBooleanMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallBooleanMethod");
-            self.check_no_exception("CallBooleanMethod");
-            self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
-            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallBooleanMethod");
+                self.check_no_exception("CallBooleanMethod");
+                self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
+                self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -9076,15 +9273,17 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallBooleanMethod");
-            self.check_no_exception("CallBooleanMethod");
-            self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
-            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallBooleanMethod");
+                self.check_no_exception("CallBooleanMethod");
+                self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
+                self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -9130,16 +9329,18 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallBooleanMethod");
-            self.check_no_exception("CallBooleanMethod");
-            self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
-            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallBooleanMethod");
+                self.check_no_exception("CallBooleanMethod");
+                self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
+                self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -9190,13 +9391,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallByteMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallByteMethodA");
-            self.check_no_exception("CallByteMethodA");
-            self.check_return_type_object("CallByteMethodA", obj, methodID, "byte");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallByteMethodA");
+                self.check_no_exception("CallByteMethodA");
+                self.check_return_type_object("CallByteMethodA", obj, methodID, "byte");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jbyte>(42)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jbyte>(42)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -9241,13 +9444,15 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have no parameters
     ///
     pub unsafe fn CallByteMethod0(&self, obj: jobject, methodID: jmethodID) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallByteMethod0");
-            self.check_no_exception("CallByteMethod0");
-            self.check_return_type_object("CallByteMethod0", obj, methodID, "byte");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallByteMethod0");
+                self.check_no_exception("CallByteMethod0");
+                self.check_return_type_object("CallByteMethod0", obj, methodID, "byte");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jbyte>(40)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jbyte>(40)(self.vtable, obj, methodID)
     }
 
     ///
@@ -9293,14 +9498,16 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallByteMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallByteMethod1");
-            self.check_no_exception("CallByteMethod1");
-            self.check_return_type_object("CallByteMethod1", obj, methodID, "byte");
-            self.check_parameter_types_object("CallByteMethod1", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallByteMethod1");
+                self.check_no_exception("CallByteMethod1");
+                self.check_return_type_object("CallByteMethod1", obj, methodID, "byte");
+                self.check_parameter_types_object("CallByteMethod1", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -9346,15 +9553,17 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallByteMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallByteMethod2");
-            self.check_no_exception("CallByteMethod2");
-            self.check_return_type_object("CallByteMethod2", obj, methodID, "byte");
-            self.check_parameter_types_object("CallByteMethod2", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallByteMethod2", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallByteMethod2");
+                self.check_no_exception("CallByteMethod2");
+                self.check_return_type_object("CallByteMethod2", obj, methodID, "byte");
+                self.check_parameter_types_object("CallByteMethod2", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallByteMethod2", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -9400,16 +9609,18 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallByteMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallByteMethod3");
-            self.check_no_exception("CallByteMethod3");
-            self.check_return_type_object("CallByteMethod3", obj, methodID, "byte");
-            self.check_parameter_types_object("CallByteMethod3", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallByteMethod3", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallByteMethod3", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallByteMethod3");
+                self.check_no_exception("CallByteMethod3");
+                self.check_return_type_object("CallByteMethod3", obj, methodID, "byte");
+                self.check_parameter_types_object("CallByteMethod3", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallByteMethod3", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallByteMethod3", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(40)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -9460,13 +9671,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallCharMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallCharMethodA");
-            self.check_no_exception("CallCharMethodA");
-            self.check_return_type_object("CallCharMethodA", obj, methodID, "char");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallCharMethodA");
+                self.check_no_exception("CallCharMethodA");
+                self.check_return_type_object("CallCharMethodA", obj, methodID, "char");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jchar>(45)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jchar>(45)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -9511,13 +9724,15 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have no parameters
     ///
     pub unsafe fn CallCharMethod0(&self, obj: jobject, methodID: jmethodID) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallCharMethod");
-            self.check_no_exception("CallCharMethod");
-            self.check_return_type_object("CallCharMethod", obj, methodID, "char");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallCharMethod");
+                self.check_no_exception("CallCharMethod");
+                self.check_return_type_object("CallCharMethod", obj, methodID, "char");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jchar>(43)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jchar>(43)(self.vtable, obj, methodID)
     }
 
     ///
@@ -9563,14 +9778,16 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallCharMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallCharMethod");
-            self.check_no_exception("CallCharMethod");
-            self.check_return_type_object("CallCharMethod", obj, methodID, "char");
-            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallCharMethod");
+                self.check_no_exception("CallCharMethod");
+                self.check_return_type_object("CallCharMethod", obj, methodID, "char");
+                self.check_parameter_types_object("CallCharMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -9616,15 +9833,17 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallCharMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallCharMethod");
-            self.check_no_exception("CallCharMethod");
-            self.check_return_type_object("CallCharMethod", obj, methodID, "char");
-            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallCharMethod");
+                self.check_no_exception("CallCharMethod");
+                self.check_return_type_object("CallCharMethod", obj, methodID, "char");
+                self.check_parameter_types_object("CallCharMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallCharMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -9670,16 +9889,18 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallCharMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallCharMethod");
-            self.check_no_exception("CallCharMethod");
-            self.check_return_type_object("CallCharMethod", obj, methodID, "char");
-            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallCharMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallCharMethod");
+                self.check_no_exception("CallCharMethod");
+                self.check_return_type_object("CallCharMethod", obj, methodID, "char");
+                self.check_parameter_types_object("CallCharMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallCharMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallCharMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(43)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -9730,13 +9951,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallShortMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallShortMethodA");
-            self.check_no_exception("CallShortMethodA");
-            self.check_return_type_object("CallShortMethodA", obj, methodID, "short");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallShortMethodA");
+                self.check_no_exception("CallShortMethodA");
+                self.check_return_type_object("CallShortMethodA", obj, methodID, "short");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jshort>(48)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jshort>(48)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -9781,13 +10004,15 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have no parameters
     ///
     pub unsafe fn CallShortMethod0(&self, obj: jobject, methodID: jmethodID) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallShortMethod");
-            self.check_no_exception("CallShortMethod");
-            self.check_return_type_object("CallShortMethod", obj, methodID, "short");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallShortMethod");
+                self.check_no_exception("CallShortMethod");
+                self.check_return_type_object("CallShortMethod", obj, methodID, "short");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jshort>(46)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jshort>(46)(self.vtable, obj, methodID)
     }
 
     ///
@@ -9833,14 +10058,16 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallShortMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallShortMethod");
-            self.check_no_exception("CallShortMethod");
-            self.check_return_type_object("CallShortMethod", obj, methodID, "short");
-            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallShortMethod");
+                self.check_no_exception("CallShortMethod");
+                self.check_return_type_object("CallShortMethod", obj, methodID, "short");
+                self.check_parameter_types_object("CallShortMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -9886,15 +10113,17 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallShortMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallShortMethod");
-            self.check_no_exception("CallShortMethod");
-            self.check_return_type_object("CallShortMethod", obj, methodID, "short");
-            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallShortMethod");
+                self.check_no_exception("CallShortMethod");
+                self.check_return_type_object("CallShortMethod", obj, methodID, "short");
+                self.check_parameter_types_object("CallShortMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallShortMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -9940,16 +10169,18 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallShortMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallShortMethod");
-            self.check_no_exception("CallShortMethod");
-            self.check_return_type_object("CallShortMethod", obj, methodID, "short");
-            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallShortMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallShortMethod");
+                self.check_no_exception("CallShortMethod");
+                self.check_return_type_object("CallShortMethod", obj, methodID, "short");
+                self.check_parameter_types_object("CallShortMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallShortMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallShortMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(46)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -10000,13 +10231,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallIntMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallIntMethodA");
-            self.check_no_exception("CallIntMethodA");
-            self.check_return_type_object("CallIntMethodA", obj, methodID, "int");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallIntMethodA");
+                self.check_no_exception("CallIntMethodA");
+                self.check_return_type_object("CallIntMethodA", obj, methodID, "int");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jint>(51)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jint>(51)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -10051,13 +10284,15 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have no parameters
     ///
     pub unsafe fn CallIntMethod0(&self, obj: jobject, methodID: jmethodID) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallIntMethod");
-            self.check_no_exception("CallIntMethod");
-            self.check_return_type_object("CallIntMethod", obj, methodID, "int");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallIntMethod");
+                self.check_no_exception("CallIntMethod");
+                self.check_return_type_object("CallIntMethod", obj, methodID, "int");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jint>(49)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jint>(49)(self.vtable, obj, methodID)
     }
 
     ///
@@ -10103,14 +10338,16 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallIntMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallIntMethod");
-            self.check_no_exception("CallIntMethod");
-            self.check_return_type_object("CallIntMethod", obj, methodID, "int");
-            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallIntMethod");
+                self.check_no_exception("CallIntMethod");
+                self.check_return_type_object("CallIntMethod", obj, methodID, "int");
+                self.check_parameter_types_object("CallIntMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -10156,15 +10393,17 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallIntMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallIntMethod");
-            self.check_no_exception("CallIntMethod");
-            self.check_return_type_object("CallIntMethod", obj, methodID, "int");
-            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallIntMethod");
+                self.check_no_exception("CallIntMethod");
+                self.check_return_type_object("CallIntMethod", obj, methodID, "int");
+                self.check_parameter_types_object("CallIntMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallIntMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -10209,16 +10448,18 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallIntMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallIntMethod");
-            self.check_no_exception("CallIntMethod");
-            self.check_return_type_object("CallIntMethod", obj, methodID, "int");
-            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallIntMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallIntMethod");
+                self.check_no_exception("CallIntMethod");
+                self.check_return_type_object("CallIntMethod", obj, methodID, "int");
+                self.check_parameter_types_object("CallIntMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallIntMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallIntMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(49)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -10267,13 +10508,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallLongMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallLongMethodA");
-            self.check_no_exception("CallLongMethodA");
-            self.check_return_type_object("CallLongMethodA", obj, methodID, "long");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallLongMethodA");
+                self.check_no_exception("CallLongMethodA");
+                self.check_return_type_object("CallLongMethodA", obj, methodID, "long");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jlong>(54)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jlong>(54)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -10317,13 +10560,15 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have no parameters
     ///
     pub unsafe fn CallLongMethod0(&self, obj: jobject, methodID: jmethodID) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallLongMethod");
-            self.check_no_exception("CallLongMethod");
-            self.check_return_type_object("CallLongMethod", obj, methodID, "long");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallLongMethod");
+                self.check_no_exception("CallLongMethod");
+                self.check_return_type_object("CallLongMethod", obj, methodID, "long");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jlong>(52)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jlong>(52)(self.vtable, obj, methodID)
     }
 
     ///
@@ -10368,14 +10613,16 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallLongMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallLongMethod");
-            self.check_no_exception("CallLongMethod");
-            self.check_return_type_object("CallLongMethod", obj, methodID, "long");
-            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallLongMethod");
+                self.check_no_exception("CallLongMethod");
+                self.check_return_type_object("CallLongMethod", obj, methodID, "long");
+                self.check_parameter_types_object("CallLongMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -10420,15 +10667,17 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallLongMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallLongMethod");
-            self.check_no_exception("CallLongMethod");
-            self.check_return_type_object("CallLongMethod", obj, methodID, "long");
-            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallLongMethod");
+                self.check_no_exception("CallLongMethod");
+                self.check_return_type_object("CallLongMethod", obj, methodID, "long");
+                self.check_parameter_types_object("CallLongMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallLongMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -10473,16 +10722,18 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallLongMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallLongMethod");
-            self.check_no_exception("CallLongMethod");
-            self.check_return_type_object("CallLongMethod", obj, methodID, "long");
-            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallLongMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallLongMethod");
+                self.check_no_exception("CallLongMethod");
+                self.check_return_type_object("CallLongMethod", obj, methodID, "long");
+                self.check_parameter_types_object("CallLongMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallLongMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallLongMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(52)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -10531,13 +10782,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallFloatMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallFloatMethodA");
-            self.check_no_exception("CallFloatMethodA");
-            self.check_return_type_object("CallFloatMethodA", obj, methodID, "float");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallFloatMethodA");
+                self.check_no_exception("CallFloatMethodA");
+                self.check_return_type_object("CallFloatMethodA", obj, methodID, "float");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jfloat>(57)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jfloat>(57)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -10581,13 +10834,15 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have no parameters
     ///
     pub unsafe fn CallFloatMethod0(&self, obj: jobject, methodID: jmethodID) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallFloatMethod");
-            self.check_no_exception("CallFloatMethod");
-            self.check_return_type_object("CallFloatMethod", obj, methodID, "float");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallFloatMethod");
+                self.check_no_exception("CallFloatMethod");
+                self.check_return_type_object("CallFloatMethod", obj, methodID, "float");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jfloat>(55)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jfloat>(55)(self.vtable, obj, methodID)
     }
 
     ///
@@ -10632,14 +10887,16 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallFloatMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallFloatMethod");
-            self.check_no_exception("CallFloatMethod");
-            self.check_return_type_object("CallFloatMethod", obj, methodID, "float");
-            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallFloatMethod");
+                self.check_no_exception("CallFloatMethod");
+                self.check_return_type_object("CallFloatMethod", obj, methodID, "float");
+                self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -10684,15 +10941,17 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallFloatMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallFloatMethod");
-            self.check_no_exception("CallFloatMethod");
-            self.check_return_type_object("CallFloatMethod", obj, methodID, "float");
-            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallFloatMethod");
+                self.check_no_exception("CallFloatMethod");
+                self.check_return_type_object("CallFloatMethod", obj, methodID, "float");
+                self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -10737,16 +10996,18 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallFloatMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallFloatMethod");
-            self.check_no_exception("CallFloatMethod");
-            self.check_return_type_object("CallFloatMethod", obj, methodID, "float");
-            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallFloatMethod");
+                self.check_no_exception("CallFloatMethod");
+                self.check_return_type_object("CallFloatMethod", obj, methodID, "float");
+                self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallFloatMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(55)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -10795,13 +11056,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallDoubleMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallDoubleMethodA");
-            self.check_no_exception("CallDoubleMethodA");
-            self.check_return_type_object("CallDoubleMethodA", obj, methodID, "double");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallDoubleMethodA");
+                self.check_no_exception("CallDoubleMethodA");
+                self.check_return_type_object("CallDoubleMethodA", obj, methodID, "double");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jdouble>(60)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jdouble>(60)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -10845,13 +11108,15 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have no parameters
     ///
     pub unsafe fn CallDoubleMethod0(&self, obj: jobject, methodID: jmethodID) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallDoubleMethod");
-            self.check_no_exception("CallDoubleMethod");
-            self.check_return_type_object("CallDoubleMethod", obj, methodID, "double");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallDoubleMethod");
+                self.check_no_exception("CallDoubleMethod");
+                self.check_return_type_object("CallDoubleMethod", obj, methodID, "double");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jdouble>(58)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jdouble>(58)(self.vtable, obj, methodID)
     }
 
     ///
@@ -10896,14 +11161,16 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallDoubleMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallDoubleMethod");
-            self.check_no_exception("CallDoubleMethod");
-            self.check_return_type_object("CallDoubleMethod", obj, methodID, "double");
-            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallDoubleMethod");
+                self.check_no_exception("CallDoubleMethod");
+                self.check_return_type_object("CallDoubleMethod", obj, methodID, "double");
+                self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -10948,15 +11215,17 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallDoubleMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallDoubleMethod");
-            self.check_no_exception("CallDoubleMethod");
-            self.check_return_type_object("CallDoubleMethod", obj, methodID, "double");
-            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallDoubleMethod");
+                self.check_no_exception("CallDoubleMethod");
+                self.check_return_type_object("CallDoubleMethod", obj, methodID, "double");
+                self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -11001,16 +11270,18 @@ impl JNIEnv {
     /// The parameter types must exactly match the java method parameters.
     ///
     pub unsafe fn CallDoubleMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallDoubleMethod");
-            self.check_no_exception("CallDoubleMethod");
-            self.check_return_type_object("CallDoubleMethod", obj, methodID, "double");
-            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallDoubleMethod");
+                self.check_no_exception("CallDoubleMethod");
+                self.check_return_type_object("CallDoubleMethod", obj, methodID, "double");
+                self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallDoubleMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(58)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -11060,14 +11331,16 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallNonvirtualVoidMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualVoidMethodA");
-            self.check_no_exception("CallNonvirtualVoidMethodA");
-            self.check_return_type_object("CallNonvirtualVoidMethodA", obj, methodID, "void");
-            self.check_is_class("CallNonvirtualVoidMethodA", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualVoidMethodA");
+                self.check_no_exception("CallNonvirtualVoidMethodA");
+                self.check_return_type_object("CallNonvirtualVoidMethodA", obj, methodID, "void");
+                self.check_is_class("CallNonvirtualVoidMethodA", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype)>(93)(self.vtable, obj, class, methodID, args);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype)>(93)(self.vtable, obj, class, methodID, args);
     }
 
     ///
@@ -11112,14 +11385,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have no parameters
     ///
     pub unsafe fn CallNonvirtualVoidMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualVoidMethod");
-            self.check_no_exception("CallNonvirtualVoidMethod");
-            self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
-            self.check_is_class("CallNonvirtualVoidMethod", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualVoidMethod");
+                self.check_no_exception("CallNonvirtualVoidMethod");
+                self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
+                self.check_is_class("CallNonvirtualVoidMethod", class);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID)>(91)(self.vtable, obj, class, methodID);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID)>(91)(self.vtable, obj, class, methodID);
     }
 
     ///
@@ -11164,15 +11439,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 1 argument
     ///
     pub unsafe fn CallNonvirtualVoidMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualVoidMethod");
-            self.check_no_exception("CallNonvirtualVoidMethod");
-            self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
-            self.check_is_class("CallNonvirtualVoidMethod", class);
-            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualVoidMethod");
+                self.check_no_exception("CallNonvirtualVoidMethod");
+                self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
+                self.check_is_class("CallNonvirtualVoidMethod", class);
+                self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1);
     }
 
     ///
@@ -11217,16 +11494,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 2 arguments
     ///
     pub unsafe fn CallNonvirtualVoidMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualVoidMethod");
-            self.check_no_exception("CallNonvirtualVoidMethod");
-            self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
-            self.check_is_class("CallNonvirtualVoidMethod", class);
-            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualVoidMethod");
+                self.check_no_exception("CallNonvirtualVoidMethod");
+                self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
+                self.check_is_class("CallNonvirtualVoidMethod", class);
+                self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2);
     }
 
     ///
@@ -11271,17 +11550,19 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return void and have 3 arguments
     ///
     pub unsafe fn CallNonvirtualVoidMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualVoidMethod");
-            self.check_no_exception("CallNonvirtualVoidMethod");
-            self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
-            self.check_is_class("CallNonvirtualVoidMethod", class);
-            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualVoidMethod");
+                self.check_no_exception("CallNonvirtualVoidMethod");
+                self.check_return_type_object("CallNonvirtualVoidMethod", obj, methodID, "void");
+                self.check_is_class("CallNonvirtualVoidMethod", class);
+                self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallNonvirtualVoidMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2, arg3);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...)>(91)(self.vtable, obj, class, methodID, arg1, arg2, arg3);
     }
 
     ///
@@ -11334,14 +11615,16 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallNonvirtualObjectMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualObjectMethodA");
-            self.check_no_exception("CallNonvirtualObjectMethodA");
-            self.check_return_type_object("CallNonvirtualObjectMethodA", obj, methodID, "object");
-            self.check_is_class("CallNonvirtualObjectMethodA", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualObjectMethodA");
+                self.check_no_exception("CallNonvirtualObjectMethodA");
+                self.check_return_type_object("CallNonvirtualObjectMethodA", obj, methodID, "object");
+                self.check_is_class("CallNonvirtualObjectMethodA", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jobject>(66)(self.vtable, obj, class, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jobject>(66)(self.vtable, obj, class, methodID, args)
     }
 
     ///
@@ -11389,14 +11672,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have no parameters
     ///
     pub unsafe fn CallNonvirtualObjectMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualObjectMethod");
-            self.check_no_exception("CallNonvirtualObjectMethod");
-            self.check_return_type_object("CallNonvirtualObjectMethod", obj, methodID, "object");
-            self.check_is_class("CallNonvirtualObjectMethod", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualObjectMethod");
+                self.check_no_exception("CallNonvirtualObjectMethod");
+                self.check_return_type_object("CallNonvirtualObjectMethod", obj, methodID, "object");
+                self.check_is_class("CallNonvirtualObjectMethod", class);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jobject>(64)(self.vtable, obj, class, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jobject>(64)(self.vtable, obj, class, methodID)
     }
 
     ///
@@ -11444,15 +11729,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 1 arguments
     ///
     pub unsafe fn CallNonvirtualObjectMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualObjectMethod");
-            self.check_no_exception("CallNonvirtualObjectMethod");
-            self.check_return_type_object("CallNonvirtualObjectMethod", obj, methodID, "object");
-            self.check_is_class("CallNonvirtualObjectMethod", class);
-            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualObjectMethod");
+                self.check_no_exception("CallNonvirtualObjectMethod");
+                self.check_return_type_object("CallNonvirtualObjectMethod", obj, methodID, "object");
+                self.check_is_class("CallNonvirtualObjectMethod", class);
+                self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1)
     }
 
     ///
@@ -11500,16 +11787,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 2 arguments
     ///
     pub unsafe fn CallNonvirtualObjectMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualObjectMethod");
-            self.check_no_exception("CallNonvirtualObjectMethod");
-            self.check_return_type_object("CallNonvirtualObjectMethod", obj, methodID, "object");
-            self.check_is_class("CallNonvirtualObjectMethod", class);
-            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualObjectMethod");
+                self.check_no_exception("CallNonvirtualObjectMethod");
+                self.check_return_type_object("CallNonvirtualObjectMethod", obj, methodID, "object");
+                self.check_is_class("CallNonvirtualObjectMethod", class);
+                self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     ///
@@ -11557,17 +11846,19 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return an object and have 3 arguments
     ///
     pub unsafe fn CallNonvirtualObjectMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualObjectMethod");
-            self.check_no_exception("CallNonvirtualObjectMethod");
-            self.check_return_type_object("CallNonvirtualObjectMethod", obj, methodID, "object");
-            self.check_is_class("CallNonvirtualObjectMethod", class);
-            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualObjectMethod");
+                self.check_no_exception("CallNonvirtualObjectMethod");
+                self.check_return_type_object("CallNonvirtualObjectMethod", obj, methodID, "object");
+                self.check_is_class("CallNonvirtualObjectMethod", class);
+                self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallNonvirtualObjectMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jobject>(64)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -11620,14 +11911,16 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallNonvirtualBooleanMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualBooleanMethodA");
-            self.check_no_exception("CallNonvirtualBooleanMethodA");
-            self.check_return_type_object("CallNonvirtualBooleanMethodA", obj, methodID, "boolean");
-            self.check_is_class("CallNonvirtualBooleanMethodA", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualBooleanMethodA");
+                self.check_no_exception("CallNonvirtualBooleanMethodA");
+                self.check_return_type_object("CallNonvirtualBooleanMethodA", obj, methodID, "boolean");
+                self.check_is_class("CallNonvirtualBooleanMethodA", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jboolean>(69)(self.vtable, obj, class, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jboolean>(69)(self.vtable, obj, class, methodID, args)
     }
 
     ///
@@ -11675,14 +11968,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have no parameters
     ///
     pub unsafe fn CallNonvirtualBooleanMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualBooleanMethod");
-            self.check_no_exception("CallNonvirtualBooleanMethod");
-            self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
-            self.check_is_class("CallNonvirtualBooleanMethod", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualBooleanMethod");
+                self.check_no_exception("CallNonvirtualBooleanMethod");
+                self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
+                self.check_is_class("CallNonvirtualBooleanMethod", class);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jboolean>(67)(self.vtable, obj, class, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jboolean>(67)(self.vtable, obj, class, methodID)
     }
 
     ///
@@ -11730,15 +12025,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 1 arguments
     ///
     pub unsafe fn CallNonvirtualBooleanMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualBooleanMethod");
-            self.check_no_exception("CallNonvirtualBooleanMethod");
-            self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
-            self.check_is_class("CallNonvirtualBooleanMethod", class);
-            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualBooleanMethod");
+                self.check_no_exception("CallNonvirtualBooleanMethod");
+                self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
+                self.check_is_class("CallNonvirtualBooleanMethod", class);
+                self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1)
     }
 
     ///
@@ -11786,16 +12083,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 2 arguments
     ///
     pub unsafe fn CallNonvirtualBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualBooleanMethod");
-            self.check_no_exception("CallNonvirtualBooleanMethod");
-            self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
-            self.check_is_class("CallNonvirtualBooleanMethod", class);
-            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualBooleanMethod");
+                self.check_no_exception("CallNonvirtualBooleanMethod");
+                self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
+                self.check_is_class("CallNonvirtualBooleanMethod", class);
+                self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     ///
@@ -11843,17 +12142,19 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 3 arguments
     ///
     pub unsafe fn CallNonvirtualBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualBooleanMethod");
-            self.check_no_exception("CallNonvirtualBooleanMethod");
-            self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
-            self.check_is_class("CallNonvirtualBooleanMethod", class);
-            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualBooleanMethod");
+                self.check_no_exception("CallNonvirtualBooleanMethod");
+                self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
+                self.check_is_class("CallNonvirtualBooleanMethod", class);
+                self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -11906,14 +12207,16 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallNonvirtualByteMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualByteMethodA");
-            self.check_no_exception("CallNonvirtualByteMethodA");
-            self.check_return_type_object("CallNonvirtualByteMethodA", obj, methodID, "byte");
-            self.check_is_class("CallNonvirtualByteMethodA", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualByteMethodA");
+                self.check_no_exception("CallNonvirtualByteMethodA");
+                self.check_return_type_object("CallNonvirtualByteMethodA", obj, methodID, "byte");
+                self.check_is_class("CallNonvirtualByteMethodA", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jbyte>(72)(self.vtable, obj, class, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jbyte>(72)(self.vtable, obj, class, methodID, args)
     }
 
     ///
@@ -11961,14 +12264,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 0 arguments
     ///
     pub unsafe fn CallNonvirtualByteMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualByteMethod");
-            self.check_no_exception("CallNonvirtualByteMethod");
-            self.check_return_type_object("CallNonvirtualByteMethod", obj, methodID, "byte");
-            self.check_is_class("CallNonvirtualByteMethod", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualByteMethod");
+                self.check_no_exception("CallNonvirtualByteMethod");
+                self.check_return_type_object("CallNonvirtualByteMethod", obj, methodID, "byte");
+                self.check_is_class("CallNonvirtualByteMethod", class);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jbyte>(70)(self.vtable, obj, class, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jbyte>(70)(self.vtable, obj, class, methodID)
     }
 
     ///
@@ -12016,15 +12321,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 1 arguments
     ///
     pub unsafe fn CallNonvirtualByteMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualByteMethod");
-            self.check_no_exception("CallNonvirtualByteMethod");
-            self.check_return_type_object("CallNonvirtualByteMethod", obj, methodID, "byte");
-            self.check_is_class("CallNonvirtualByteMethod", class);
-            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualByteMethod");
+                self.check_no_exception("CallNonvirtualByteMethod");
+                self.check_return_type_object("CallNonvirtualByteMethod", obj, methodID, "byte");
+                self.check_is_class("CallNonvirtualByteMethod", class);
+                self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1)
     }
 
     ///
@@ -12072,16 +12379,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 2 arguments
     ///
     pub unsafe fn CallNonvirtualByteMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualByteMethod");
-            self.check_no_exception("CallNonvirtualByteMethod");
-            self.check_return_type_object("CallNonvirtualByteMethod", obj, methodID, "byte");
-            self.check_is_class("CallNonvirtualByteMethod", class);
-            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualByteMethod");
+                self.check_no_exception("CallNonvirtualByteMethod");
+                self.check_return_type_object("CallNonvirtualByteMethod", obj, methodID, "byte");
+                self.check_is_class("CallNonvirtualByteMethod", class);
+                self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     ///
@@ -12129,17 +12438,19 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return byte and have 3 arguments
     ///
     pub unsafe fn CallNonvirtualByteMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualByteMethod");
-            self.check_no_exception("CallNonvirtualByteMethod");
-            self.check_return_type_object("CallNonvirtualByteMethod", obj, methodID, "byte");
-            self.check_is_class("CallNonvirtualByteMethod", class);
-            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualByteMethod");
+                self.check_no_exception("CallNonvirtualByteMethod");
+                self.check_return_type_object("CallNonvirtualByteMethod", obj, methodID, "byte");
+                self.check_is_class("CallNonvirtualByteMethod", class);
+                self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallNonvirtualByteMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jbyte>(70)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -12192,14 +12503,16 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallNonvirtualCharMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualCharMethodA");
-            self.check_no_exception("CallNonvirtualCharMethodA");
-            self.check_return_type_object("CallNonvirtualCharMethodA", obj, methodID, "char");
-            self.check_is_class("CallNonvirtualCharMethodA", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualCharMethodA");
+                self.check_no_exception("CallNonvirtualCharMethodA");
+                self.check_return_type_object("CallNonvirtualCharMethodA", obj, methodID, "char");
+                self.check_is_class("CallNonvirtualCharMethodA", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jchar>(75)(self.vtable, obj, class, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jchar>(75)(self.vtable, obj, class, methodID, args)
     }
 
     ///
@@ -12247,14 +12560,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 0 arguments
     ///
     pub unsafe fn CallNonvirtualCharMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualCharMethod");
-            self.check_no_exception("CallNonvirtualCharMethod");
-            self.check_return_type_object("CallNonvirtualCharMethod", obj, methodID, "char");
-            self.check_is_class("CallNonvirtualCharMethod", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualCharMethod");
+                self.check_no_exception("CallNonvirtualCharMethod");
+                self.check_return_type_object("CallNonvirtualCharMethod", obj, methodID, "char");
+                self.check_is_class("CallNonvirtualCharMethod", class);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jchar>(73)(self.vtable, obj, class, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jchar>(73)(self.vtable, obj, class, methodID)
     }
 
     ///
@@ -12302,15 +12617,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 1 arguments
     ///
     pub unsafe fn CallNonvirtualCharMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualCharMethod");
-            self.check_no_exception("CallNonvirtualCharMethod");
-            self.check_return_type_object("CallNonvirtualCharMethod", obj, methodID, "char");
-            self.check_is_class("CallNonvirtualCharMethod", class);
-            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualCharMethod");
+                self.check_no_exception("CallNonvirtualCharMethod");
+                self.check_return_type_object("CallNonvirtualCharMethod", obj, methodID, "char");
+                self.check_is_class("CallNonvirtualCharMethod", class);
+                self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1)
     }
 
     ///
@@ -12358,16 +12675,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 2 arguments
     ///
     pub unsafe fn CallNonvirtualCharMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualCharMethod");
-            self.check_no_exception("CallNonvirtualCharMethod");
-            self.check_return_type_object("CallNonvirtualCharMethod", obj, methodID, "char");
-            self.check_is_class("CallNonvirtualCharMethod", class);
-            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualCharMethod");
+                self.check_no_exception("CallNonvirtualCharMethod");
+                self.check_return_type_object("CallNonvirtualCharMethod", obj, methodID, "char");
+                self.check_is_class("CallNonvirtualCharMethod", class);
+                self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     ///
@@ -12415,17 +12734,19 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return char and have 3 arguments
     ///
     pub unsafe fn CallNonvirtualCharMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualCharMethod");
-            self.check_no_exception("CallNonvirtualCharMethod");
-            self.check_return_type_object("CallNonvirtualCharMethod", obj, methodID, "char");
-            self.check_is_class("CallNonvirtualCharMethod", class);
-            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualCharMethod");
+                self.check_no_exception("CallNonvirtualCharMethod");
+                self.check_return_type_object("CallNonvirtualCharMethod", obj, methodID, "char");
+                self.check_is_class("CallNonvirtualCharMethod", class);
+                self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallNonvirtualCharMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jchar>(73)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -12478,14 +12799,16 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallNonvirtualShortMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualShortMethodA");
-            self.check_no_exception("CallNonvirtualShortMethodA");
-            self.check_return_type_object("CallNonvirtualShortMethodA", obj, methodID, "short");
-            self.check_is_class("CallNonvirtualShortMethodA", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualShortMethodA");
+                self.check_no_exception("CallNonvirtualShortMethodA");
+                self.check_return_type_object("CallNonvirtualShortMethodA", obj, methodID, "short");
+                self.check_is_class("CallNonvirtualShortMethodA", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jshort>(78)(self.vtable, obj, class, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jshort>(78)(self.vtable, obj, class, methodID, args)
     }
 
     ///
@@ -12533,14 +12856,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 0 arguments
     ///
     pub unsafe fn CallNonvirtualShortMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualShortMethod");
-            self.check_no_exception("CallNonvirtualShortMethod");
-            self.check_return_type_object("CallNonvirtualShortMethod", obj, methodID, "short");
-            self.check_is_class("CallNonvirtualShortMethod", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualShortMethod");
+                self.check_no_exception("CallNonvirtualShortMethod");
+                self.check_return_type_object("CallNonvirtualShortMethod", obj, methodID, "short");
+                self.check_is_class("CallNonvirtualShortMethod", class);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jshort>(76)(self.vtable, obj, class, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jshort>(76)(self.vtable, obj, class, methodID)
     }
 
     ///
@@ -12588,15 +12913,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 1 arguments
     ///
     pub unsafe fn CallNonvirtualShortMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualShortMethod");
-            self.check_no_exception("CallNonvirtualShortMethod");
-            self.check_return_type_object("CallNonvirtualShortMethod", obj, methodID, "short");
-            self.check_is_class("CallNonvirtualShortMethod", class);
-            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualShortMethod");
+                self.check_no_exception("CallNonvirtualShortMethod");
+                self.check_return_type_object("CallNonvirtualShortMethod", obj, methodID, "short");
+                self.check_is_class("CallNonvirtualShortMethod", class);
+                self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1)
     }
 
     ///
@@ -12644,16 +12971,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 2 arguments
     ///
     pub unsafe fn CallNonvirtualShortMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualShortMethod");
-            self.check_no_exception("CallNonvirtualShortMethod");
-            self.check_return_type_object("CallNonvirtualShortMethod", obj, methodID, "short");
-            self.check_is_class("CallNonvirtualShortMethod", class);
-            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualShortMethod");
+                self.check_no_exception("CallNonvirtualShortMethod");
+                self.check_return_type_object("CallNonvirtualShortMethod", obj, methodID, "short");
+                self.check_is_class("CallNonvirtualShortMethod", class);
+                self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     ///
@@ -12701,17 +13030,19 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return short and have 3 arguments
     ///
     pub unsafe fn CallNonvirtualShortMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualShortMethod");
-            self.check_no_exception("CallNonvirtualShortMethod");
-            self.check_return_type_object("CallNonvirtualShortMethod", obj, methodID, "short");
-            self.check_is_class("CallNonvirtualShortMethod", class);
-            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualShortMethod");
+                self.check_no_exception("CallNonvirtualShortMethod");
+                self.check_return_type_object("CallNonvirtualShortMethod", obj, methodID, "short");
+                self.check_is_class("CallNonvirtualShortMethod", class);
+                self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallNonvirtualShortMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jshort>(76)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -12764,14 +13095,16 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallNonvirtualIntMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualIntMethodA");
-            self.check_no_exception("CallNonvirtualIntMethodA");
-            self.check_return_type_object("CallNonvirtualIntMethodA", obj, methodID, "int");
-            self.check_is_class("CallNonvirtualIntMethodA", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualIntMethodA");
+                self.check_no_exception("CallNonvirtualIntMethodA");
+                self.check_return_type_object("CallNonvirtualIntMethodA", obj, methodID, "int");
+                self.check_is_class("CallNonvirtualIntMethodA", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jint>(81)(self.vtable, obj, class, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jint>(81)(self.vtable, obj, class, methodID, args)
     }
 
     ///
@@ -12819,14 +13152,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 0 arguments
     ///
     pub unsafe fn CallNonvirtualIntMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualIntMethod");
-            self.check_no_exception("CallNonvirtualIntMethod");
-            self.check_return_type_object("CallNonvirtualIntMethod", obj, methodID, "int");
-            self.check_is_class("CallNonvirtualIntMethod", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualIntMethod");
+                self.check_no_exception("CallNonvirtualIntMethod");
+                self.check_return_type_object("CallNonvirtualIntMethod", obj, methodID, "int");
+                self.check_is_class("CallNonvirtualIntMethod", class);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jint>(79)(self.vtable, obj, class, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jint>(79)(self.vtable, obj, class, methodID)
     }
 
     ///
@@ -12874,15 +13209,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 1 arguments
     ///
     pub unsafe fn CallNonvirtualIntMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualIntMethod");
-            self.check_no_exception("CallNonvirtualIntMethod");
-            self.check_return_type_object("CallNonvirtualIntMethod", obj, methodID, "int");
-            self.check_is_class("CallNonvirtualIntMethod", class);
-            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualIntMethod");
+                self.check_no_exception("CallNonvirtualIntMethod");
+                self.check_return_type_object("CallNonvirtualIntMethod", obj, methodID, "int");
+                self.check_is_class("CallNonvirtualIntMethod", class);
+                self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1)
     }
 
     ///
@@ -12930,16 +13267,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 2 arguments
     ///
     pub unsafe fn CallNonvirtualIntMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualIntMethod");
-            self.check_no_exception("CallNonvirtualIntMethod");
-            self.check_return_type_object("CallNonvirtualIntMethod", obj, methodID, "int");
-            self.check_is_class("CallNonvirtualIntMethod", class);
-            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualIntMethod");
+                self.check_no_exception("CallNonvirtualIntMethod");
+                self.check_return_type_object("CallNonvirtualIntMethod", obj, methodID, "int");
+                self.check_is_class("CallNonvirtualIntMethod", class);
+                self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     ///
@@ -12987,17 +13326,19 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return int and have 3 arguments
     ///
     pub unsafe fn CallNonvirtualIntMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualIntMethod");
-            self.check_no_exception("CallNonvirtualIntMethod");
-            self.check_return_type_object("CallNonvirtualIntMethod", obj, methodID, "int");
-            self.check_is_class("CallNonvirtualIntMethod", class);
-            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualIntMethod");
+                self.check_no_exception("CallNonvirtualIntMethod");
+                self.check_return_type_object("CallNonvirtualIntMethod", obj, methodID, "int");
+                self.check_is_class("CallNonvirtualIntMethod", class);
+                self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallNonvirtualIntMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jint>(79)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -13050,14 +13391,16 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallNonvirtualLongMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualLongMethodA");
-            self.check_no_exception("CallNonvirtualLongMethodA");
-            self.check_return_type_object("CallNonvirtualLongMethodA", obj, methodID, "long");
-            self.check_is_class("CallNonvirtualLongMethodA", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualLongMethodA");
+                self.check_no_exception("CallNonvirtualLongMethodA");
+                self.check_return_type_object("CallNonvirtualLongMethodA", obj, methodID, "long");
+                self.check_is_class("CallNonvirtualLongMethodA", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jlong>(84)(self.vtable, obj, class, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jlong>(84)(self.vtable, obj, class, methodID, args)
     }
 
     ///
@@ -13105,14 +13448,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 0 arguments
     ///
     pub unsafe fn CallNonvirtualLongMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualLongMethod");
-            self.check_no_exception("CallNonvirtualLongMethod");
-            self.check_return_type_object("CallNonvirtualLongMethod", obj, methodID, "long");
-            self.check_is_class("CallNonvirtualLongMethod", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualLongMethod");
+                self.check_no_exception("CallNonvirtualLongMethod");
+                self.check_return_type_object("CallNonvirtualLongMethod", obj, methodID, "long");
+                self.check_is_class("CallNonvirtualLongMethod", class);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jlong>(82)(self.vtable, obj, class, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jlong>(82)(self.vtable, obj, class, methodID)
     }
 
     ///
@@ -13160,15 +13505,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 1 arguments
     ///
     pub unsafe fn CallNonvirtualLongMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualLongMethod");
-            self.check_no_exception("CallNonvirtualLongMethod");
-            self.check_return_type_object("CallNonvirtualLongMethod", obj, methodID, "long");
-            self.check_is_class("CallNonvirtualLongMethod", class);
-            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualLongMethod");
+                self.check_no_exception("CallNonvirtualLongMethod");
+                self.check_return_type_object("CallNonvirtualLongMethod", obj, methodID, "long");
+                self.check_is_class("CallNonvirtualLongMethod", class);
+                self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1)
     }
 
     ///
@@ -13216,16 +13563,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 2 arguments
     ///
     pub unsafe fn CallNonvirtualLongMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualLongMethod");
-            self.check_no_exception("CallNonvirtualLongMethod");
-            self.check_return_type_object("CallNonvirtualLongMethod", obj, methodID, "long");
-            self.check_is_class("CallNonvirtualLongMethod", class);
-            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualLongMethod");
+                self.check_no_exception("CallNonvirtualLongMethod");
+                self.check_return_type_object("CallNonvirtualLongMethod", obj, methodID, "long");
+                self.check_is_class("CallNonvirtualLongMethod", class);
+                self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     ///
@@ -13273,17 +13622,19 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return long and have 3 arguments
     ///
     pub unsafe fn CallNonvirtualLongMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualLongMethod");
-            self.check_no_exception("CallNonvirtualLongMethod");
-            self.check_return_type_object("CallNonvirtualLongMethod", obj, methodID, "long");
-            self.check_is_class("CallNonvirtualLongMethod", class);
-            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualLongMethod");
+                self.check_no_exception("CallNonvirtualLongMethod");
+                self.check_return_type_object("CallNonvirtualLongMethod", obj, methodID, "long");
+                self.check_is_class("CallNonvirtualLongMethod", class);
+                self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallNonvirtualLongMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jlong>(82)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -13336,14 +13687,16 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallNonvirtualFloatMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualFloatMethodA");
-            self.check_no_exception("CallNonvirtualFloatMethodA");
-            self.check_return_type_object("CallNonvirtualFloatMethodA", obj, methodID, "float");
-            self.check_is_class("CallNonvirtualFloatMethodA", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualFloatMethodA");
+                self.check_no_exception("CallNonvirtualFloatMethodA");
+                self.check_return_type_object("CallNonvirtualFloatMethodA", obj, methodID, "float");
+                self.check_is_class("CallNonvirtualFloatMethodA", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jfloat>(87)(self.vtable, obj, class, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jfloat>(87)(self.vtable, obj, class, methodID, args)
     }
 
     ///
@@ -13391,14 +13744,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 0 arguments
     ///
     pub unsafe fn CallNonvirtualFloatMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualFloatMethod");
-            self.check_no_exception("CallNonvirtualFloatMethod");
-            self.check_return_type_object("CallNonvirtualFloatMethod", obj, methodID, "float");
-            self.check_is_class("CallNonvirtualFloatMethod", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualFloatMethod");
+                self.check_no_exception("CallNonvirtualFloatMethod");
+                self.check_return_type_object("CallNonvirtualFloatMethod", obj, methodID, "float");
+                self.check_is_class("CallNonvirtualFloatMethod", class);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jfloat>(85)(self.vtable, obj, class, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jfloat>(85)(self.vtable, obj, class, methodID)
     }
 
     ///
@@ -13446,15 +13801,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 1 arguments
     ///
     pub unsafe fn CallNonvirtualFloatMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualFloatMethod");
-            self.check_no_exception("CallNonvirtualFloatMethod");
-            self.check_return_type_object("CallNonvirtualFloatMethod", obj, methodID, "float");
-            self.check_is_class("CallNonvirtualFloatMethod", class);
-            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualFloatMethod");
+                self.check_no_exception("CallNonvirtualFloatMethod");
+                self.check_return_type_object("CallNonvirtualFloatMethod", obj, methodID, "float");
+                self.check_is_class("CallNonvirtualFloatMethod", class);
+                self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1)
     }
 
     ///
@@ -13502,16 +13859,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 2 arguments
     ///
     pub unsafe fn CallNonvirtualFloatMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualFloatMethod");
-            self.check_no_exception("CallNonvirtualFloatMethod");
-            self.check_return_type_object("CallNonvirtualFloatMethod", obj, methodID, "float");
-            self.check_is_class("CallNonvirtualFloatMethod", class);
-            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualFloatMethod");
+                self.check_no_exception("CallNonvirtualFloatMethod");
+                self.check_return_type_object("CallNonvirtualFloatMethod", obj, methodID, "float");
+                self.check_is_class("CallNonvirtualFloatMethod", class);
+                self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     ///
@@ -13559,17 +13918,19 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return float and have 3 arguments
     ///
     pub unsafe fn CallNonvirtualFloatMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualFloatMethod");
-            self.check_no_exception("CallNonvirtualFloatMethod");
-            self.check_return_type_object("CallNonvirtualFloatMethod", obj, methodID, "float");
-            self.check_is_class("CallNonvirtualFloatMethod", class);
-            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualFloatMethod");
+                self.check_no_exception("CallNonvirtualFloatMethod");
+                self.check_return_type_object("CallNonvirtualFloatMethod", obj, methodID, "float");
+                self.check_is_class("CallNonvirtualFloatMethod", class);
+                self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallNonvirtualFloatMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jfloat>(85)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -13622,14 +13983,16 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallNonvirtualDoubleMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualDoubleMethodA");
-            self.check_no_exception("CallNonvirtualDoubleMethodA");
-            self.check_return_type_object("CallNonvirtualDoubleMethodA", obj, methodID, "double");
-            self.check_is_class("CallNonvirtualDoubleMethodA", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualDoubleMethodA");
+                self.check_no_exception("CallNonvirtualDoubleMethodA");
+                self.check_return_type_object("CallNonvirtualDoubleMethodA", obj, methodID, "double");
+                self.check_is_class("CallNonvirtualDoubleMethodA", class);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jdouble>(90)(self.vtable, obj, class, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jdouble>(90)(self.vtable, obj, class, methodID, args)
     }
 
     ///
@@ -13677,14 +14040,16 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 0 arguments
     ///
     pub unsafe fn CallNonvirtualDoubleMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualDoubleMethod");
-            self.check_no_exception("CallNonvirtualDoubleMethod");
-            self.check_return_type_object("CallNonvirtualDoubleMethod", obj, methodID, "double");
-            self.check_is_class("CallNonvirtualDoubleMethod", class);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualDoubleMethod");
+                self.check_no_exception("CallNonvirtualDoubleMethod");
+                self.check_return_type_object("CallNonvirtualDoubleMethod", obj, methodID, "double");
+                self.check_is_class("CallNonvirtualDoubleMethod", class);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jdouble>(88)(self.vtable, obj, class, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jdouble>(88)(self.vtable, obj, class, methodID)
     }
 
     ///
@@ -13732,15 +14097,17 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 1 arguments
     ///
     pub unsafe fn CallNonvirtualDoubleMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualDoubleMethod");
-            self.check_no_exception("CallNonvirtualDoubleMethod");
-            self.check_return_type_object("CallNonvirtualDoubleMethod", obj, methodID, "double");
-            self.check_is_class("CallNonvirtualDoubleMethod", class);
-            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualDoubleMethod");
+                self.check_no_exception("CallNonvirtualDoubleMethod");
+                self.check_return_type_object("CallNonvirtualDoubleMethod", obj, methodID, "double");
+                self.check_is_class("CallNonvirtualDoubleMethod", class);
+                self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1)
     }
 
     ///
@@ -13788,16 +14155,18 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 2 arguments
     ///
     pub unsafe fn CallNonvirtualDoubleMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualDoubleMethod");
-            self.check_no_exception("CallNonvirtualDoubleMethod");
-            self.check_return_type_object("CallNonvirtualDoubleMethod", obj, methodID, "double");
-            self.check_is_class("CallNonvirtualDoubleMethod", class);
-            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualDoubleMethod");
+                self.check_no_exception("CallNonvirtualDoubleMethod");
+                self.check_return_type_object("CallNonvirtualDoubleMethod", obj, methodID, "double");
+                self.check_is_class("CallNonvirtualDoubleMethod", class);
+                self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1, arg2)
     }
 
     ///
@@ -13845,17 +14214,19 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return double and have 3 arguments
     ///
     pub unsafe fn CallNonvirtualDoubleMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallNonvirtualDoubleMethod");
-            self.check_no_exception("CallNonvirtualDoubleMethod");
-            self.check_return_type_object("CallNonvirtualDoubleMethod", obj, methodID, "double");
-            self.check_is_class("CallNonvirtualDoubleMethod", class);
-            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallNonvirtualDoubleMethod");
+                self.check_no_exception("CallNonvirtualDoubleMethod");
+                self.check_return_type_object("CallNonvirtualDoubleMethod", obj, methodID, "double");
+                self.check_is_class("CallNonvirtualDoubleMethod", class);
+                self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_object("CallNonvirtualDoubleMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jdouble>(88)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -13904,19 +14275,21 @@ impl JNIEnv {
     /// `sig` must be non-null and zero terminated utf-8.
     ///
     pub unsafe fn GetStaticFieldID(&self, clazz: jclass, name: impl UseCString, sig: impl UseCString) -> jfieldID {
-        name.use_as_const_c_char(|name| {
-            sig.use_as_const_c_char(|sig| {
-                #[cfg(feature = "asserts")]
-                {
-                    self.check_not_critical("GetStaticFieldID");
-                    self.check_no_exception("GetStaticFieldID");
-                    assert!(!name.is_null(), "GetStaticFieldID name is null");
-                    assert!(!sig.is_null(), "GetStaticFieldID sig is null");
-                    self.check_is_class("GetStaticFieldID", clazz);
-                }
-                self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char, *const c_char) -> jfieldID>(144)(self.vtable, clazz, name, sig)
+        unsafe {
+            name.use_as_const_c_char(|name| {
+                sig.use_as_const_c_char(|sig| {
+                    #[cfg(feature = "asserts")]
+                    {
+                        self.check_not_critical("GetStaticFieldID");
+                        self.check_no_exception("GetStaticFieldID");
+                        assert!(!name.is_null(), "GetStaticFieldID name is null");
+                        assert!(!sig.is_null(), "GetStaticFieldID sig is null");
+                        self.check_is_class("GetStaticFieldID", clazz);
+                    }
+                    self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const c_char, *const c_char) -> jfieldID>(144)(self.vtable, clazz, name, sig)
+                })
             })
-        })
+        }
     }
 
     ///
@@ -13956,13 +14329,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is an object and not a primitive.
     ///
     pub unsafe fn GetStaticObjectField(&self, obj: jclass, fieldID: jfieldID) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStaticObjectField");
-            self.check_no_exception("GetStaticObjectField");
-            self.check_field_type_static("GetStaticObjectField", obj, fieldID, "object");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStaticObjectField");
+                self.check_no_exception("GetStaticObjectField");
+                self.check_field_type_static("GetStaticObjectField", obj, fieldID, "object");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jobject>(145)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jobject>(145)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -14002,13 +14377,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a boolean.
     ///
     pub unsafe fn GetStaticBooleanField(&self, obj: jclass, fieldID: jfieldID) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStaticBooleanField");
-            self.check_no_exception("GetStaticBooleanField");
-            self.check_field_type_static("GetStaticBooleanField", obj, fieldID, "boolean");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStaticBooleanField");
+                self.check_no_exception("GetStaticBooleanField");
+                self.check_field_type_static("GetStaticBooleanField", obj, fieldID, "boolean");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jboolean>(146)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jboolean>(146)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -14048,13 +14425,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a byte.
     ///
     pub unsafe fn GetStaticByteField(&self, obj: jclass, fieldID: jfieldID) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStaticByteField");
-            self.check_no_exception("GetStaticByteField");
-            self.check_field_type_static("GetStaticByteField", obj, fieldID, "byte");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStaticByteField");
+                self.check_no_exception("GetStaticByteField");
+                self.check_field_type_static("GetStaticByteField", obj, fieldID, "byte");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jbyte>(147)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jbyte>(147)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -14094,13 +14473,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a char.
     ///
     pub unsafe fn GetStaticCharField(&self, obj: jclass, fieldID: jfieldID) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStaticCharField");
-            self.check_no_exception("GetStaticCharField");
-            self.check_field_type_static("GetStaticCharField", obj, fieldID, "char");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStaticCharField");
+                self.check_no_exception("GetStaticCharField");
+                self.check_field_type_static("GetStaticCharField", obj, fieldID, "char");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jchar>(148)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jchar>(148)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -14140,13 +14521,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a short.
     ///
     pub unsafe fn GetStaticShortField(&self, obj: jclass, fieldID: jfieldID) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStaticShortField");
-            self.check_no_exception("GetStaticShortField");
-            self.check_field_type_static("GetStaticShortField", obj, fieldID, "short");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStaticShortField");
+                self.check_no_exception("GetStaticShortField");
+                self.check_field_type_static("GetStaticShortField", obj, fieldID, "short");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jshort>(149)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jshort>(149)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -14186,13 +14569,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a int.
     ///
     pub unsafe fn GetStaticIntField(&self, obj: jclass, fieldID: jfieldID) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStaticIntField");
-            self.check_no_exception("GetStaticIntField");
-            self.check_field_type_static("GetStaticIntField", obj, fieldID, "int");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStaticIntField");
+                self.check_no_exception("GetStaticIntField");
+                self.check_field_type_static("GetStaticIntField", obj, fieldID, "int");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jint>(150)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jint>(150)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -14233,13 +14618,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a long.
     ///
     pub unsafe fn GetStaticLongField(&self, obj: jclass, fieldID: jfieldID) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStaticLongField");
-            self.check_no_exception("GetStaticLongField");
-            self.check_field_type_static("GetStaticLongField", obj, fieldID, "long");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStaticLongField");
+                self.check_no_exception("GetStaticLongField");
+                self.check_field_type_static("GetStaticLongField", obj, fieldID, "long");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jlong>(151)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jlong>(151)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -14280,13 +14667,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a float.
     ///
     pub unsafe fn GetStaticFloatField(&self, obj: jclass, fieldID: jfieldID) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStaticFloatField");
-            self.check_no_exception("GetStaticFloatField");
-            self.check_field_type_static("GetStaticFloatField", obj, fieldID, "float");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStaticFloatField");
+                self.check_no_exception("GetStaticFloatField");
+                self.check_field_type_static("GetStaticFloatField", obj, fieldID, "float");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jfloat>(152)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jfloat>(152)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -14327,13 +14716,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a double.
     ///
     pub unsafe fn GetStaticDoubleField(&self, obj: jclass, fieldID: jfieldID) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStaticDoubleField");
-            self.check_no_exception("GetStaticDoubleField");
-            self.check_field_type_static("GetStaticDoubleField", obj, fieldID, "double");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStaticDoubleField");
+                self.check_no_exception("GetStaticDoubleField");
+                self.check_field_type_static("GetStaticDoubleField", obj, fieldID, "double");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jdouble>(153)(self.vtable, obj, fieldID)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jdouble>(153)(self.vtable, obj, fieldID)
     }
 
     ///
@@ -14378,13 +14769,15 @@ impl JNIEnv {
     /// `value` must be assignable to the field type (i.e. if it's a String field setting to an `ArrayList` for example is UB)
     ///
     pub unsafe fn SetStaticObjectField(&self, obj: jclass, fieldID: jfieldID, value: jobject) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetStaticObjectField");
-            self.check_no_exception("SetStaticObjectField");
-            self.check_field_type_static("SetStaticObjectField", obj, fieldID, "object");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetStaticObjectField");
+                self.check_no_exception("SetStaticObjectField");
+                self.check_field_type_static("SetStaticObjectField", obj, fieldID, "object");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jobject)>(154)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jobject)>(154)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -14424,13 +14817,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a boolean.
     ///
     pub unsafe fn SetStaticBooleanField(&self, obj: jclass, fieldID: jfieldID, value: jboolean) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetStaticBooleanField");
-            self.check_no_exception("SetStaticBooleanField");
-            self.check_field_type_static("SetStaticBooleanField", obj, fieldID, "boolean");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetStaticBooleanField");
+                self.check_no_exception("SetStaticBooleanField");
+                self.check_field_type_static("SetStaticBooleanField", obj, fieldID, "boolean");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(155)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(155)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -14470,13 +14865,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a byte.
     ///
     pub unsafe fn SetStaticByteField(&self, obj: jclass, fieldID: jfieldID, value: jbyte) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetStaticByteField");
-            self.check_no_exception("SetStaticByteField");
-            self.check_field_type_static("SetStaticByteField", obj, fieldID, "byte");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetStaticByteField");
+                self.check_no_exception("SetStaticByteField");
+                self.check_field_type_static("SetStaticByteField", obj, fieldID, "byte");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jbyte)>(156)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jbyte)>(156)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -14516,13 +14913,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a char.
     ///
     pub unsafe fn SetStaticCharField(&self, obj: jclass, fieldID: jfieldID, value: jchar) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetStaticCharField");
-            self.check_no_exception("SetStaticCharField");
-            self.check_field_type_static("SetStaticCharField", obj, fieldID, "char");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetStaticCharField");
+                self.check_no_exception("SetStaticCharField");
+                self.check_field_type_static("SetStaticCharField", obj, fieldID, "char");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jchar)>(157)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jchar)>(157)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -14562,13 +14961,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a short.
     ///
     pub unsafe fn SetStaticShortField(&self, obj: jclass, fieldID: jfieldID, value: jshort) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetStaticShortField");
-            self.check_no_exception("SetStaticShortField");
-            self.check_field_type_static("SetStaticShortField", obj, fieldID, "short");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetStaticShortField");
+                self.check_no_exception("SetStaticShortField");
+                self.check_field_type_static("SetStaticShortField", obj, fieldID, "short");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jshort)>(158)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jshort)>(158)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -14608,13 +15009,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a int.
     ///
     pub unsafe fn SetStaticIntField(&self, obj: jclass, fieldID: jfieldID, value: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetStaticIntField");
-            self.check_no_exception("SetStaticIntField");
-            self.check_field_type_static("SetStaticIntField", obj, fieldID, "int");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetStaticIntField");
+                self.check_no_exception("SetStaticIntField");
+                self.check_field_type_static("SetStaticIntField", obj, fieldID, "int");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jint)>(159)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jint)>(159)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -14654,13 +15057,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a long.
     ///
     pub unsafe fn SetStaticLongField(&self, obj: jclass, fieldID: jfieldID, value: jlong) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetStaticLongField");
-            self.check_no_exception("SetStaticLongField");
-            self.check_field_type_static("SetStaticLongField", obj, fieldID, "long");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetStaticLongField");
+                self.check_no_exception("SetStaticLongField");
+                self.check_field_type_static("SetStaticLongField", obj, fieldID, "long");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jlong)>(160)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jlong)>(160)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -14700,13 +15105,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a float.
     ///
     pub unsafe fn SetStaticFloatField(&self, obj: jclass, fieldID: jfieldID, value: jfloat) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetStaticFloatField");
-            self.check_no_exception("SetStaticFloatField");
-            self.check_field_type_static("SetStaticFloatField", obj, fieldID, "float");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetStaticFloatField");
+                self.check_no_exception("SetStaticFloatField");
+                self.check_field_type_static("SetStaticFloatField", obj, fieldID, "float");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jfloat)>(161)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jfloat)>(161)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -14746,13 +15153,15 @@ impl JNIEnv {
     /// `fieldID` must refer to a field that is a double.
     ///
     pub unsafe fn SetStaticDoubleField(&self, obj: jclass, fieldID: jfieldID, value: jdouble) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetStaticDoubleField");
-            self.check_no_exception("SetStaticDoubleField");
-            self.check_field_type_static("SetStaticDoubleField", obj, fieldID, "double");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetStaticDoubleField");
+                self.check_no_exception("SetStaticDoubleField");
+                self.check_field_type_static("SetStaticDoubleField", obj, fieldID, "double");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(162)(self.vtable, obj, fieldID, value);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jdouble)>(162)(self.vtable, obj, fieldID, value);
     }
 
     ///
@@ -14801,20 +15210,22 @@ impl JNIEnv {
     /// `sig` must be non-null and zero terminated utf-8.
     ///
     pub unsafe fn GetStaticMethodID(&self, class: jclass, name: impl UseCString, sig: impl UseCString) -> jmethodID {
-        name.use_as_const_c_char(|name| {
-            sig.use_as_const_c_char(|sig| {
-                #[cfg(feature = "asserts")]
-                {
-                    self.check_not_critical("GetStaticMethodID");
-                    self.check_no_exception("GetStaticMethodID");
-                    self.check_is_class("GetStaticMethodID", class);
-                    assert!(!name.is_null(), "GetStaticMethodID name is null");
-                    assert!(!sig.is_null(), "GetStaticMethodID sig is null");
-                }
+        unsafe {
+            name.use_as_const_c_char(|name| {
+                sig.use_as_const_c_char(|sig| {
+                    #[cfg(feature = "asserts")]
+                    {
+                        self.check_not_critical("GetStaticMethodID");
+                        self.check_no_exception("GetStaticMethodID");
+                        self.check_is_class("GetStaticMethodID", class);
+                        assert!(!name.is_null(), "GetStaticMethodID name is null");
+                        assert!(!sig.is_null(), "GetStaticMethodID sig is null");
+                    }
 
-                self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(113)(self.vtable, class, name, sig)
+                    self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(113)(self.vtable, class, name, sig)
+                })
             })
-        })
+        }
     }
 
     ///
@@ -14862,13 +15273,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallStaticVoidMethodA(&self, clazz: jclass, methodID: jmethodID, args: *const jtype) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticVoidMethodA");
-            self.check_no_exception("CallStaticVoidMethodA");
-            self.check_return_type_static("CallStaticVoidMethodA", clazz, methodID, "void");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticVoidMethodA");
+                self.check_no_exception("CallStaticVoidMethodA");
+                self.check_return_type_static("CallStaticVoidMethodA", clazz, methodID, "void");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype)>(143)(self.vtable, clazz, methodID, args);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype)>(143)(self.vtable, clazz, methodID, args);
     }
 
     ///
@@ -14910,13 +15323,15 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 0 arguments
     ///
     pub unsafe fn CallStaticVoidMethod0(&self, clazz: jclass, methodID: jmethodID) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticVoidMethod");
-            self.check_no_exception("CallStaticVoidMethod");
-            self.check_return_type_static("CallStaticVoidMethod", clazz, methodID, "void");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticVoidMethod");
+                self.check_no_exception("CallStaticVoidMethod");
+                self.check_return_type_static("CallStaticVoidMethod", clazz, methodID, "void");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, clazz, methodID);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, clazz, methodID);
     }
 
     ///
@@ -14958,14 +15373,16 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 1 arguments
     ///
     pub unsafe fn CallStaticVoidMethod1<A: JType>(&self, clazz: jclass, methodID: jmethodID, arg1: A) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticVoidMethod");
-            self.check_no_exception("CallStaticVoidMethod");
-            self.check_return_type_static("CallStaticVoidMethod", clazz, methodID, "void");
-            self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticVoidMethod");
+                self.check_no_exception("CallStaticVoidMethod");
+                self.check_return_type_static("CallStaticVoidMethod", clazz, methodID, "void");
+                self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, clazz, methodID, arg1);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, clazz, methodID, arg1);
     }
 
     ///
@@ -15007,15 +15424,17 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 2 arguments
     ///
     pub unsafe fn CallStaticVoidMethod2<A: JType, B: JType>(&self, clazz: jclass, methodID: jmethodID, arg1: A, arg2: B) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticVoidMethod");
-            self.check_no_exception("CallStaticVoidMethod");
-            self.check_return_type_static("CallStaticVoidMethod", clazz, methodID, "void");
-            self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg1, 0, 2);
-            self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticVoidMethod");
+                self.check_no_exception("CallStaticVoidMethod");
+                self.check_return_type_static("CallStaticVoidMethod", clazz, methodID, "void");
+                self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg1, 0, 2);
+                self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, clazz, methodID, arg1, arg2);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, clazz, methodID, arg1, arg2);
     }
 
     ///
@@ -15057,16 +15476,18 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return void and have 3 arguments
     ///
     pub unsafe fn CallStaticVoidMethod3<A: JType, B: JType, C: JType>(&self, clazz: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticVoidMethod");
-            self.check_no_exception("CallStaticVoidMethod");
-            self.check_return_type_static("CallStaticVoidMethod", clazz, methodID, "void");
-            self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg1, 0, 3);
-            self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg2, 1, 3);
-            self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticVoidMethod");
+                self.check_no_exception("CallStaticVoidMethod");
+                self.check_return_type_static("CallStaticVoidMethod", clazz, methodID, "void");
+                self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg1, 0, 3);
+                self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg2, 1, 3);
+                self.check_parameter_types_static("CallStaticVoidMethod", clazz, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, clazz, methodID, arg1, arg2, arg3);
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...)>(141)(self.vtable, clazz, methodID, arg1, arg2, arg3);
     }
 
     ///
@@ -15117,13 +15538,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallStaticObjectMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticObjectMethodA");
-            self.check_no_exception("CallStaticObjectMethodA");
-            self.check_return_type_static("CallStaticBooleanMethodA", obj, methodID, "object");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticObjectMethodA");
+                self.check_no_exception("CallStaticObjectMethodA");
+                self.check_return_type_static("CallStaticBooleanMethodA", obj, methodID, "object");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(116)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(116)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -15168,13 +15591,15 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 0 arguments
     ///
     pub unsafe fn CallStaticObjectMethod0(&self, obj: jclass, methodID: jmethodID) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticObjectMethod");
-            self.check_no_exception("CallStaticObjectMethod");
-            self.check_return_type_static("CallStaticObjectMethod", obj, methodID, "object");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticObjectMethod");
+                self.check_no_exception("CallStaticObjectMethod");
+                self.check_return_type_static("CallStaticObjectMethod", obj, methodID, "object");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jobject>(114)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jobject>(114)(self.vtable, obj, methodID)
     }
 
     ///
@@ -15219,14 +15644,16 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 1 arguments
     ///
     pub unsafe fn CallStaticObjectMethod1<A: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticObjectMethod");
-            self.check_no_exception("CallStaticObjectMethod");
-            self.check_return_type_static("CallStaticObjectMethod", obj, methodID, "object");
-            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticObjectMethod");
+                self.check_no_exception("CallStaticObjectMethod");
+                self.check_return_type_static("CallStaticObjectMethod", obj, methodID, "object");
+                self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -15271,15 +15698,17 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 2 arguments
     ///
     pub unsafe fn CallStaticObjectMethod2<A: JType, B: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticObjectMethod");
-            self.check_no_exception("CallStaticObjectMethod");
-            self.check_return_type_static("CallStaticObjectMethod", obj, methodID, "object");
-            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticObjectMethod");
+                self.check_no_exception("CallStaticObjectMethod");
+                self.check_return_type_static("CallStaticObjectMethod", obj, methodID, "object");
+                self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -15324,16 +15753,18 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return an object and have 3 arguments
     ///
     pub unsafe fn CallStaticObjectMethod3<A: JType, B: JType, C: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticObjectMethod");
-            self.check_no_exception("CallStaticObjectMethod");
-            self.check_return_type_static("CallStaticObjectMethod", obj, methodID, "object");
-            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticObjectMethod");
+                self.check_no_exception("CallStaticObjectMethod");
+                self.check_return_type_static("CallStaticObjectMethod", obj, methodID, "object");
+                self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_static("CallStaticObjectMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jobject>(114)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -15384,13 +15815,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallStaticBooleanMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticBooleanMethodA");
-            self.check_no_exception("CallStaticBooleanMethodA");
-            self.check_return_type_static("CallStaticBooleanMethodA", obj, methodID, "boolean");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticBooleanMethodA");
+                self.check_no_exception("CallStaticBooleanMethodA");
+                self.check_return_type_static("CallStaticBooleanMethodA", obj, methodID, "boolean");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(119)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(119)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -15435,13 +15868,15 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 0 arguments
     ///
     pub unsafe fn CallStaticBooleanMethod0(&self, obj: jclass, methodID: jmethodID) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticBooleanMethod");
-            self.check_no_exception("CallStaticBooleanMethod");
-            self.check_return_type_static("CallStaticBooleanMethod", obj, methodID, "boolean");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticBooleanMethod");
+                self.check_no_exception("CallStaticBooleanMethod");
+                self.check_return_type_static("CallStaticBooleanMethod", obj, methodID, "boolean");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jboolean>(117)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jboolean>(117)(self.vtable, obj, methodID)
     }
 
     ///
@@ -15486,14 +15921,16 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 1 arguments
     ///
     pub unsafe fn CallStaticBooleanMethod1<A: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticBooleanMethod");
-            self.check_no_exception("CallStaticBooleanMethod");
-            self.check_return_type_static("CallStaticBooleanMethod", obj, methodID, "boolean");
-            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticBooleanMethod");
+                self.check_no_exception("CallStaticBooleanMethod");
+                self.check_return_type_static("CallStaticBooleanMethod", obj, methodID, "boolean");
+                self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -15538,15 +15975,17 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 2 arguments
     ///
     pub unsafe fn CallStaticBooleanMethod2<A: JType, B: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticBooleanMethod");
-            self.check_no_exception("CallStaticBooleanMethod");
-            self.check_return_type_static("CallStaticBooleanMethod", obj, methodID, "boolean");
-            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticBooleanMethod");
+                self.check_no_exception("CallStaticBooleanMethod");
+                self.check_return_type_static("CallStaticBooleanMethod", obj, methodID, "boolean");
+                self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -15591,16 +16030,18 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 3 arguments
     ///
     pub unsafe fn CallStaticBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticBooleanMethod");
-            self.check_no_exception("CallStaticBooleanMethod");
-            self.check_return_type_static("CallStaticBooleanMethod", obj, methodID, "boolean");
-            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticBooleanMethod");
+                self.check_no_exception("CallStaticBooleanMethod");
+                self.check_return_type_static("CallStaticBooleanMethod", obj, methodID, "boolean");
+                self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -15651,13 +16092,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallStaticByteMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticByteMethodA");
-            self.check_no_exception("CallStaticByteMethodA");
-            self.check_return_type_static("CallStaticByteMethodA", obj, methodID, "byte");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticByteMethodA");
+                self.check_no_exception("CallStaticByteMethodA");
+                self.check_return_type_static("CallStaticByteMethodA", obj, methodID, "byte");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jbyte>(122)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jbyte>(122)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -15702,13 +16145,15 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 0 arguments
     ///
     pub unsafe fn CallStaticByteMethod0(&self, obj: jclass, methodID: jmethodID) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticByteMethod");
-            self.check_no_exception("CallStaticByteMethod");
-            self.check_return_type_static("CallStaticByteMethod", obj, methodID, "byte");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticByteMethod");
+                self.check_no_exception("CallStaticByteMethod");
+                self.check_return_type_static("CallStaticByteMethod", obj, methodID, "byte");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jbyte>(120)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jbyte>(120)(self.vtable, obj, methodID)
     }
 
     ///
@@ -15753,14 +16198,16 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 1 arguments
     ///
     pub unsafe fn CallStaticByteMethod1<A: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticByteMethod");
-            self.check_no_exception("CallStaticByteMethod");
-            self.check_return_type_static("CallStaticByteMethod", obj, methodID, "byte");
-            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticByteMethod");
+                self.check_no_exception("CallStaticByteMethod");
+                self.check_return_type_static("CallStaticByteMethod", obj, methodID, "byte");
+                self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -15805,15 +16252,17 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 2 arguments
     ///
     pub unsafe fn CallStaticByteMethod2<A: JType, B: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticByteMethod");
-            self.check_no_exception("CallStaticByteMethod");
-            self.check_return_type_static("CallStaticByteMethod", obj, methodID, "byte");
-            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticByteMethod");
+                self.check_no_exception("CallStaticByteMethod");
+                self.check_return_type_static("CallStaticByteMethod", obj, methodID, "byte");
+                self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -15858,16 +16307,18 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return byte and have 3 arguments
     ///
     pub unsafe fn CallStaticByteMethod3<A: JType, B: JType, C: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticByteMethod");
-            self.check_no_exception("CallStaticByteMethod");
-            self.check_return_type_static("CallStaticByteMethod", obj, methodID, "byte");
-            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticByteMethod");
+                self.check_no_exception("CallStaticByteMethod");
+                self.check_return_type_static("CallStaticByteMethod", obj, methodID, "byte");
+                self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_static("CallStaticByteMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jbyte>(120)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -15918,13 +16369,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallStaticCharMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticCharMethodA");
-            self.check_no_exception("CallStaticCharMethodA");
-            self.check_return_type_static("CallStaticCharMethodA", obj, methodID, "char");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticCharMethodA");
+                self.check_no_exception("CallStaticCharMethodA");
+                self.check_return_type_static("CallStaticCharMethodA", obj, methodID, "char");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jchar>(125)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jchar>(125)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -15969,13 +16422,15 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 0 arguments
     ///
     pub unsafe fn CallStaticCharMethod0(&self, obj: jclass, methodID: jmethodID) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticCharMethod");
-            self.check_no_exception("CallStaticCharMethod");
-            self.check_return_type_static("CallStaticCharMethod", obj, methodID, "char");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticCharMethod");
+                self.check_no_exception("CallStaticCharMethod");
+                self.check_return_type_static("CallStaticCharMethod", obj, methodID, "char");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jchar>(123)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jchar>(123)(self.vtable, obj, methodID)
     }
 
     ///
@@ -16020,14 +16475,16 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 1 arguments
     ///
     pub unsafe fn CallStaticCharMethod1<A: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticCharMethod");
-            self.check_no_exception("CallStaticCharMethod");
-            self.check_return_type_static("CallStaticCharMethod", obj, methodID, "char");
-            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticCharMethod");
+                self.check_no_exception("CallStaticCharMethod");
+                self.check_return_type_static("CallStaticCharMethod", obj, methodID, "char");
+                self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -16072,15 +16529,17 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 2 arguments
     ///
     pub unsafe fn CallStaticCharMethod2<A: JType, B: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticCharMethod");
-            self.check_no_exception("CallStaticCharMethod");
-            self.check_return_type_static("CallStaticCharMethod", obj, methodID, "char");
-            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticCharMethod");
+                self.check_no_exception("CallStaticCharMethod");
+                self.check_return_type_static("CallStaticCharMethod", obj, methodID, "char");
+                self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -16125,16 +16584,18 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return char and have 3 arguments
     ///
     pub unsafe fn CallStaticCharMethod3<A: JType, B: JType, C: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticCharMethod");
-            self.check_no_exception("CallStaticCharMethod");
-            self.check_return_type_static("CallStaticCharMethod", obj, methodID, "char");
-            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticCharMethod");
+                self.check_no_exception("CallStaticCharMethod");
+                self.check_return_type_static("CallStaticCharMethod", obj, methodID, "char");
+                self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_static("CallStaticCharMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jchar>(123)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -16185,13 +16646,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallStaticShortMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticShortMethodA");
-            self.check_no_exception("CallStaticShortMethodA");
-            self.check_return_type_static("CallStaticShortMethodA", obj, methodID, "short");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticShortMethodA");
+                self.check_no_exception("CallStaticShortMethodA");
+                self.check_return_type_static("CallStaticShortMethodA", obj, methodID, "short");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jshort>(128)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jshort>(128)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -16236,13 +16699,15 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 0 arguments
     ///
     pub unsafe fn CallStaticShortMethod0(&self, obj: jclass, methodID: jmethodID) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticShortMethod");
-            self.check_no_exception("CallStaticShortMethod");
-            self.check_return_type_static("CallStaticShortMethod", obj, methodID, "short");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticShortMethod");
+                self.check_no_exception("CallStaticShortMethod");
+                self.check_return_type_static("CallStaticShortMethod", obj, methodID, "short");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jshort>(126)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jshort>(126)(self.vtable, obj, methodID)
     }
 
     ///
@@ -16287,14 +16752,16 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 1 arguments
     ///
     pub unsafe fn CallStaticShortMethod1<A: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticShortMethod");
-            self.check_no_exception("CallStaticShortMethod");
-            self.check_return_type_static("CallStaticShortMethod", obj, methodID, "short");
-            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticShortMethod");
+                self.check_no_exception("CallStaticShortMethod");
+                self.check_return_type_static("CallStaticShortMethod", obj, methodID, "short");
+                self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -16339,15 +16806,17 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 2 arguments
     ///
     pub unsafe fn CallStaticShortMethod2<A: JType, B: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticShortMethod");
-            self.check_no_exception("CallStaticShortMethod");
-            self.check_return_type_static("CallStaticShortMethod", obj, methodID, "short");
-            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticShortMethod");
+                self.check_no_exception("CallStaticShortMethod");
+                self.check_return_type_static("CallStaticShortMethod", obj, methodID, "short");
+                self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -16392,16 +16861,18 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return short and have 3 arguments
     ///
     pub unsafe fn CallStaticShortMethod3<A: JType, B: JType, C: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticShortMethod");
-            self.check_no_exception("CallStaticShortMethod");
-            self.check_return_type_static("CallStaticShortMethod", obj, methodID, "short");
-            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticShortMethod");
+                self.check_no_exception("CallStaticShortMethod");
+                self.check_return_type_static("CallStaticShortMethod", obj, methodID, "short");
+                self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_static("CallStaticShortMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jshort>(126)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -16452,13 +16923,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallStaticIntMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticIntMethodA");
-            self.check_no_exception("CallStaticIntMethodA");
-            self.check_return_type_static("CallStaticIntMethodA", obj, methodID, "int");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticIntMethodA");
+                self.check_no_exception("CallStaticIntMethodA");
+                self.check_return_type_static("CallStaticIntMethodA", obj, methodID, "int");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jint>(131)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jint>(131)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -16503,13 +16976,15 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 0 arguments
     ///
     pub unsafe fn CallStaticIntMethod0(&self, obj: jclass, methodID: jmethodID) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticIntMethod");
-            self.check_no_exception("CallStaticIntMethod");
-            self.check_return_type_static("CallStaticIntMethod", obj, methodID, "int");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticIntMethod");
+                self.check_no_exception("CallStaticIntMethod");
+                self.check_return_type_static("CallStaticIntMethod", obj, methodID, "int");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jint>(129)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jint>(129)(self.vtable, obj, methodID)
     }
 
     ///
@@ -16554,14 +17029,16 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 1 arguments
     ///
     pub unsafe fn CallStaticIntMethod1<A: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticIntMethod");
-            self.check_no_exception("CallStaticIntMethod");
-            self.check_return_type_static("CallStaticIntMethod", obj, methodID, "int");
-            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticIntMethod");
+                self.check_no_exception("CallStaticIntMethod");
+                self.check_return_type_static("CallStaticIntMethod", obj, methodID, "int");
+                self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -16606,15 +17083,17 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 2 arguments
     ///
     pub unsafe fn CallStaticIntMethod2<A: JType, B: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticIntMethod");
-            self.check_no_exception("CallStaticIntMethod");
-            self.check_return_type_static("CallStaticIntMethod", obj, methodID, "int");
-            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticIntMethod");
+                self.check_no_exception("CallStaticIntMethod");
+                self.check_return_type_static("CallStaticIntMethod", obj, methodID, "int");
+                self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -16659,16 +17138,18 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return int and have 3 arguments
     ///
     pub unsafe fn CallStaticIntMethod3<A: JType, B: JType, C: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticIntMethod");
-            self.check_no_exception("CallStaticIntMethod");
-            self.check_return_type_static("CallStaticIntMethod", obj, methodID, "int");
-            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticIntMethod");
+                self.check_no_exception("CallStaticIntMethod");
+                self.check_return_type_static("CallStaticIntMethod", obj, methodID, "int");
+                self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_static("CallStaticIntMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jint>(129)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -16719,13 +17200,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallStaticLongMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticLongMethodA");
-            self.check_no_exception("CallStaticLongMethodA");
-            self.check_return_type_static("CallStaticLongMethodA", obj, methodID, "long");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticLongMethodA");
+                self.check_no_exception("CallStaticLongMethodA");
+                self.check_return_type_static("CallStaticLongMethodA", obj, methodID, "long");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jlong>(134)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jlong>(134)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -16770,13 +17253,15 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 0 arguments
     ///
     pub unsafe fn CallStaticLongMethod0(&self, obj: jclass, methodID: jmethodID) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticLongMethod");
-            self.check_no_exception("CallStaticLongMethod");
-            self.check_return_type_static("CallStaticLongMethod", obj, methodID, "long");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticLongMethod");
+                self.check_no_exception("CallStaticLongMethod");
+                self.check_return_type_static("CallStaticLongMethod", obj, methodID, "long");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jlong>(132)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jlong>(132)(self.vtable, obj, methodID)
     }
 
     ///
@@ -16821,14 +17306,16 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 1 arguments
     ///
     pub unsafe fn CallStaticLongMethod1<A: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticLongMethod");
-            self.check_no_exception("CallStaticLongMethod");
-            self.check_return_type_static("CallStaticLongMethod", obj, methodID, "long");
-            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticLongMethod");
+                self.check_no_exception("CallStaticLongMethod");
+                self.check_return_type_static("CallStaticLongMethod", obj, methodID, "long");
+                self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -16873,15 +17360,17 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 2 arguments
     ///
     pub unsafe fn CallStaticLongMethod2<A: JType, B: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticLongMethod");
-            self.check_no_exception("CallStaticLongMethod");
-            self.check_return_type_static("CallStaticLongMethod", obj, methodID, "long");
-            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticLongMethod");
+                self.check_no_exception("CallStaticLongMethod");
+                self.check_return_type_static("CallStaticLongMethod", obj, methodID, "long");
+                self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -16926,16 +17415,18 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return long and have 3 arguments
     ///
     pub unsafe fn CallStaticLongMethod3<A: JType, B: JType, C: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticLongMethod");
-            self.check_no_exception("CallStaticLongMethod");
-            self.check_return_type_static("CallStaticLongMethod", obj, methodID, "long");
-            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticLongMethod");
+                self.check_no_exception("CallStaticLongMethod");
+                self.check_return_type_static("CallStaticLongMethod", obj, methodID, "long");
+                self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_static("CallStaticLongMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jlong>(132)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -16986,13 +17477,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallStaticFloatMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticFloatMethodA");
-            self.check_no_exception("CallStaticFloatMethodA");
-            self.check_return_type_static("CallStaticFloatMethodA", obj, methodID, "float");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticFloatMethodA");
+                self.check_no_exception("CallStaticFloatMethodA");
+                self.check_return_type_static("CallStaticFloatMethodA", obj, methodID, "float");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jfloat>(137)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jfloat>(137)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -17037,13 +17530,15 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 0 arguments
     ///
     pub unsafe fn CallStaticFloatMethod0(&self, obj: jclass, methodID: jmethodID) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticFloatMethod");
-            self.check_no_exception("CallStaticFloatMethod");
-            self.check_return_type_static("CallStaticFloatMethod", obj, methodID, "float");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticFloatMethod");
+                self.check_no_exception("CallStaticFloatMethod");
+                self.check_return_type_static("CallStaticFloatMethod", obj, methodID, "float");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jfloat>(135)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jfloat>(135)(self.vtable, obj, methodID)
     }
 
     ///
@@ -17088,14 +17583,16 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 1 arguments
     ///
     pub unsafe fn CallStaticFloatMethod1<A: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticFloatMethod");
-            self.check_no_exception("CallStaticFloatMethod");
-            self.check_return_type_static("CallStaticFloatMethod", obj, methodID, "float");
-            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticFloatMethod");
+                self.check_no_exception("CallStaticFloatMethod");
+                self.check_return_type_static("CallStaticFloatMethod", obj, methodID, "float");
+                self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -17140,15 +17637,17 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 2 arguments
     ///
     pub unsafe fn CallStaticFloatMethod2<A: JType, B: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticFloatMethod");
-            self.check_no_exception("CallStaticFloatMethod");
-            self.check_return_type_static("CallStaticFloatMethod", obj, methodID, "float");
-            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticFloatMethod");
+                self.check_no_exception("CallStaticFloatMethod");
+                self.check_return_type_static("CallStaticFloatMethod", obj, methodID, "float");
+                self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -17193,16 +17692,18 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return float and have 3 arguments
     ///
     pub unsafe fn CallStaticFloatMethod3<A: JType, B: JType, C: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticFloatMethod");
-            self.check_no_exception("CallStaticFloatMethod");
-            self.check_return_type_static("CallStaticFloatMethod", obj, methodID, "float");
-            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticFloatMethod");
+                self.check_no_exception("CallStaticFloatMethod");
+                self.check_return_type_static("CallStaticFloatMethod", obj, methodID, "float");
+                self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_static("CallStaticFloatMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jfloat>(135)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -17253,13 +17754,15 @@ impl JNIEnv {
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
     pub unsafe fn CallStaticDoubleMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticDoubleMethodA");
-            self.check_no_exception("CallStaticDoubleMethodA");
-            self.check_return_type_static("CallStaticDoubleMethodA", obj, methodID, "double");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticDoubleMethodA");
+                self.check_no_exception("CallStaticDoubleMethodA");
+                self.check_return_type_static("CallStaticDoubleMethodA", obj, methodID, "double");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jdouble>(140)(self.vtable, obj, methodID, args)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jdouble>(140)(self.vtable, obj, methodID, args)
     }
 
     ///
@@ -17304,13 +17807,15 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 0 arguments
     ///
     pub unsafe fn CallStaticDoubleMethod0(&self, obj: jclass, methodID: jmethodID) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticDoubleMethod");
-            self.check_no_exception("CallStaticDoubleMethod");
-            self.check_return_type_static("CallStaticDoubleMethod", obj, methodID, "double");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticDoubleMethod");
+                self.check_no_exception("CallStaticDoubleMethod");
+                self.check_return_type_static("CallStaticDoubleMethod", obj, methodID, "double");
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jdouble>(138)(self.vtable, obj, methodID)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jdouble>(138)(self.vtable, obj, methodID)
     }
 
     ///
@@ -17355,14 +17860,16 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 1 arguments
     ///
     pub unsafe fn CallStaticDoubleMethod1<A: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticDoubleMethod");
-            self.check_no_exception("CallStaticDoubleMethod");
-            self.check_return_type_static("CallStaticDoubleMethod", obj, methodID, "double");
-            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg1, 0, 1);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticDoubleMethod");
+                self.check_no_exception("CallStaticDoubleMethod");
+                self.check_return_type_static("CallStaticDoubleMethod", obj, methodID, "double");
+                self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg1, 0, 1);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1)
     }
 
     ///
@@ -17407,15 +17914,17 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 2 arguments
     ///
     pub unsafe fn CallStaticDoubleMethod2<A: JType, B: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticDoubleMethod");
-            self.check_no_exception("CallStaticDoubleMethod");
-            self.check_return_type_static("CallStaticDoubleMethod", obj, methodID, "double");
-            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg1, 0, 2);
-            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg2, 1, 2);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticDoubleMethod");
+                self.check_no_exception("CallStaticDoubleMethod");
+                self.check_return_type_static("CallStaticDoubleMethod", obj, methodID, "double");
+                self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg1, 0, 2);
+                self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg2, 1, 2);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1, arg2)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1, arg2)
     }
 
     ///
@@ -17460,16 +17969,18 @@ impl JNIEnv {
     /// `methodID` must be valid, static and actually be a method of `obj`, return double and have 3 arguments
     ///
     pub unsafe fn CallStaticDoubleMethod3<A: JType, B: JType, C: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("CallStaticDoubleMethod");
-            self.check_no_exception("CallStaticDoubleMethod");
-            self.check_return_type_static("CallStaticDoubleMethod", obj, methodID, "double");
-            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg1, 0, 3);
-            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg2, 1, 3);
-            self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg3, 2, 3);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("CallStaticDoubleMethod");
+                self.check_no_exception("CallStaticDoubleMethod");
+                self.check_return_type_static("CallStaticDoubleMethod", obj, methodID, "double");
+                self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg1, 0, 3);
+                self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg2, 1, 3);
+                self.check_parameter_types_static("CallStaticDoubleMethod", obj, methodID, arg3, 2, 3);
+            }
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1, arg2, arg3)
         }
-        self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jdouble>(138)(self.vtable, obj, methodID, arg1, arg2, arg3)
     }
 
     ///
@@ -17507,14 +18018,16 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn NewString(&self, unicodeChars: *const jchar, len: jsize) -> jstring {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewString");
-            self.check_no_exception("NewString");
-            assert!(!unicodeChars.is_null(), "NewString string must not be null");
-            assert!(len >= 0, "NewString len must not be negative");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewString");
+                self.check_no_exception("NewString");
+                assert!(!unicodeChars.is_null(), "NewString string must not be null");
+                assert!(len >= 0, "NewString len must not be negative");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, *const jchar, jsize) -> jstring>(163)(self.vtable, unicodeChars, len)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, *const jchar, jsize) -> jstring>(163)(self.vtable, unicodeChars, len)
     }
 
     ///
@@ -17548,14 +18061,16 @@ impl JNIEnv {
     /// `string` must be a valid reference that is not yet garbage collected and refer to a String.
     ///
     pub unsafe fn GetStringLength(&self, string: jstring) -> jsize {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStringLength");
-            self.check_no_exception("GetStringLength");
-            assert!(!string.is_null(), "GetStringLength string must not be null");
-            self.check_if_arg_is_string("GetStringLength", string);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStringLength");
+                self.check_no_exception("GetStringLength");
+                assert!(!string.is_null(), "GetStringLength string must not be null");
+                self.check_if_arg_is_string("GetStringLength", string);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jstring) -> jsize>(164)(self.vtable, string)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring) -> jsize>(164)(self.vtable, string)
     }
 
     ///
@@ -17593,14 +18108,16 @@ impl JNIEnv {
     /// `isCopy` must be null or valid.
     ///
     pub unsafe fn GetStringChars(&self, string: jstring, isCopy: *mut jboolean) -> *const jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStringChars");
-            self.check_no_exception("GetStringChars");
-            assert!(!string.is_null(), "GetStringChars string must not be null");
-            self.check_if_arg_is_string("GetStringChars", string);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStringChars");
+                self.check_no_exception("GetStringChars");
+                assert!(!string.is_null(), "GetStringChars string must not be null");
+                self.check_if_arg_is_string("GetStringChars", string);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const jchar>(165)(self.vtable, string, isCopy)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const jchar>(165)(self.vtable, string, isCopy)
     }
 
     ///
@@ -17632,14 +18149,16 @@ impl JNIEnv {
     /// `chars` must be the result of a call to `GetStringChars` of the String `string`
     ///
     pub unsafe fn ReleaseStringChars(&self, string: jstring, chars: *const jchar) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ReleaseStringChars");
-            assert!(!string.is_null(), "ReleaseStringChars string must not be null");
-            assert!(!chars.is_null(), "ReleaseStringChars chars must not be null");
-            self.check_if_arg_is_string("ReleaseStringChars", string);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ReleaseStringChars");
+                assert!(!string.is_null(), "ReleaseStringChars string must not be null");
+                assert!(!chars.is_null(), "ReleaseStringChars chars must not be null");
+                self.check_if_arg_is_string("ReleaseStringChars", string);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(166)(self.vtable, string, chars);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(166)(self.vtable, string, chars);
     }
 
     ///
@@ -17675,15 +18194,17 @@ impl JNIEnv {
     /// `bytes` must be zero terminated.
     ///
     pub unsafe fn NewStringUTF(&self, bytes: impl UseCString) -> jstring {
-        bytes.use_as_const_c_char(|bytes| {
-            #[cfg(feature = "asserts")]
-            {
-                self.check_not_critical("NewStringUTF");
-                self.check_no_exception("NewStringUTF");
-                assert!(!bytes.is_null(), "NewStringUTF string must not be null");
-            }
-            self.jni::<extern "system" fn(JNIEnvVTable, *const c_char) -> jstring>(167)(self.vtable, bytes)
-        })
+        unsafe {
+            bytes.use_as_const_c_char(|bytes| {
+                #[cfg(feature = "asserts")]
+                {
+                    self.check_not_critical("NewStringUTF");
+                    self.check_no_exception("NewStringUTF");
+                    assert!(!bytes.is_null(), "NewStringUTF string must not be null");
+                }
+                self.jni::<extern "system" fn(JNIEnvVTable, *const c_char) -> jstring>(167)(self.vtable, bytes)
+            })
+        }
     }
 
     ///
@@ -17725,15 +18246,17 @@ impl JNIEnv {
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
     pub unsafe fn GetStringUTFLength(&self, string: jstring) -> jsize {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStringUTFLength");
-            self.check_no_exception("GetStringUTFLength");
-            assert!(!string.is_null(), "GetStringUTFLength string must not be null");
-            self.check_if_arg_is_string("GetStringUTFLength", string);
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStringUTFLength");
+                self.check_no_exception("GetStringUTFLength");
+                assert!(!string.is_null(), "GetStringUTFLength string must not be null");
+                self.check_if_arg_is_string("GetStringUTFLength", string);
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring) -> jsize>(168)(self.vtable, string)
+            self.jni::<extern "system" fn(JNIEnvVTable, jstring) -> jsize>(168)(self.vtable, string)
+        }
     }
 
     ///
@@ -17769,16 +18292,18 @@ impl JNIEnv {
     /// The JVM must be a Java 24 VM or newer
     ///
     pub unsafe fn GetStringUTFLengthAsLong(&self, string: jstring) -> jsize {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStringUTFLengthAsLong");
-            self.check_no_exception("GetStringUTFLengthAsLong");
-            assert!(!string.is_null(), "GetStringUTFLengthAsLong string must not be null");
-            self.check_if_arg_is_string("GetStringUTFLengthAsLong", string);
-            assert!(self.GetVersion() >= JNI_VERSION_24);
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStringUTFLengthAsLong");
+                self.check_no_exception("GetStringUTFLengthAsLong");
+                assert!(!string.is_null(), "GetStringUTFLengthAsLong string must not be null");
+                self.check_if_arg_is_string("GetStringUTFLengthAsLong", string);
+                assert!(self.GetVersion() >= JNI_VERSION_24);
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring) -> jsize>(235)(self.vtable, string)
+            self.jni::<extern "system" fn(JNIEnvVTable, jstring) -> jsize>(235)(self.vtable, string)
+        }
     }
 
     ///
@@ -17818,14 +18343,16 @@ impl JNIEnv {
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
     pub unsafe fn GetStringUTFChars(&self, string: jstring, isCopy: *mut jboolean) -> *const c_char {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStringUTFChars");
-            assert!(!string.is_null(), "GetStringUTFChars string must not be null");
-            self.check_if_arg_is_string("GetStringUTFChars", string);
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStringUTFChars");
+                assert!(!string.is_null(), "GetStringUTFChars string must not be null");
+                self.check_if_arg_is_string("GetStringUTFChars", string);
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const c_char>(169)(self.vtable, string, isCopy)
+            self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const c_char>(169)(self.vtable, string, isCopy)
+        }
     }
 
     ///
@@ -17855,28 +18382,30 @@ impl JNIEnv {
     ///
     ///
     pub unsafe fn GetStringUTFChars_as_string(&self, string: jstring) -> Option<String> {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStringUTFChars_as_string");
-            self.check_no_exception("GetStringUTFChars_as_string");
-            assert!(!string.is_null(), "GetStringUTFChars_as_string string must not be null");
-            self.check_if_arg_is_string("GetStringUTFChars_as_string", string);
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStringUTFChars_as_string");
+                self.check_no_exception("GetStringUTFChars_as_string");
+                assert!(!string.is_null(), "GetStringUTFChars_as_string string must not be null");
+                self.check_if_arg_is_string("GetStringUTFChars_as_string", string);
+            }
 
-        let str = self.GetStringUTFChars(string, null_mut());
-        if str.is_null() {
-            return None;
-        }
+            let str = self.GetStringUTFChars(string, null_mut());
+            if str.is_null() {
+                return None;
+            }
 
-        let parsed = CStr::from_ptr(str).to_str();
-        if let Ok(parsed) = parsed {
-            let copy = parsed.to_string();
+            let parsed = CStr::from_ptr(str).to_str();
+            if let Ok(parsed) = parsed {
+                let copy = parsed.to_string();
+                self.ReleaseStringUTFChars(string, str);
+                return Some(copy);
+            }
+
             self.ReleaseStringUTFChars(string, str);
-            return Some(copy);
+            None
         }
-
-        self.ReleaseStringUTFChars(string, str);
-        None
     }
 
     ///
@@ -17909,15 +18438,17 @@ impl JNIEnv {
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
     pub unsafe fn ReleaseStringUTFChars(&self, string: jstring, utf: *const c_char) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ReleaseStringUTFChars");
-            assert!(!string.is_null(), "ReleaseStringUTFChars string must not be null");
-            assert!(!utf.is_null(), "ReleaseStringUTFChars utf must not be null");
-            self.check_if_arg_is_string("ReleaseStringUTFChars", string);
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ReleaseStringUTFChars");
+                assert!(!string.is_null(), "ReleaseStringUTFChars string must not be null");
+                assert!(!utf.is_null(), "ReleaseStringUTFChars utf must not be null");
+                self.check_if_arg_is_string("ReleaseStringUTFChars", string);
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const c_char)>(170)(self.vtable, string, utf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const c_char)>(170)(self.vtable, string, utf);
+        }
     }
 
     ///
@@ -17959,17 +18490,19 @@ impl JNIEnv {
     /// `buffer` must be large enough to hold the requested amount of jchar's
     ///
     pub unsafe fn GetStringRegion(&self, string: jstring, start: jsize, len: jsize, buffer: *mut jchar) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStringRegion");
-            self.check_no_exception("GetStringRegion");
-            assert!(!string.is_null(), "GetStringRegion string must not be null");
-            assert!(!buffer.is_null(), "GetStringRegion buffer must not be null");
-            assert!(buffer.is_aligned(), "GetStringRegion buffer is not aligned properly!");
-            self.check_if_arg_is_string("GetStringRegion", string);
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStringRegion");
+                self.check_no_exception("GetStringRegion");
+                assert!(!string.is_null(), "GetStringRegion string must not be null");
+                assert!(!buffer.is_null(), "GetStringRegion buffer must not be null");
+                assert!(buffer.is_aligned(), "GetStringRegion buffer is not aligned properly!");
+                self.check_if_arg_is_string("GetStringRegion", string);
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, jsize, jsize, *mut jchar)>(220)(self.vtable, string, start, len, buffer);
+            self.jni::<extern "system" fn(JNIEnvVTable, jstring, jsize, jsize, *mut jchar)>(220)(self.vtable, string, start, len, buffer);
+        }
     }
 
     ///
@@ -18006,7 +18539,9 @@ impl JNIEnv {
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
     pub unsafe fn GetStringRegion_into_slice(&self, string: jstring, start: jsize, buffer: &mut [jchar]) {
-        self.GetStringRegion(string, start, jsize::try_from(buffer.len()).expect("buf.len() > jsize::MAX"), buffer.as_mut_ptr());
+        unsafe {
+            self.GetStringRegion(string, start, jsize::try_from(buffer.len()).expect("buf.len() > jsize::MAX"), buffer.as_mut_ptr());
+        }
     }
 
     ///
@@ -18058,15 +18593,17 @@ impl JNIEnv {
     /// `buffer` must be large enough to hold the requested amount of jchar's
     ///
     pub unsafe fn GetStringUTFRegion(&self, string: jstring, start: jsize, len: jsize, buffer: *mut c_char) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetStringUTFRegion");
-            self.check_no_exception("GetStringUTFRegion");
-            assert!(!string.is_null(), "GetStringUTFRegion string must not be null");
-            self.check_if_arg_is_string("GetStringUTFRegion", string);
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStringUTFRegion");
+                self.check_no_exception("GetStringUTFRegion");
+                assert!(!string.is_null(), "GetStringUTFRegion string must not be null");
+                self.check_if_arg_is_string("GetStringUTFRegion", string);
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, jsize, jsize, *mut c_char)>(221)(self.vtable, string, start, len, buffer);
+            self.jni::<extern "system" fn(JNIEnvVTable, jstring, jsize, jsize, *mut c_char)>(221)(self.vtable, string, start, len, buffer);
+        }
     }
 
     #[cfg(feature = "asserts")]
@@ -18118,37 +18655,39 @@ impl JNIEnv {
     /// `string` must be non-null, valid, actually refer to a string and not yet be garbage collected.
     ///
     pub unsafe fn GetStringCritical(&self, string: jstring, isCopy: *mut jboolean) -> *const jchar {
-        #[cfg(feature = "asserts")]
-        {
-            assert!(!string.is_null(), "GetStringCritical string must not be null");
-            Self::CRITICAL_POINTERS.with(|set| {
-                if set.borrow().is_empty() {
-                    Self::CRITICAL_STRINGS.with(|strings| {
-                        if strings.borrow().is_empty() {
-                            //We can only do this check if we have not yet obtained a unreleased critical on the current thread.
-                            //For subsequent calls we cannot do this check.
-                            self.check_no_exception("GetStringCritical");
-                            self.check_if_arg_is_string("GetStringCritical", string);
-                        }
-                    });
-                }
-            });
-        }
-
-        let crit = self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const jchar>(224)(self.vtable, string, isCopy);
-
-        #[cfg(feature = "asserts")]
-        {
-            if !crit.is_null() {
-                Self::CRITICAL_STRINGS.with(|set| {
-                    let mut rm = set.borrow_mut();
-                    let n = rm.remove(&crit).unwrap_or(0) + 1;
-                    rm.insert(crit, n);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                assert!(!string.is_null(), "GetStringCritical string must not be null");
+                Self::CRITICAL_POINTERS.with(|set| {
+                    if set.borrow().is_empty() {
+                        Self::CRITICAL_STRINGS.with(|strings| {
+                            if strings.borrow().is_empty() {
+                                //We can only do this check if we have not yet obtained a unreleased critical on the current thread.
+                                //For subsequent calls we cannot do this check.
+                                self.check_no_exception("GetStringCritical");
+                                self.check_if_arg_is_string("GetStringCritical", string);
+                            }
+                        });
+                    }
                 });
             }
-        }
 
-        crit
+            let crit = self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const jchar>(224)(self.vtable, string, isCopy);
+
+            #[cfg(feature = "asserts")]
+            {
+                if !crit.is_null() {
+                    Self::CRITICAL_STRINGS.with(|set| {
+                        let mut rm = set.borrow_mut();
+                        let n = rm.remove(&crit).unwrap_or(0) + 1;
+                        rm.insert(crit, n);
+                    });
+                }
+            }
+
+            crit
+        }
     }
 
     ///
@@ -18164,26 +18703,28 @@ impl JNIEnv {
     /// `cstring` must be non-null and the result of a `GetStringCritical` call
     ///
     pub unsafe fn ReleaseStringCritical(&self, string: jstring, cstring: *const jchar) {
-        #[cfg(feature = "asserts")]
-        {
-            assert!(!string.is_null(), "ReleaseStringCritical string must not be null");
-            assert!(!cstring.is_null(), "ReleaseStringCritical cstring must not be null");
-            Self::CRITICAL_STRINGS.with(|set| {
-                let mut rm = set.borrow_mut();
-                let mut n = rm.remove(&cstring).expect("ReleaseStringCritical cstring is not valid");
-                if n == 0 {
-                    unreachable!();
-                }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                assert!(!string.is_null(), "ReleaseStringCritical string must not be null");
+                assert!(!cstring.is_null(), "ReleaseStringCritical cstring must not be null");
+                Self::CRITICAL_STRINGS.with(|set| {
+                    let mut rm = set.borrow_mut();
+                    let mut n = rm.remove(&cstring).expect("ReleaseStringCritical cstring is not valid");
+                    if n == 0 {
+                        unreachable!();
+                    }
 
-                n -= 1;
+                    n -= 1;
 
-                if n >= 1 {
-                    rm.insert(cstring, n);
-                }
-            });
+                    if n >= 1 {
+                        rm.insert(cstring, n);
+                    }
+                });
+            }
+
+            self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(225)(self.vtable, string, cstring);
         }
-
-        self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(225)(self.vtable, string, cstring);
     }
 
     ///
@@ -18216,15 +18757,17 @@ impl JNIEnv {
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
     pub unsafe fn GetArrayLength(&self, array: jarray) -> jsize {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetArrayLength");
-            self.check_no_exception("GetArrayLength");
-            assert!(!array.is_null(), "GetArrayLength array must not be null");
-            self.check_is_array(array, "GetArrayLength");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetArrayLength");
+                self.check_no_exception("GetArrayLength");
+                assert!(!array.is_null(), "GetArrayLength array must not be null");
+                self.check_is_array(array, "GetArrayLength");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jarray) -> jsize>(171)(self.vtable, array)
+            self.jni::<extern "system" fn(JNIEnvVTable, jarray) -> jsize>(171)(self.vtable, array)
+        }
     }
 
     ///
@@ -18268,15 +18811,17 @@ impl JNIEnv {
     /// `initialElement` must be null or an instance of the class referred to by `elementClass` and not already be garbage collected.
     ///
     pub unsafe fn NewObjectArray(&self, len: jsize, elementClass: jclass, initialElement: jobject) -> jobjectArray {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewObjectArray");
-            self.check_no_exception("NewObjectArray");
-            assert!(!elementClass.is_null(), "NewObjectArray elementClass must not be null");
-            assert!(len >= 0, "NewObjectArray len mot not be negative {len}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewObjectArray");
+                self.check_no_exception("NewObjectArray");
+                assert!(!elementClass.is_null(), "NewObjectArray elementClass must not be null");
+                assert!(len >= 0, "NewObjectArray len mot not be negative {len}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jsize, jclass, jobject) -> jobjectArray>(172)(self.vtable, len, elementClass, initialElement)
+            self.jni::<extern "system" fn(JNIEnvVTable, jsize, jclass, jobject) -> jobjectArray>(172)(self.vtable, len, elementClass, initialElement)
+        }
     }
 
     ///
@@ -18312,14 +18857,16 @@ impl JNIEnv {
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
     pub unsafe fn GetObjectArrayElement(&self, array: jobjectArray, index: jsize) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetObjectArrayElement");
-            self.check_no_exception("GetObjectArrayElement");
-            assert!(!array.is_null(), "GetObjectArrayElement array must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetObjectArrayElement");
+                self.check_no_exception("GetObjectArrayElement");
+                assert!(!array.is_null(), "GetObjectArrayElement array must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jobjectArray, jsize) -> jobject>(173)(self.vtable, array, index)
+            self.jni::<extern "system" fn(JNIEnvVTable, jobjectArray, jsize) -> jobject>(173)(self.vtable, array, index)
+        }
     }
 
     ///
@@ -18357,15 +18904,17 @@ impl JNIEnv {
     /// `value` must be null or an instance of the type contained inside the array and not already be garbage collected.
     ///
     pub unsafe fn SetObjectArrayElement(&self, array: jobjectArray, index: jsize, value: jobject) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetObjectArrayElement");
-            self.check_no_exception("SetObjectArrayElement");
-            assert!(!array.is_null(), "SetObjectArrayElement array must not be null");
-            //TODO check array component type matches value
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetObjectArrayElement");
+                self.check_no_exception("SetObjectArrayElement");
+                assert!(!array.is_null(), "SetObjectArrayElement array must not be null");
+                //TODO check array component type matches value
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jobjectArray, jsize, jobject)>(174)(self.vtable, array, index, value);
+            self.jni::<extern "system" fn(JNIEnvVTable, jobjectArray, jsize, jobject)>(174)(self.vtable, array, index, value);
+        }
     }
 
     ///
@@ -18400,14 +18949,16 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn NewBooleanArray(&self, size: jsize) -> jbooleanArray {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewBooleanArray");
-            self.check_no_exception("NewBooleanArray");
-            assert!(size >= 0, "NewBooleanArray size must not be negative {size}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewBooleanArray");
+                self.check_no_exception("NewBooleanArray");
+                assert!(size >= 0, "NewBooleanArray size must not be negative {size}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jobject>(175)(self.vtable, size)
+            self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jobject>(175)(self.vtable, size)
+        }
     }
 
     ///
@@ -18442,14 +18993,16 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn NewByteArray(&self, size: jsize) -> jbyteArray {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewByteArray");
-            self.check_no_exception("NewByteArray");
-            assert!(size >= 0, "NewByteArray size must not be negative {size}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewByteArray");
+                self.check_no_exception("NewByteArray");
+                assert!(size >= 0, "NewByteArray size must not be negative {size}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jbyteArray>(176)(self.vtable, size)
+            self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jbyteArray>(176)(self.vtable, size)
+        }
     }
 
     ///
@@ -18484,14 +19037,16 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn NewCharArray(&self, size: jsize) -> jcharArray {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewCharArray");
-            self.check_no_exception("NewCharArray");
-            assert!(size >= 0, "NewCharArray size must not be negative {size}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewCharArray");
+                self.check_no_exception("NewCharArray");
+                assert!(size >= 0, "NewCharArray size must not be negative {size}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jcharArray>(177)(self.vtable, size)
+            self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jcharArray>(177)(self.vtable, size)
+        }
     }
 
     ///
@@ -18526,14 +19081,16 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn NewShortArray(&self, size: jsize) -> jshortArray {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewShortArray");
-            self.check_no_exception("NewShortArray");
-            assert!(size >= 0, "NewShortArray size must not be negative {size}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewShortArray");
+                self.check_no_exception("NewShortArray");
+                assert!(size >= 0, "NewShortArray size must not be negative {size}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jshortArray>(178)(self.vtable, size)
+            self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jshortArray>(178)(self.vtable, size)
+        }
     }
 
     ///
@@ -18568,14 +19125,16 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn NewIntArray(&self, size: jsize) -> jintArray {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewIntArray");
-            self.check_no_exception("NewIntArray");
-            assert!(size >= 0, "NewIntArray size must not be negative {size}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewIntArray");
+                self.check_no_exception("NewIntArray");
+                assert!(size >= 0, "NewIntArray size must not be negative {size}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jintArray>(179)(self.vtable, size)
+            self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jintArray>(179)(self.vtable, size)
+        }
     }
 
     ///
@@ -18610,14 +19169,16 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn NewLongArray(&self, size: jsize) -> jlongArray {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewLongArray");
-            self.check_no_exception("NewLongArray");
-            assert!(size >= 0, "NewLongArray size must not be negative {size}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewLongArray");
+                self.check_no_exception("NewLongArray");
+                assert!(size >= 0, "NewLongArray size must not be negative {size}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jlongArray>(180)(self.vtable, size)
+            self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jlongArray>(180)(self.vtable, size)
+        }
     }
 
     ///
@@ -18652,14 +19213,16 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn NewFloatArray(&self, size: jsize) -> jfloatArray {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewFloatArray");
-            self.check_no_exception("NewFloatArray");
-            assert!(size >= 0, "NewFloatArray size must not be negative {size}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewFloatArray");
+                self.check_no_exception("NewFloatArray");
+                assert!(size >= 0, "NewFloatArray size must not be negative {size}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jfloatArray>(181)(self.vtable, size)
+            self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jfloatArray>(181)(self.vtable, size)
+        }
     }
 
     ///
@@ -18694,14 +19257,16 @@ impl JNIEnv {
     ///
     #[must_use]
     pub unsafe fn NewDoubleArray(&self, size: jsize) -> jdoubleArray {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewDoubleArray");
-            self.check_no_exception("NewDoubleArray");
-            assert!(size >= 0, "NewDoubleArray size must not be negative {size}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewDoubleArray");
+                self.check_no_exception("NewDoubleArray");
+                assert!(size >= 0, "NewDoubleArray size must not be negative {size}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jdoubleArray>(182)(self.vtable, size)
+            self.jni::<extern "system" fn(JNIEnvVTable, jsize) -> jdoubleArray>(182)(self.vtable, size)
+        }
     }
 
     ///
@@ -18738,14 +19303,16 @@ impl JNIEnv {
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
     pub unsafe fn GetBooleanArrayElements(&self, array: jbooleanArray, is_copy: *mut jboolean) -> *mut jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetBooleanArrayElements");
-            self.check_no_exception("GetBooleanArrayElements");
-            assert!(!array.is_null(), "GetBooleanArrayElements jarray must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetBooleanArrayElements");
+                self.check_no_exception("GetBooleanArrayElements");
+                assert!(!array.is_null(), "GetBooleanArrayElements jarray must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, *mut jboolean) -> *mut jboolean>(183)(self.vtable, array, is_copy)
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, *mut jboolean) -> *mut jboolean>(183)(self.vtable, array, is_copy)
+        }
     }
 
     ///
@@ -18782,14 +19349,16 @@ impl JNIEnv {
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
     pub unsafe fn GetByteArrayElements(&self, array: jbyteArray, is_copy: *mut jboolean) -> *mut jbyte {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetByteArrayElements");
-            self.check_no_exception("GetByteArrayElements");
-            assert!(!array.is_null(), "GetByteArrayElements jarray must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetByteArrayElements");
+                self.check_no_exception("GetByteArrayElements");
+                assert!(!array.is_null(), "GetByteArrayElements jarray must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, *mut jboolean) -> *mut jbyte>(184)(self.vtable, array, is_copy)
+            self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, *mut jboolean) -> *mut jbyte>(184)(self.vtable, array, is_copy)
+        }
     }
 
     ///
@@ -18826,14 +19395,16 @@ impl JNIEnv {
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
     pub unsafe fn GetCharArrayElements(&self, array: jcharArray, is_copy: *mut jboolean) -> *mut jchar {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetCharArrayElements");
-            self.check_no_exception("GetCharArrayElements");
-            assert!(!array.is_null(), "GetCharArrayElements jarray must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetCharArrayElements");
+                self.check_no_exception("GetCharArrayElements");
+                assert!(!array.is_null(), "GetCharArrayElements jarray must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, *mut jboolean) -> *mut jchar>(185)(self.vtable, array, is_copy)
+            self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, *mut jboolean) -> *mut jchar>(185)(self.vtable, array, is_copy)
+        }
     }
 
     ///
@@ -18870,14 +19441,16 @@ impl JNIEnv {
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
     pub unsafe fn GetShortArrayElements(&self, array: jshortArray, is_copy: *mut jboolean) -> *mut jshort {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetShortArrayElements");
-            self.check_no_exception("GetShortArrayElements");
-            assert!(!array.is_null(), "GetShortArrayElements jarray must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetShortArrayElements");
+                self.check_no_exception("GetShortArrayElements");
+                assert!(!array.is_null(), "GetShortArrayElements jarray must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, *mut jboolean) -> *mut jshort>(186)(self.vtable, array, is_copy)
+            self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, *mut jboolean) -> *mut jshort>(186)(self.vtable, array, is_copy)
+        }
     }
 
     ///
@@ -18914,14 +19487,16 @@ impl JNIEnv {
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
     pub unsafe fn GetIntArrayElements(&self, array: jintArray, is_copy: *mut jboolean) -> *mut jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetIntArrayElements");
-            self.check_no_exception("GetIntArrayElements");
-            assert!(!array.is_null(), "GetIntArrayElements jarray must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetIntArrayElements");
+                self.check_no_exception("GetIntArrayElements");
+                assert!(!array.is_null(), "GetIntArrayElements jarray must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jintArray, *mut jboolean) -> *mut jint>(187)(self.vtable, array, is_copy)
+            self.jni::<extern "system" fn(JNIEnvVTable, jintArray, *mut jboolean) -> *mut jint>(187)(self.vtable, array, is_copy)
+        }
     }
 
     ///
@@ -18958,14 +19533,16 @@ impl JNIEnv {
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
     pub unsafe fn GetLongArrayElements(&self, array: jlongArray, is_copy: *mut jboolean) -> *mut jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetLongArrayElements");
-            self.check_no_exception("GetLongArrayElements");
-            assert!(!array.is_null(), "GetLongArrayElements jarray must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetLongArrayElements");
+                self.check_no_exception("GetLongArrayElements");
+                assert!(!array.is_null(), "GetLongArrayElements jarray must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, *mut jboolean) -> *mut jlong>(188)(self.vtable, array, is_copy)
+            self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, *mut jboolean) -> *mut jlong>(188)(self.vtable, array, is_copy)
+        }
     }
 
     ///
@@ -19002,14 +19579,16 @@ impl JNIEnv {
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
     pub unsafe fn GetFloatArrayElements(&self, array: jfloatArray, is_copy: *mut jboolean) -> *mut jfloat {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetFloatArrayElements");
-            self.check_no_exception("GetFloatArrayElements");
-            assert!(!array.is_null(), "GetFloatArrayElements jarray must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetFloatArrayElements");
+                self.check_no_exception("GetFloatArrayElements");
+                assert!(!array.is_null(), "GetFloatArrayElements jarray must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, *mut jboolean) -> *mut jfloat>(189)(self.vtable, array, is_copy)
+            self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, *mut jboolean) -> *mut jfloat>(189)(self.vtable, array, is_copy)
+        }
     }
 
     ///
@@ -19046,14 +19625,16 @@ impl JNIEnv {
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
     pub unsafe fn GetDoubleArrayElements(&self, array: jdoubleArray, is_copy: *mut jboolean) -> *mut jdouble {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetDoubleArrayElements");
-            self.check_no_exception("GetDoubleArrayElements");
-            assert!(!array.is_null(), "GetDoubleArrayElements jarray must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetDoubleArrayElements");
+                self.check_no_exception("GetDoubleArrayElements");
+                assert!(!array.is_null(), "GetDoubleArrayElements jarray must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, *mut jboolean) -> *mut jdouble>(190)(self.vtable, array, is_copy)
+            self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, *mut jboolean) -> *mut jdouble>(190)(self.vtable, array, is_copy)
+        }
     }
 
     ///
@@ -19090,18 +19671,20 @@ impl JNIEnv {
     /// `mode` must be one of the constants
     ///
     pub unsafe fn ReleaseBooleanArrayElements(&self, array: jbooleanArray, elems: *mut jboolean, mode: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ReleaseBooleanArrayElements");
-            assert!(!array.is_null(), "ReleaseBooleanArrayElements jarray must not be null");
-            assert!(!elems.is_null(), "ReleaseBooleanArrayElements elems must not be null");
-            assert!(
-                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseBooleanArrayElements mode is invalid {mode}"
-            );
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ReleaseBooleanArrayElements");
+                assert!(!array.is_null(), "ReleaseBooleanArrayElements jarray must not be null");
+                assert!(!elems.is_null(), "ReleaseBooleanArrayElements elems must not be null");
+                assert!(
+                    mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                    "ReleaseBooleanArrayElements mode is invalid {mode}"
+                );
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, *mut jboolean, jint)>(191)(self.vtable, array, elems, mode);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, *mut jboolean, jint)>(191)(self.vtable, array, elems, mode);
+        }
     }
 
     ///
@@ -19138,15 +19721,17 @@ impl JNIEnv {
     /// `mode` must be one of the constants
     ///
     pub unsafe fn ReleaseByteArrayElements(&self, array: jbyteArray, elems: *mut jbyte, mode: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ReleaseByteArrayElements");
-            assert!(!array.is_null(), "ReleaseByteArrayElements jarray must not be null");
-            assert!(!elems.is_null(), "ReleaseByteArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseByteArrayElements mode is invalid {mode}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ReleaseByteArrayElements");
+                assert!(!array.is_null(), "ReleaseByteArrayElements jarray must not be null");
+                assert!(!elems.is_null(), "ReleaseByteArrayElements elems must not be null");
+                assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseByteArrayElements mode is invalid {mode}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, *mut jbyte, jint)>(192)(self.vtable, array, elems, mode);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, *mut jbyte, jint)>(192)(self.vtable, array, elems, mode);
+        }
     }
 
     ///
@@ -19184,15 +19769,17 @@ impl JNIEnv {
     /// `mode` must be one of the constants
     ///
     pub unsafe fn ReleaseCharArrayElements(&self, array: jcharArray, elems: *mut jchar, mode: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ReleaseCharArrayElements");
-            assert!(!array.is_null(), "ReleaseCharArrayElements jarray must not be null");
-            assert!(!elems.is_null(), "ReleaseCharArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseCharArrayElements mode is invalid {mode}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ReleaseCharArrayElements");
+                assert!(!array.is_null(), "ReleaseCharArrayElements jarray must not be null");
+                assert!(!elems.is_null(), "ReleaseCharArrayElements elems must not be null");
+                assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseCharArrayElements mode is invalid {mode}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, *mut jchar, jint)>(193)(self.vtable, array, elems, mode);
+            self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, *mut jchar, jint)>(193)(self.vtable, array, elems, mode);
+        }
     }
 
     ///
@@ -19230,18 +19817,20 @@ impl JNIEnv {
     /// `mode` must be one of the constants
     ///
     pub unsafe fn ReleaseShortArrayElements(&self, array: jshortArray, elems: *mut jshort, mode: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ReleaseShortArrayElements");
-            assert!(!array.is_null(), "ReleaseShortArrayElements jarray must not be null");
-            assert!(!elems.is_null(), "ReleaseShortArrayElements elems must not be null");
-            assert!(
-                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseShortArrayElements mode is invalid {mode}"
-            );
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ReleaseShortArrayElements");
+                assert!(!array.is_null(), "ReleaseShortArrayElements jarray must not be null");
+                assert!(!elems.is_null(), "ReleaseShortArrayElements elems must not be null");
+                assert!(
+                    mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                    "ReleaseShortArrayElements mode is invalid {mode}"
+                );
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, *mut jshort, jint)>(194)(self.vtable, array, elems, mode);
+            self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, *mut jshort, jint)>(194)(self.vtable, array, elems, mode);
+        }
     }
 
     ///
@@ -19279,15 +19868,17 @@ impl JNIEnv {
     /// `mode` must be one of the constants
     ///
     pub unsafe fn ReleaseIntArrayElements(&self, array: jintArray, elems: *mut jint, mode: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ReleaseIntArrayElements");
-            assert!(!array.is_null(), "ReleaseIntArrayElements jarray must not be null");
-            assert!(!elems.is_null(), "ReleaseIntArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseIntArrayElements mode is invalid {mode}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ReleaseIntArrayElements");
+                assert!(!array.is_null(), "ReleaseIntArrayElements jarray must not be null");
+                assert!(!elems.is_null(), "ReleaseIntArrayElements elems must not be null");
+                assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseIntArrayElements mode is invalid {mode}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jintArray, *mut jint, jint)>(195)(self.vtable, array, elems, mode);
+            self.jni::<extern "system" fn(JNIEnvVTable, jintArray, *mut jint, jint)>(195)(self.vtable, array, elems, mode);
+        }
     }
 
     ///
@@ -19325,15 +19916,17 @@ impl JNIEnv {
     /// `mode` must be one of the constants
     ///
     pub unsafe fn ReleaseLongArrayElements(&self, array: jlongArray, elems: *mut jlong, mode: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ReleaseLongArrayElements");
-            assert!(!array.is_null(), "ReleaseLongArrayElements jarray must not be null");
-            assert!(!elems.is_null(), "ReleaseLongArrayElements elems must not be null");
-            assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseLongArrayElements mode is invalid {mode}");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ReleaseLongArrayElements");
+                assert!(!array.is_null(), "ReleaseLongArrayElements jarray must not be null");
+                assert!(!elems.is_null(), "ReleaseLongArrayElements elems must not be null");
+                assert!(mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT, "ReleaseLongArrayElements mode is invalid {mode}");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, *mut jlong, jint)>(196)(self.vtable, array, elems, mode);
+            self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, *mut jlong, jint)>(196)(self.vtable, array, elems, mode);
+        }
     }
 
     ///
@@ -19371,18 +19964,20 @@ impl JNIEnv {
     /// `mode` must be one of the constants
     ///
     pub unsafe fn ReleaseFloatArrayElements(&self, array: jfloatArray, elems: *mut jfloat, mode: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ReleaseFloatArrayElements");
-            assert!(!array.is_null(), "ReleaseFloatArrayElements jarray must not be null");
-            assert!(!elems.is_null(), "ReleaseFloatArrayElements elems must not be null");
-            assert!(
-                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseFloatArrayElements mode is invalid {mode}"
-            );
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ReleaseFloatArrayElements");
+                assert!(!array.is_null(), "ReleaseFloatArrayElements jarray must not be null");
+                assert!(!elems.is_null(), "ReleaseFloatArrayElements elems must not be null");
+                assert!(
+                    mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                    "ReleaseFloatArrayElements mode is invalid {mode}"
+                );
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, *mut jfloat, jint)>(197)(self.vtable, array, elems, mode);
+            self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, *mut jfloat, jint)>(197)(self.vtable, array, elems, mode);
+        }
     }
 
     ///
@@ -19420,18 +20015,20 @@ impl JNIEnv {
     /// `mode` must be one of the constants
     ///
     pub unsafe fn ReleaseDoubleArrayElements(&self, array: jdoubleArray, elems: *mut jdouble, mode: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ReleaseDoubleArrayElements");
-            assert!(!array.is_null(), "ReleaseDoubleArrayElements jarray must not be null");
-            assert!(!elems.is_null(), "ReleaseDoubleArrayElements elems must not be null");
-            assert!(
-                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleaseDoubleArrayElements mode is invalid {mode}"
-            );
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ReleaseDoubleArrayElements");
+                assert!(!array.is_null(), "ReleaseDoubleArrayElements jarray must not be null");
+                assert!(!elems.is_null(), "ReleaseDoubleArrayElements elems must not be null");
+                assert!(
+                    mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                    "ReleaseDoubleArrayElements mode is invalid {mode}"
+                );
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, *mut jdouble, jint)>(198)(self.vtable, array, elems, mode);
+            self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, *mut jdouble, jint)>(198)(self.vtable, array, elems, mode);
+        }
     }
 
     ///
@@ -19487,14 +20084,16 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetBooleanArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *mut jboolean) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetBooleanArrayRegion");
-            self.check_no_exception("GetBooleanArrayRegion");
-            assert!(!array.is_null(), "GetBooleanArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "GetBooleanArrayRegion buf must not be null");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetBooleanArrayRegion");
+                self.check_no_exception("GetBooleanArrayRegion");
+                assert!(!array.is_null(), "GetBooleanArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "GetBooleanArrayRegion buf must not be null");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jboolean)>(199)(self.vtable, array, start, len, buf);
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jboolean)>(199)(self.vtable, array, start, len, buf);
     }
 
     ///
@@ -19551,15 +20150,17 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetByteArrayRegion(&self, array: jbyteArray, start: jsize, len: jsize, buf: *mut jbyte) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetByteArrayRegion");
-            self.check_no_exception("GetByteArrayRegion");
-            assert!(!array.is_null(), "GetByteArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "GetByteArrayRegion buf must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetByteArrayRegion");
+                self.check_no_exception("GetByteArrayRegion");
+                assert!(!array.is_null(), "GetByteArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "GetByteArrayRegion buf must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jbyte)>(200)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jbyte)>(200)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -19612,7 +20213,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetByteArrayRegion_into_slice(&self, array: jbyteArray, start: jsize, buf: &mut [jbyte]) {
-        self.GetByteArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        unsafe {
+            self.GetByteArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        }
     }
 
     ///
@@ -19665,7 +20268,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetByteArrayRegion_from_slice(&self, array: jbyteArray, start: jsize, buf: &[jbyte]) {
-        self.SetByteArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        unsafe {
+            self.SetByteArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        }
     }
 
     ///
@@ -19718,7 +20323,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetBooleanArrayRegion_from_slice(&self, array: jbyteArray, start: jsize, buf: &[jboolean]) {
-        self.SetBooleanArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        unsafe {
+            self.SetBooleanArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        }
     }
 
     ///
@@ -19771,13 +20378,15 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetByteArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<jbyte> {
-        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if let Ok(len) = usize::try_from(len) {
-            let mut data = vec![0i8; len];
-            self.GetByteArrayRegion_into_slice(array, start, data.as_mut_slice());
-            return data;
+        unsafe {
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            if let Ok(len) = usize::try_from(len) {
+                let mut data = vec![0i8; len];
+                self.GetByteArrayRegion_into_slice(array, start, data.as_mut_slice());
+                return data;
+            }
+            Vec::new()
         }
-        Vec::new()
     }
 
     ///
@@ -19834,16 +20443,18 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetCharArrayRegion(&self, array: jcharArray, start: jsize, len: jsize, buf: *mut jchar) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetCharArrayRegion");
-            self.check_no_exception("GetCharArrayRegion");
-            assert!(!array.is_null(), "GetCharArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "GetCharArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jchar>()), "GetCharArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetCharArrayRegion");
+                self.check_no_exception("GetCharArrayRegion");
+                assert!(!array.is_null(), "GetCharArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "GetCharArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jchar>()), "GetCharArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jchar)>(201)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jchar)>(201)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -19896,7 +20507,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetCharArrayRegion_into_slice(&self, array: jcharArray, start: jsize, buf: &mut [jchar]) {
-        self.GetCharArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        unsafe {
+            self.GetCharArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        }
     }
 
     ///
@@ -19949,7 +20562,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetCharArrayRegion_from_slice(&self, array: jcharArray, start: jsize, buf: &[jchar]) {
-        self.SetCharArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        unsafe {
+            self.SetCharArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        }
     }
 
     ///
@@ -20002,13 +20617,15 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetCharArrayRegion_as_vec(&self, array: jcharArray, start: jsize, len: Option<jsize>) -> Vec<jchar> {
-        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if let Ok(len) = usize::try_from(len) {
-            let mut data = vec![0u16; len];
-            self.GetCharArrayRegion_into_slice(array, start, data.as_mut_slice());
-            return data;
+        unsafe {
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            if let Ok(len) = usize::try_from(len) {
+                let mut data = vec![0u16; len];
+                self.GetCharArrayRegion_into_slice(array, start, data.as_mut_slice());
+                return data;
+            }
+            Vec::new()
         }
-        Vec::new()
     }
 
     ///
@@ -20065,16 +20682,18 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetShortArrayRegion(&self, array: jshortArray, start: jsize, len: jsize, buf: *mut jshort) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetShortArrayRegion");
-            self.check_no_exception("GetShortArrayRegion");
-            assert!(!array.is_null(), "GetShortArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "GetShortArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jshort>()), "GetShortArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetShortArrayRegion");
+                self.check_no_exception("GetShortArrayRegion");
+                assert!(!array.is_null(), "GetShortArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "GetShortArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jshort>()), "GetShortArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jshort)>(202)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jshort)>(202)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -20127,7 +20746,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetShortArrayRegion_into_slice(&self, array: jshortArray, start: jsize, buf: &mut [jshort]) {
-        self.GetShortArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        unsafe {
+            self.GetShortArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        }
     }
 
     ///
@@ -20180,7 +20801,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetShortArrayRegion_from_slice(&self, array: jshortArray, start: jsize, buf: &[jshort]) {
-        self.SetShortArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        unsafe {
+            self.SetShortArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        }
     }
 
     ///
@@ -20233,13 +20856,15 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetShortArrayRegion_as_vec(&self, array: jshortArray, start: jsize, len: Option<jsize>) -> Vec<jshort> {
-        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if let Ok(len) = usize::try_from(len) {
-            let mut data = vec![0i16; len];
-            self.GetShortArrayRegion_into_slice(array, start, data.as_mut_slice());
-            return data;
+        unsafe {
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            if let Ok(len) = usize::try_from(len) {
+                let mut data = vec![0i16; len];
+                self.GetShortArrayRegion_into_slice(array, start, data.as_mut_slice());
+                return data;
+            }
+            Vec::new()
         }
-        Vec::new()
     }
 
     ///
@@ -20296,16 +20921,18 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetIntArrayRegion(&self, array: jintArray, start: jsize, len: jsize, buf: *mut jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetIntArrayRegion");
-            self.check_no_exception("GetIntArrayRegion");
-            assert!(!array.is_null(), "GetIntArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "GetIntArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jint>()), "GetIntArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetIntArrayRegion");
+                self.check_no_exception("GetIntArrayRegion");
+                assert!(!array.is_null(), "GetIntArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "GetIntArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jint>()), "GetIntArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jint)>(203)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jint)>(203)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -20358,7 +20985,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetIntArrayRegion_into_slice(&self, array: jshortArray, start: jsize, buf: &mut [jint]) {
-        self.GetIntArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        unsafe {
+            self.GetIntArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        }
     }
 
     ///
@@ -20411,7 +21040,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetIntArrayRegion_from_slice(&self, array: jintArray, start: jsize, buf: &[jint]) {
-        self.SetIntArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        unsafe {
+            self.SetIntArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        }
     }
 
     ///
@@ -20464,13 +21095,15 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetIntArrayRegion_as_vec(&self, array: jintArray, start: jsize, len: Option<jsize>) -> Vec<jint> {
-        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if let Ok(len) = usize::try_from(len) {
-            let mut data = vec![0i32; len];
-            self.GetIntArrayRegion_into_slice(array, start, data.as_mut_slice());
-            return data;
+        unsafe {
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            if let Ok(len) = usize::try_from(len) {
+                let mut data = vec![0i32; len];
+                self.GetIntArrayRegion_into_slice(array, start, data.as_mut_slice());
+                return data;
+            }
+            Vec::new()
         }
-        Vec::new()
     }
 
     ///
@@ -20527,16 +21160,18 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetLongArrayRegion(&self, array: jlongArray, start: jsize, len: jsize, buf: *mut jlong) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetLongArrayRegion");
-            self.check_no_exception("GetLongArrayRegion");
-            assert!(!array.is_null(), "GetLongArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "GetLongArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jlong>()), "GetLongArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetLongArrayRegion");
+                self.check_no_exception("GetLongArrayRegion");
+                assert!(!array.is_null(), "GetLongArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "GetLongArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jlong>()), "GetLongArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jlong)>(204)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jlong)>(204)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -20589,7 +21224,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetLongArrayRegion_into_slice(&self, array: jlongArray, start: jsize, buf: &mut [i64]) {
-        self.GetLongArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        unsafe {
+            self.GetLongArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        }
     }
 
     ///
@@ -20642,7 +21279,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetLongArrayRegion_from_slice(&self, array: jlongArray, start: jsize, buf: &[jlong]) {
-        self.SetLongArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        unsafe {
+            self.SetLongArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        }
     }
 
     ///
@@ -20695,13 +21334,15 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetLongArrayRegion_as_vec(&self, array: jlongArray, start: jsize, len: Option<jsize>) -> Vec<jlong> {
-        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if let Ok(len) = usize::try_from(len) {
-            let mut data = vec![0i64; len];
-            self.GetLongArrayRegion_into_slice(array, start, data.as_mut_slice());
-            return data;
+        unsafe {
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            if let Ok(len) = usize::try_from(len) {
+                let mut data = vec![0i64; len];
+                self.GetLongArrayRegion_into_slice(array, start, data.as_mut_slice());
+                return data;
+            }
+            Vec::new()
         }
-        Vec::new()
     }
 
     ///
@@ -20758,16 +21399,18 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetFloatArrayRegion(&self, array: jfloatArray, start: jsize, len: jsize, buf: *mut jfloat) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetFloatArrayRegion");
-            self.check_no_exception("GetFloatArrayRegion");
-            assert!(!array.is_null(), "GetFloatArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "GetFloatArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jfloat>()), "GetFloatArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetFloatArrayRegion");
+                self.check_no_exception("GetFloatArrayRegion");
+                assert!(!array.is_null(), "GetFloatArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "GetFloatArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jfloat>()), "GetFloatArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jfloat)>(205)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jfloat)>(205)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -20820,7 +21463,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetFloatArrayRegion_into_slice(&self, array: jfloatArray, start: jsize, buf: &mut [jfloat]) {
-        self.GetFloatArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        unsafe {
+            self.GetFloatArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        }
     }
 
     ///
@@ -20873,7 +21518,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetFloatArrayRegion_from_slice(&self, array: jfloatArray, start: jsize, buf: &[jfloat]) {
-        self.SetFloatArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        unsafe {
+            self.SetFloatArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        }
     }
 
     ///
@@ -20926,13 +21573,15 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetFloatArrayRegion_as_vec(&self, array: jfloatArray, start: jsize, len: Option<jsize>) -> Vec<jfloat> {
-        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if let Ok(len) = usize::try_from(len) {
-            let mut data = vec![0f32; len];
-            self.GetFloatArrayRegion_into_slice(array, start, data.as_mut_slice());
-            return data;
+        unsafe {
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            if let Ok(len) = usize::try_from(len) {
+                let mut data = vec![0f32; len];
+                self.GetFloatArrayRegion_into_slice(array, start, data.as_mut_slice());
+                return data;
+            }
+            Vec::new()
         }
-        Vec::new()
     }
 
     ///
@@ -20989,16 +21638,18 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetDoubleArrayRegion(&self, array: jdoubleArray, start: jsize, len: jsize, buf: *mut jdouble) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetDoubleArrayRegion");
-            self.check_no_exception("GetDoubleArrayRegion");
-            assert!(!array.is_null(), "GetDoubleArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "GetDoubleArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jdouble>()), "GetDoubleArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetDoubleArrayRegion");
+                self.check_no_exception("GetDoubleArrayRegion");
+                assert!(!array.is_null(), "GetDoubleArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "GetDoubleArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jdouble>()), "GetDoubleArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jdouble)>(206)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *mut jdouble)>(206)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -21051,7 +21702,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetDoubleArrayRegion_into_slice(&self, array: jdoubleArray, start: jsize, buf: &mut [jdouble]) {
-        self.GetDoubleArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        unsafe {
+            self.GetDoubleArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        }
     }
 
     ///
@@ -21104,7 +21757,9 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn SetDoubleArrayRegion_from_slice(&self, array: jdoubleArray, start: jsize, buf: &[jdouble]) {
-        self.SetDoubleArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        unsafe {
+            self.SetDoubleArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        }
     }
 
     ///
@@ -21157,13 +21812,15 @@ impl JNIEnv {
     /// ```
     ///
     pub unsafe fn GetDoubleArrayRegion_as_vec(&self, array: jdoubleArray, start: jsize, len: Option<jsize>) -> Vec<jdouble> {
-        let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
-        if let Ok(len) = usize::try_from(len) {
-            let mut data = vec![0f64; len];
-            self.GetDoubleArrayRegion_into_slice(array, start, data.as_mut_slice());
-            return data;
+        unsafe {
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            if let Ok(len) = usize::try_from(len) {
+                let mut data = vec![0f64; len];
+                self.GetDoubleArrayRegion_into_slice(array, start, data.as_mut_slice());
+                return data;
+            }
+            Vec::new()
         }
-        Vec::new()
     }
 
     ///
@@ -21201,15 +21858,17 @@ impl JNIEnv {
     /// `buf` must be at least `len` elements in size
     ///
     pub unsafe fn SetBooleanArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *const jboolean) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetBooleanArrayRegion");
-            self.check_no_exception("SetBooleanArrayRegion");
-            assert!(!array.is_null(), "SetBooleanArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "SetBooleanArrayRegion buf must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetBooleanArrayRegion");
+                self.check_no_exception("SetBooleanArrayRegion");
+                assert!(!array.is_null(), "SetBooleanArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "SetBooleanArrayRegion buf must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jboolean)>(207)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jboolean)>(207)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -21247,15 +21906,17 @@ impl JNIEnv {
     /// `buf` must be at least `len` elements in size
     ///
     pub unsafe fn SetByteArrayRegion(&self, array: jbyteArray, start: jsize, len: jsize, buf: *const jbyte) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetByteArrayRegion");
-            self.check_no_exception("SetByteArrayRegion");
-            assert!(!array.is_null(), "SetByteArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "SetByteArrayRegion buf must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetByteArrayRegion");
+                self.check_no_exception("SetByteArrayRegion");
+                assert!(!array.is_null(), "SetByteArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "SetByteArrayRegion buf must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, jsize, jsize, *const jbyte)>(208)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, jsize, jsize, *const jbyte)>(208)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -21293,16 +21954,18 @@ impl JNIEnv {
     /// `buf` must be at least `len` elements in size
     ///
     pub unsafe fn SetCharArrayRegion(&self, array: jcharArray, start: jsize, len: jsize, buf: *const jchar) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetCharArrayRegion");
-            self.check_no_exception("SetCharArrayRegion");
-            assert!(!array.is_null(), "SetCharArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "SetCharArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jchar>()), "SetCharArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetCharArrayRegion");
+                self.check_no_exception("SetCharArrayRegion");
+                assert!(!array.is_null(), "SetCharArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "SetCharArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jchar>()), "SetCharArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, jsize, jsize, *const jchar)>(209)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, jsize, jsize, *const jchar)>(209)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -21340,16 +22003,18 @@ impl JNIEnv {
     /// `buf` must be at least `len` elements in size
     ///
     pub unsafe fn SetShortArrayRegion(&self, array: jshortArray, start: jsize, len: jsize, buf: *const jshort) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetShortArrayRegion");
-            self.check_no_exception("SetShortArrayRegion");
-            assert!(!array.is_null(), "SetShortArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "SetShortArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jshort>()), "SetShortArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetShortArrayRegion");
+                self.check_no_exception("SetShortArrayRegion");
+                assert!(!array.is_null(), "SetShortArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "SetShortArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jshort>()), "SetShortArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, jsize, jsize, *const jshort)>(210)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, jsize, jsize, *const jshort)>(210)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -21387,16 +22052,18 @@ impl JNIEnv {
     /// `buf` must be at least `len` elements in size
     ///
     pub unsafe fn SetIntArrayRegion(&self, array: jintArray, start: jsize, len: jsize, buf: *const jint) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetIntArrayRegion");
-            self.check_no_exception("SetIntArrayRegion");
-            assert!(!array.is_null(), "SetIntArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "SetIntArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jint>()), "SetIntArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetIntArrayRegion");
+                self.check_no_exception("SetIntArrayRegion");
+                assert!(!array.is_null(), "SetIntArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "SetIntArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jint>()), "SetIntArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jintArray, jsize, jsize, *const jint)>(211)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jintArray, jsize, jsize, *const jint)>(211)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -21434,16 +22101,18 @@ impl JNIEnv {
     /// `buf` must be at least `len` elements in size
     ///
     pub unsafe fn SetLongArrayRegion(&self, array: jlongArray, start: jsize, len: jsize, buf: *const jlong) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetLongArrayRegion");
-            self.check_no_exception("SetLongArrayRegion");
-            assert!(!array.is_null(), "SetLongArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "SetLongArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jlong>()), "SetLongArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetLongArrayRegion");
+                self.check_no_exception("SetLongArrayRegion");
+                assert!(!array.is_null(), "SetLongArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "SetLongArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jlong>()), "SetLongArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, jsize, jsize, *const jlong)>(212)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, jsize, jsize, *const jlong)>(212)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -21481,16 +22150,18 @@ impl JNIEnv {
     /// `buf` must be at least `len` elements in size
     ///
     pub unsafe fn SetFloatArrayRegion(&self, array: jfloatArray, start: jsize, len: jsize, buf: *const jfloat) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetFloatArrayRegion");
-            self.check_no_exception("SetFloatArrayRegion");
-            assert!(!array.is_null(), "SetFloatArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "SetFloatArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jfloat>()), "SetFloatArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetFloatArrayRegion");
+                self.check_no_exception("SetFloatArrayRegion");
+                assert!(!array.is_null(), "SetFloatArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "SetFloatArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jfloat>()), "SetFloatArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, jsize, jsize, *const jfloat)>(213)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, jsize, jsize, *const jfloat)>(213)(self.vtable, array, start, len, buf);
+        }
     }
 
     ///
@@ -21528,16 +22199,18 @@ impl JNIEnv {
     /// `buf` must be at least `len` elements in size
     ///
     pub unsafe fn SetDoubleArrayRegion(&self, array: jdoubleArray, start: jsize, len: jsize, buf: *const jdouble) {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("SetDoubleArrayRegion");
-            self.check_no_exception("SetDoubleArrayRegion");
-            assert!(!array.is_null(), "SetDoubleArrayRegion jarray must not be null");
-            assert!(!buf.is_null(), "SetDoubleArrayRegion buf must not be null");
-            assert_eq!(0, buf.align_offset(align_of::<jdouble>()), "SetDoubleArrayRegion buf pointer is not aligned");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("SetDoubleArrayRegion");
+                self.check_no_exception("SetDoubleArrayRegion");
+                assert!(!array.is_null(), "SetDoubleArrayRegion jarray must not be null");
+                assert!(!buf.is_null(), "SetDoubleArrayRegion buf must not be null");
+                assert_eq!(0, buf.align_offset(align_of::<jdouble>()), "SetDoubleArrayRegion buf pointer is not aligned");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, jsize, jsize, *const jdouble)>(214)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, jsize, jsize, *const jdouble)>(214)(self.vtable, array, start, len, buf);
+        }
     }
 
     #[cfg(feature = "asserts")]
@@ -21587,36 +22260,38 @@ impl JNIEnv {
     /// `array` must be valid non null reference to a array that is not already garbage collected
     ///
     pub unsafe fn GetPrimitiveArrayCritical(&self, array: jarray, isCopy: *mut jboolean) -> *mut c_void {
-        #[cfg(feature = "asserts")]
-        {
-            Self::CRITICAL_POINTERS.with(|set| {
-                if set.borrow().is_empty() {
-                    Self::CRITICAL_STRINGS.with(|strings| {
-                        if strings.borrow().is_empty() {
-                            //We can only do this check if we have not yet obtained a unreleased critical on the current thread.
-                            //For subsequent calls we cannot do this check.
-                            self.check_no_exception("GetPrimitiveArrayCritical");
-                        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                Self::CRITICAL_POINTERS.with(|set| {
+                    if set.borrow().is_empty() {
+                        Self::CRITICAL_STRINGS.with(|strings| {
+                            if strings.borrow().is_empty() {
+                                //We can only do this check if we have not yet obtained a unreleased critical on the current thread.
+                                //For subsequent calls we cannot do this check.
+                                self.check_no_exception("GetPrimitiveArrayCritical");
+                            }
+                        });
+                    }
+                });
+                assert!(!array.is_null(), "GetPrimitiveArrayCritical jarray must not be null");
+            }
+
+            let crit = self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut jboolean) -> *mut c_void>(222)(self.vtable, array, isCopy);
+
+            #[cfg(feature = "asserts")]
+            {
+                if !crit.is_null() {
+                    Self::CRITICAL_POINTERS.with(|set| {
+                        let mut rm = set.borrow_mut();
+                        let n = rm.remove(&crit).unwrap_or(0) + 1;
+                        rm.insert(crit, n);
                     });
                 }
-            });
-            assert!(!array.is_null(), "GetPrimitiveArrayCritical jarray must not be null");
-        }
-
-        let crit = self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut jboolean) -> *mut c_void>(222)(self.vtable, array, isCopy);
-
-        #[cfg(feature = "asserts")]
-        {
-            if !crit.is_null() {
-                Self::CRITICAL_POINTERS.with(|set| {
-                    let mut rm = set.borrow_mut();
-                    let n = rm.remove(&crit).unwrap_or(0) + 1;
-                    rm.insert(crit, n);
-                });
             }
-        }
 
-        crit
+            crit
+        }
     }
 
     ///
@@ -21631,33 +22306,35 @@ impl JNIEnv {
     /// `mode` must be one of `JNI_OK`, `JNI_COMMIT` or `JNI_ABORT` constant values.
     ///
     pub unsafe fn ReleasePrimitiveArrayCritical(&self, array: jarray, carray: *mut c_void, mode: jint) {
-        #[cfg(feature = "asserts")]
-        {
-            assert!(!array.is_null(), "ReleasePrimitiveArrayCritical jarray must not be null");
-            assert!(!carray.is_null(), "ReleasePrimitiveArrayCritical carray must not be null");
-            assert!(
-                mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
-                "ReleasePrimitiveArrayCritical mode is invalid {mode}"
-            );
-            Self::CRITICAL_POINTERS.with(|set| {
-                let mut rm = set.borrow_mut();
-                let mut n = rm.remove(&carray).expect("ReleasePrimitiveArrayCritical carray is not valid");
-                if n == 0 {
-                    unreachable!();
-                }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                assert!(!array.is_null(), "ReleasePrimitiveArrayCritical jarray must not be null");
+                assert!(!carray.is_null(), "ReleasePrimitiveArrayCritical carray must not be null");
+                assert!(
+                    mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
+                    "ReleasePrimitiveArrayCritical mode is invalid {mode}"
+                );
+                Self::CRITICAL_POINTERS.with(|set| {
+                    let mut rm = set.borrow_mut();
+                    let mut n = rm.remove(&carray).expect("ReleasePrimitiveArrayCritical carray is not valid");
+                    if n == 0 {
+                        unreachable!();
+                    }
 
-                if mode != JNI_COMMIT {
-                    //JNI_COMMIT does not release the pointer. It's a noop for non-copied pointers.
-                    n -= 1;
-                }
+                    if mode != JNI_COMMIT {
+                        //JNI_COMMIT does not release the pointer. It's a noop for non-copied pointers.
+                        n -= 1;
+                    }
 
-                if n >= 1 {
-                    rm.insert(carray, n);
-                }
-            });
+                    if n >= 1 {
+                        rm.insert(carray, n);
+                    }
+                });
+            }
+
+            self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut c_void, jint)>(223)(self.vtable, array, carray, mode);
         }
-
-        self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut c_void, jint)>(223)(self.vtable, array, carray, mode);
     }
 
     ///
@@ -21684,7 +22361,7 @@ impl JNIEnv {
     /// `methods` all elements and their function pointers must be non null and valid.
     ///
     pub unsafe fn RegisterNatives_from_slice(&self, clazz: jclass, methods: &[JNINativeMethod]) -> jint {
-        self.RegisterNatives(clazz, methods.as_ptr(), jint::try_from(methods.len()).expect("More than jsize::MAX methods"))
+        unsafe { self.RegisterNatives(clazz, methods.as_ptr(), jint::try_from(methods.len()).expect("More than jsize::MAX methods")) }
     }
 
     ///
@@ -21717,22 +22394,24 @@ impl JNIEnv {
     /// `methods` must be at least `size` elements large
     ///
     pub unsafe fn RegisterNatives(&self, clazz: jclass, methods: *const JNINativeMethod, size: jint) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("RegisterNatives");
-            self.check_no_exception("RegisterNatives");
-            assert!(!clazz.is_null(), "RegisterNatives class must not be null");
-            assert!(size > 0, "RegisterNatives size must be greater than 0");
-            if let Ok(size) = usize::try_from(size) {
-                for (idx, cur) in std::slice::from_raw_parts(methods, size).iter().enumerate() {
-                    assert!(!cur.name.is_null(), "RegisterNatives JNINativeMethod[{idx}],name is null");
-                    assert!(!cur.signature.is_null(), "RegisterNatives JNINativeMethod[{idx}].signature is null");
-                    assert!(!cur.fnPtr.is_null(), "RegisterNatives JNINativeMethod[{idx}].fnPtr is null");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("RegisterNatives");
+                self.check_no_exception("RegisterNatives");
+                assert!(!clazz.is_null(), "RegisterNatives class must not be null");
+                assert!(size > 0, "RegisterNatives size must be greater than 0");
+                if let Ok(size) = usize::try_from(size) {
+                    for (idx, cur) in std::slice::from_raw_parts(methods, size).iter().enumerate() {
+                        assert!(!cur.name.is_null(), "RegisterNatives JNINativeMethod[{idx}],name is null");
+                        assert!(!cur.signature.is_null(), "RegisterNatives JNINativeMethod[{idx}].signature is null");
+                        assert!(!cur.fnPtr.is_null(), "RegisterNatives JNINativeMethod[{idx}].fnPtr is null");
+                    }
                 }
             }
-        }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const JNINativeMethod, jint) -> jint>(215)(self.vtable, clazz, methods, size)
+            self.jni::<extern "system" fn(JNIEnvVTable, jclass, *const JNINativeMethod, jint) -> jint>(215)(self.vtable, clazz, methods, size)
+        }
     }
 
     ///
@@ -21761,14 +22440,16 @@ impl JNIEnv {
     /// `methods` must be at least `size` elements large
     ///
     pub unsafe fn UnregisterNatives(&self, clazz: jclass) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("UnregisterNatives");
-            self.check_no_exception("UnregisterNatives");
-            assert!(!clazz.is_null(), "UnregisterNatives class must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("UnregisterNatives");
+                self.check_no_exception("UnregisterNatives");
+                assert!(!clazz.is_null(), "UnregisterNatives class must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jint>(216)(self.vtable, clazz)
+            self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jint>(216)(self.vtable, clazz)
+        }
     }
 
     ///
@@ -21801,14 +22482,16 @@ impl JNIEnv {
     /// `jobject` must be a valid non-null reference that is not yet garbage collected.
     ///
     pub unsafe fn MonitorEnter(&self, obj: jobject) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("MonitorEnter");
-            self.check_no_exception("MonitorEnter");
-            assert!(!obj.is_null(), "MonitorEnter object must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("MonitorEnter");
+                self.check_no_exception("MonitorEnter");
+                assert!(!obj.is_null(), "MonitorEnter object must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jint>(217)(self.vtable, obj)
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jint>(217)(self.vtable, obj)
+        }
     }
 
     ///
@@ -21842,13 +22525,15 @@ impl JNIEnv {
     /// `jobject` must be a valid non-null reference that is not yet garbage collected.
     ///
     pub unsafe fn MonitorExit(&self, obj: jobject) -> jint {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("MonitorExit");
-            assert!(!obj.is_null(), "MonitorExit object must not be null");
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("MonitorExit");
+                assert!(!obj.is_null(), "MonitorExit object must not be null");
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jint>(218)(self.vtable, obj)
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jint>(218)(self.vtable, obj)
+        }
     }
 
     ///
@@ -21883,19 +22568,21 @@ impl JNIEnv {
     /// `capacity` must be positive, the memory pointed to by `address` must have at least this amount of bytes in space.
     ///
     pub unsafe fn NewDirectByteBuffer(&self, address: *mut c_void, capacity: jlong) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("NewDirectByteBuffer");
-            self.check_no_exception("NewDirectByteBuffer");
-            assert!(!address.is_null(), "NewDirectByteBuffer address must not be null");
-            assert!(capacity >= 0, "NewDirectByteBuffer capacity must not be negative {capacity}");
-            assert!(
-                capacity <= jlong::from(jint::MAX),
-                "NewDirectByteBuffer capacity is too big, its larger than Integer.MAX_VALUE {capacity}"
-            );
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("NewDirectByteBuffer");
+                self.check_no_exception("NewDirectByteBuffer");
+                assert!(!address.is_null(), "NewDirectByteBuffer address must not be null");
+                assert!(capacity >= 0, "NewDirectByteBuffer capacity must not be negative {capacity}");
+                assert!(
+                    capacity <= jlong::from(jint::MAX),
+                    "NewDirectByteBuffer capacity is too big, its larger than Integer.MAX_VALUE {capacity}"
+                );
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, *mut c_void, jlong) -> jobject>(229)(self.vtable, address, capacity)
+            self.jni::<extern "system" fn(JNIEnvVTable, *mut c_void, jlong) -> jobject>(229)(self.vtable, address, capacity)
+        }
     }
 
     ///
@@ -21928,13 +22615,15 @@ impl JNIEnv {
     /// `buf` must be a valid non-null reference to a object and not be garbage collected.
     ///
     pub unsafe fn GetDirectBufferAddress(&self, buf: jobject) -> *mut c_void {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetDirectBufferAddress");
-            self.check_no_exception("GetDirectBufferAddress");
-            assert!(!buf.is_null(), "GetDirectBufferAddress buffer must not be null");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetDirectBufferAddress");
+                self.check_no_exception("GetDirectBufferAddress");
+                assert!(!buf.is_null(), "GetDirectBufferAddress buffer must not be null");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> *mut c_void>(230)(self.vtable, buf)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> *mut c_void>(230)(self.vtable, buf)
     }
 
     ///
@@ -21967,13 +22656,15 @@ impl JNIEnv {
     /// `buf` must be a valid non-null reference to a object and not be garbage collected.
     ///
     pub unsafe fn GetDirectBufferCapacity(&self, buf: jobject) -> jlong {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetDirectBufferCapacity");
-            self.check_no_exception("GetDirectBufferCapacity");
-            assert!(!buf.is_null(), "GetDirectBufferCapacity buffer must not be null");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetDirectBufferCapacity");
+                self.check_no_exception("GetDirectBufferCapacity");
+                assert!(!buf.is_null(), "GetDirectBufferCapacity buffer must not be null");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jlong>(231)(self.vtable, buf)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jlong>(231)(self.vtable, buf)
     }
 
     ///
@@ -22005,13 +22696,15 @@ impl JNIEnv {
     /// `method` must be a valid non-null reference to a java.lang.reflect.Method or java.lang.reflect.Constructor and not be garbage collected.
     ///
     pub unsafe fn FromReflectedMethod(&self, method: jobject) -> jmethodID {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("FromReflectedMethod");
-            self.check_no_exception("FromReflectedMethod");
-            assert!(!method.is_null(), "FromReflectedMethod method must not be null");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("FromReflectedMethod");
+                self.check_no_exception("FromReflectedMethod");
+                assert!(!method.is_null(), "FromReflectedMethod method must not be null");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jmethodID>(7)(self.vtable, method)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jmethodID>(7)(self.vtable, method)
     }
 
     ///
@@ -22050,14 +22743,16 @@ impl JNIEnv {
     /// `jmethodID` must refer to a method in `cls` and must be either static or not static depending on the `isStatic` flag.
     ///
     pub unsafe fn ToReflectedMethod(&self, cls: jclass, jmethodID: jmethodID, isStatic: jboolean) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ToReflectedMethod");
-            self.check_no_exception("ToReflectedMethod");
-            assert!(!cls.is_null(), "ToReflectedMethod class must not be null");
-            assert!(!jmethodID.is_null(), "ToReflectedMethod method must not be null");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ToReflectedMethod");
+                self.check_no_exception("ToReflectedMethod");
+                assert!(!cls.is_null(), "ToReflectedMethod class must not be null");
+                assert!(!jmethodID.is_null(), "ToReflectedMethod method must not be null");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jclass, jmethodID, jboolean) -> jobject>(9)(self.vtable, cls, jmethodID, isStatic)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass, jmethodID, jboolean) -> jobject>(9)(self.vtable, cls, jmethodID, isStatic)
     }
 
     ///
@@ -22089,13 +22784,15 @@ impl JNIEnv {
     /// `field` must be a valid non-null reference to a java.lang.reflect.Field and not be garbage collected.
     ///
     pub unsafe fn FromReflectedField(&self, field: jobject) -> jfieldID {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("FromReflectedField");
-            self.check_no_exception("FromReflectedField");
-            assert!(!field.is_null(), "FromReflectedField field must not be null");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("FromReflectedField");
+                self.check_no_exception("FromReflectedField");
+                assert!(!field.is_null(), "FromReflectedField field must not be null");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jfieldID>(8)(self.vtable, field)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jfieldID>(8)(self.vtable, field)
     }
 
     ///
@@ -22134,14 +22831,16 @@ impl JNIEnv {
     /// `jfieldID` must refer to a field in `cls` and must be either static or not static depending on the `isStatic` flag.
     ///
     pub unsafe fn ToReflectedField(&self, cls: jclass, jfieldID: jfieldID, isStatic: jboolean) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("ToReflectedField");
-            self.check_no_exception("ToReflectedField");
-            assert!(!cls.is_null(), "ToReflectedField class must not be null");
-            assert!(!jfieldID.is_null(), "ToReflectedField field must not be null");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("ToReflectedField");
+                self.check_no_exception("ToReflectedField");
+                assert!(!cls.is_null(), "ToReflectedField class must not be null");
+                assert!(!jfieldID.is_null(), "ToReflectedField field must not be null");
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jclass, jfieldID, jboolean) -> jobject>(12)(self.vtable, cls, jfieldID, isStatic)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass, jfieldID, jboolean) -> jobject>(12)(self.vtable, cls, jfieldID, isStatic)
     }
 
     ///
@@ -22170,18 +22869,20 @@ impl JNIEnv {
     /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     pub unsafe fn GetJavaVM(&self) -> Result<JavaVM, jint> {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetJavaVM");
-            self.check_no_exception("GetJavaVM");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetJavaVM");
+                self.check_no_exception("GetJavaVM");
+            }
+            let mut r: JNIInvPtr = SyncMutPtr::null();
+            let res = self.jni::<extern "system" fn(JNIEnvVTable, *mut JNIInvPtr) -> jint>(219)(self.vtable, &raw mut r);
+            if res != 0 {
+                return Err(res);
+            }
+            assert!(!r.is_null(), "GetJavaVM returned 0 but did not set JVM pointer");
+            Ok(JavaVM { vtable: r })
         }
-        let mut r: JNIInvPtr = SyncMutPtr::null();
-        let res = self.jni::<extern "system" fn(JNIEnvVTable, *mut JNIInvPtr) -> jint>(219)(self.vtable, &raw mut r);
-        if res != 0 {
-            return Err(res);
-        }
-        assert!(!r.is_null(), "GetJavaVM returned 0 but did not set JVM pointer");
-        Ok(JavaVM { vtable: r })
     }
 
     ///
@@ -22214,14 +22915,16 @@ impl JNIEnv {
     /// `cls` must refer to a non-null class that is not yet garbage collected.
     ///
     pub unsafe fn GetModule(&self, cls: jclass) -> jobject {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("GetModule");
-            self.check_no_exception("GetModule");
-            assert!(self.GetVersion() >= JNI_VERSION_9);
-        }
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetModule");
+                self.check_no_exception("GetModule");
+                assert!(self.GetVersion() >= JNI_VERSION_9);
+            }
 
-        self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jobject>(233)(self.vtable, cls)
+            self.jni::<extern "system" fn(JNIEnvVTable, jclass) -> jobject>(233)(self.vtable, cls)
+        }
     }
 
     ///
@@ -22254,13 +22957,15 @@ impl JNIEnv {
     /// `thread` must refer to a non-null java.lang.Thread that is not yet garbage collected.
     ///
     pub unsafe fn IsVirtualThread(&self, thread: jobject) -> jboolean {
-        #[cfg(feature = "asserts")]
-        {
-            self.check_not_critical("IsVirtualThread");
-            self.check_no_exception("IsVirtualThread");
-            assert!(self.GetVersion() >= JNI_VERSION_21);
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("IsVirtualThread");
+                self.check_no_exception("IsVirtualThread");
+                assert!(self.GetVersion() >= JNI_VERSION_21);
+            }
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jboolean>(234)(self.vtable, thread)
         }
-        self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jboolean>(234)(self.vtable, thread)
     }
 
     /// Checks that we are not in a critical section currently.
@@ -22287,585 +22992,617 @@ impl JNIEnv {
     /// Checks that obj is an array of any type
     #[cfg(feature = "asserts")]
     unsafe fn check_is_array(self, obj: jobject, context: &str) {
-        assert!(!obj.is_null(), "{context} cannot check if arg is array because arg is null");
-        let cl = self.GetObjectClass(obj);
-        assert!(!cl.is_null(), "{context} arg.getClass() is null?");
-        let clazz = self.GetObjectClass(cl);
-        assert!(!clazz.is_null(), "{context} Class#getClass() is null?");
+        unsafe {
+            assert!(!obj.is_null(), "{context} cannot check if arg is array because arg is null");
+            let cl = self.GetObjectClass(obj);
+            assert!(!cl.is_null(), "{context} arg.getClass() is null?");
+            let clazz = self.GetObjectClass(cl);
+            assert!(!clazz.is_null(), "{context} Class#getClass() is null?");
 
-        let is_array = self.GetMethodID(clazz, "isArray", "()Z");
-        let r = self.CallBooleanMethod0(cl, is_array);
-        if self.ExceptionCheck() {
-            self.ExceptionDescribe();
-            panic!("{context} Class#isArray() is throws?");
+            let is_array = self.GetMethodID(clazz, "isArray", "()Z");
+            let r = self.CallBooleanMethod0(cl, is_array);
+            if self.ExceptionCheck() {
+                self.ExceptionDescribe();
+                panic!("{context} Class#isArray() is throws?");
+            }
+
+            assert!(r, "{context} arg is not an array");
+
+            self.DeleteLocalRef(cl);
+            self.DeleteLocalRef(clazz);
         }
-
-        assert!(r, "{context} arg is not an array");
-
-        self.DeleteLocalRef(cl);
-        self.DeleteLocalRef(clazz);
     }
 
     /// Checks that no exception is currently thrown
     #[cfg(feature = "asserts")]
     unsafe fn check_no_exception(self, context: &str) {
-        if !self.ExceptionCheck() {
-            return;
-        }
+        unsafe {
+            if !self.ExceptionCheck() {
+                return;
+            }
 
-        self.ExceptionDescribe();
-        panic!("{context} exception is thrown and not handled");
+            self.ExceptionDescribe();
+            panic!("{context} exception is thrown and not handled");
+        }
     }
 
     /// Checks if the object is a valid reference or null
     #[cfg(feature = "asserts")]
     unsafe fn check_ref_obj_permit_null(self, context: &str, obj: jobject) {
-        if obj.is_null() {
-            return;
-        }
+        unsafe {
+            if obj.is_null() {
+                return;
+            }
 
-        if self.ExceptionCheck() {
-            //We cannot do this check currently...
-            return;
-        }
+            if self.ExceptionCheck() {
+                //We cannot do this check currently...
+                return;
+            }
 
-        assert_ne!(self.GetObjectRefType(obj), jobjectRefType::JNIInvalidRefType, "{context} ref is invalid");
+            assert_ne!(self.GetObjectRefType(obj), jobjectRefType::JNIInvalidRefType, "{context} ref is invalid");
+        }
     }
 
     /// Checks if the object is a valid non-null reference
     #[cfg(feature = "asserts")]
     unsafe fn check_ref_obj(self, context: &str, obj: jobject) {
-        assert!(!obj.is_null(), "{context} ref is null");
+        unsafe {
+            assert!(!obj.is_null(), "{context} ref is null");
 
-        if self.ExceptionCheck() {
-            //We cannot do this check currently...
-            return;
-        }
-
-        let cl = self.FindClass("java/lang/System");
-        assert!(!cl.is_null(), "java/lang/System not found?");
-
-        let cname = CString::new("gc").unwrap_unchecked();
-        let csig = CString::new("()V").unwrap_unchecked();
-        //GetStaticMethodID
-        let gc_method = self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(113)(self.vtable, cl, cname.as_ptr(), csig.as_ptr());
-
-        assert!(!gc_method.is_null(), "java/lang/System#gc() not found?");
-
-        match self.GetObjectRefType(obj) {
-            jobjectRefType::JNIInvalidRefType => panic!("{context} ref is invalid"),
-            jobjectRefType::JNIWeakGlobalRefType => {
-                //This bad practice, but sadly sometimes valid.
-                //I.e. caller holds a strong reference and "knows" the weak ref cannot be GC'ed during the call.
-                //Good practice would be to use the strong ref to make the call but sadly JVM doesn't enforce this.
-                //This is just best effort really since we have absolutely NO clue when the GC will run.
-                //CallStaticVoidMethod
-                self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, obj, gc_method);
-                assert!(!self.IsSameObject(obj, null_mut()), "{context} weak reference that has already been garbage collected");
+            if self.ExceptionCheck() {
+                //We cannot do this check currently...
+                return;
             }
-            _ => {}
-        }
 
-        self.DeleteLocalRef(cl);
+            let cl = self.FindClass("java/lang/System");
+            assert!(!cl.is_null(), "java/lang/System not found?");
+
+            let cname = CString::new("gc").unwrap_unchecked();
+            let csig = CString::new("()V").unwrap_unchecked();
+            //GetStaticMethodID
+            let gc_method = self.jni::<extern "system" fn(JNIEnvVTable, jobject, *const c_char, *const c_char) -> jmethodID>(113)(self.vtable, cl, cname.as_ptr(), csig.as_ptr());
+
+            assert!(!gc_method.is_null(), "java/lang/System#gc() not found?");
+
+            match self.GetObjectRefType(obj) {
+                jobjectRefType::JNIInvalidRefType => panic!("{context} ref is invalid"),
+                jobjectRefType::JNIWeakGlobalRefType => {
+                    //This bad practice, but sadly sometimes valid.
+                    //I.e. caller holds a strong reference and "knows" the weak ref cannot be GC'ed during the call.
+                    //Good practice would be to use the strong ref to make the call but sadly JVM doesn't enforce this.
+                    //This is just best effort really since we have absolutely NO clue when the GC will run.
+                    //CallStaticVoidMethod
+                    self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, obj, gc_method);
+                    assert!(!self.IsSameObject(obj, null_mut()), "{context} weak reference that has already been garbage collected");
+                }
+                _ => {}
+            }
+
+            self.DeleteLocalRef(cl);
+        }
     }
 
     /// Checks if the class is a throwable
     #[cfg(feature = "asserts")]
     unsafe fn check_is_exception_class(self, context: &str, obj: jclass) {
-        self.check_is_class(context, obj);
-        let throwable_cl = self.FindClass("java/lang/Throwable");
-        assert!(!throwable_cl.is_null(), "{context} java/lang/Throwable not found???");
-        assert!(self.IsAssignableFrom(obj, throwable_cl), "{context} class is not throwable");
-        self.DeleteLocalRef(throwable_cl);
+        unsafe {
+            self.check_is_class(context, obj);
+            let throwable_cl = self.FindClass("java/lang/Throwable");
+            assert!(!throwable_cl.is_null(), "{context} java/lang/Throwable not found???");
+            assert!(self.IsAssignableFrom(obj, throwable_cl), "{context} class is not throwable");
+            self.DeleteLocalRef(throwable_cl);
+        }
     }
 
     /// Checks if the class is not abstract
     #[cfg(feature = "asserts")]
     unsafe fn check_is_not_abstract(self, context: &str, obj: jclass) {
-        self.check_is_class(context, obj);
-        let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
-        let meth = self.GetMethodID(class_cl, "getModifiers", "()I");
-        assert!(!meth.is_null(), "{context} java/lang/Class#getModifiers not found???");
-        let mods = self.CallIntMethod0(obj, meth);
-        self.DeleteLocalRef(class_cl);
-        if self.ExceptionCheck() {
-            self.ExceptionDescribe();
-            panic!("{context} java/lang/Class#getModifiers throws?");
+        unsafe {
+            self.check_is_class(context, obj);
+            let class_cl = self.FindClass("java/lang/Class");
+            assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
+            let meth = self.GetMethodID(class_cl, "getModifiers", "()I");
+            assert!(!meth.is_null(), "{context} java/lang/Class#getModifiers not found???");
+            let mods = self.CallIntMethod0(obj, meth);
+            self.DeleteLocalRef(class_cl);
+            if self.ExceptionCheck() {
+                self.ExceptionDescribe();
+                panic!("{context} java/lang/Class#getModifiers throws?");
+            }
+
+            let mod_cl = self.FindClass("java/lang/reflect/Modifier");
+            assert!(!mod_cl.is_null(), "{context} java/lang/reflect/Modifier not found???");
+            let mod_field = self.GetStaticFieldID(mod_cl, "ABSTRACT", "I");
+            assert!(!mod_field.is_null(), "{context} java/lang/reflect/Modifier.ABSTRACT not found???");
+            let amod = self.GetStaticIntField(mod_cl, mod_field);
+            self.DeleteLocalRef(mod_cl);
+
+            assert_eq!(mods & amod, 0, "{context} class is abstract");
         }
-
-        let mod_cl = self.FindClass("java/lang/reflect/Modifier");
-        assert!(!mod_cl.is_null(), "{context} java/lang/reflect/Modifier not found???");
-        let mod_field = self.GetStaticFieldID(mod_cl, "ABSTRACT", "I");
-        assert!(!mod_field.is_null(), "{context} java/lang/reflect/Modifier.ABSTRACT not found???");
-        let amod = self.GetStaticIntField(mod_cl, mod_field);
-        self.DeleteLocalRef(mod_cl);
-
-        assert_eq!(mods & amod, 0, "{context} class is abstract");
     }
 
     /// Checks if obj is a class.
     #[cfg(feature = "asserts")]
     unsafe fn check_is_class(self, context: &str, obj: jclass) {
-        assert!(!obj.is_null(), "{context} class is null");
-        self.check_ref_obj(context, obj);
+        unsafe {
+            assert!(!obj.is_null(), "{context} class is null");
+            self.check_ref_obj(context, obj);
 
-        let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
-        //GET OBJECT CLASS
-        let tcl = self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(31)(self.vtable, obj);
-        assert!(self.IsSameObject(tcl, class_cl), "{context} not a class!");
-        self.DeleteLocalRef(tcl);
-        self.DeleteLocalRef(class_cl);
+            let class_cl = self.FindClass("java/lang/Class");
+            assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
+            //GET OBJECT CLASS
+            let tcl = self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(31)(self.vtable, obj);
+            assert!(self.IsSameObject(tcl, class_cl), "{context} not a class!");
+            self.DeleteLocalRef(tcl);
+            self.DeleteLocalRef(class_cl);
+        }
     }
 
     /// Checks if the `obj` is a classloader or null
     #[cfg(feature = "asserts")]
     unsafe fn check_is_classloader_or_null(self, context: &str, obj: jobject) {
-        if obj.is_null() {
-            return;
-        }
-        self.check_ref_obj(context, obj);
-        let classloader_cl = self.FindClass("java/lang/ClassLoader");
-        assert!(!classloader_cl.is_null(), "{context} java/lang/ClassLoader not found");
-        assert!(self.IsInstanceOf(obj, classloader_cl), "{context} argument is not a valid instanceof ClassLoader");
+        unsafe {
+            if obj.is_null() {
+                return;
+            }
+            self.check_ref_obj(context, obj);
+            let classloader_cl = self.FindClass("java/lang/ClassLoader");
+            assert!(!classloader_cl.is_null(), "{context} java/lang/ClassLoader not found");
+            assert!(self.IsInstanceOf(obj, classloader_cl), "{context} argument is not a valid instanceof ClassLoader");
 
-        self.DeleteLocalRef(classloader_cl);
+            self.DeleteLocalRef(classloader_cl);
+        }
     }
 
     /// Checks if the argument refers toa string
     #[cfg(feature = "asserts")]
     unsafe fn check_if_arg_is_string(self, src: &str, jobject: jobject) {
-        if jobject.is_null() {
-            return;
-        }
+        unsafe {
+            if jobject.is_null() {
+                return;
+            }
 
-        let clazz = self.GetObjectClass(jobject);
-        assert!(!clazz.is_null(), "{src} string.class is null?");
-        let str_class = self.FindClass("java/lang/String");
-        assert!(!str_class.is_null(), "{src} java/lang/String not found?");
-        assert!(self.IsSameObject(clazz, str_class), "{src} Non string passed to GetStringCritical");
-        self.DeleteLocalRef(clazz);
-        self.DeleteLocalRef(str_class);
+            let clazz = self.GetObjectClass(jobject);
+            assert!(!clazz.is_null(), "{src} string.class is null?");
+            let str_class = self.FindClass("java/lang/String");
+            assert!(!str_class.is_null(), "{src} java/lang/String not found?");
+            assert!(self.IsSameObject(clazz, str_class), "{src} Non string passed to GetStringCritical");
+            self.DeleteLocalRef(clazz);
+            self.DeleteLocalRef(str_class);
+        }
     }
 
     /// Checks if the field type of a static field matches
     #[cfg(feature = "asserts")]
     unsafe fn check_field_type_static(self, context: &str, obj: jclass, fieldID: jfieldID, ty: &str) {
-        self.check_is_class(context, obj);
-        assert!(!fieldID.is_null(), "{context} fieldID is null");
-        let f = self.ToReflectedField(obj, fieldID, true);
-        assert!(!f.is_null(), "{context} -> ToReflectedField returned null");
-        let field_cl = self.FindClass("java/lang/reflect/Field");
-        assert!(!f.is_null(), "{context} java/lang/reflect/Method not found???");
-        let field_rtyp = self.GetMethodID(field_cl, "getType", "()Ljava/lang/Class;");
-        assert!(!field_rtyp.is_null(), "{context} java/lang/reflect/Field#getType not found???");
-        //CallObjectMethodA
-        let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, f, field_rtyp, null());
-        assert!(!rtc.is_null(), "{context} java/lang/reflect/Field#getType returned null???");
-        self.DeleteLocalRef(field_cl);
-        self.DeleteLocalRef(f);
-        let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
-        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
-        //CallObjectMethodA
-        let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
-        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
-        self.DeleteLocalRef(rtc);
-        let the_name = self
-            .GetStringUTFChars_as_string(name_str)
-            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
-        self.DeleteLocalRef(class_cl);
-        self.DeleteLocalRef(name_str);
-        if the_name.as_str().eq(ty) {
-            return;
-        }
+        unsafe {
+            self.check_is_class(context, obj);
+            assert!(!fieldID.is_null(), "{context} fieldID is null");
+            let f = self.ToReflectedField(obj, fieldID, true);
+            assert!(!f.is_null(), "{context} -> ToReflectedField returned null");
+            let field_cl = self.FindClass("java/lang/reflect/Field");
+            assert!(!f.is_null(), "{context} java/lang/reflect/Method not found???");
+            let field_rtyp = self.GetMethodID(field_cl, "getType", "()Ljava/lang/Class;");
+            assert!(!field_rtyp.is_null(), "{context} java/lang/reflect/Field#getType not found???");
+            //CallObjectMethodA
+            let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, f, field_rtyp, null());
+            assert!(!rtc.is_null(), "{context} java/lang/reflect/Field#getType returned null???");
+            self.DeleteLocalRef(field_cl);
+            self.DeleteLocalRef(f);
+            let class_cl = self.FindClass("java/lang/Class");
+            assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
+            let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
+            assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
+            //CallObjectMethodA
+            let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
+            assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
+            self.DeleteLocalRef(rtc);
+            let the_name = self
+                .GetStringUTFChars_as_string(name_str)
+                .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
+            self.DeleteLocalRef(class_cl);
+            self.DeleteLocalRef(name_str);
+            if the_name.as_str().eq(ty) {
+                return;
+            }
 
-        if ty.eq("object") {
-            match the_name.as_str() {
-                "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
-                    panic!("{context} type of field is {the_name} but expected object");
-                }
-                _ => {
-                    return;
+            if ty.eq("object") {
+                match the_name.as_str() {
+                    "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
+                        panic!("{context} type of field is {the_name} but expected object");
+                    }
+                    _ => {
+                        return;
+                    }
                 }
             }
-        }
 
-        panic!("{context} type of field is {the_name} but expected {ty}");
+            panic!("{context} type of field is {the_name} but expected {ty}");
+        }
     }
 
     /// Checks if the return type of a static method matches
     #[cfg(feature = "asserts")]
     unsafe fn check_return_type_static(self, context: &str, obj: jclass, methodID: jmethodID, ty: &str) {
-        self.check_is_class(context, obj);
-        assert!(!methodID.is_null(), "{context} methodID is null");
-        let m = self.ToReflectedMethod(obj, methodID, true);
-        assert!(!m.is_null(), "{context} -> ToReflectedMethod returned null");
-        let meth_cl = self.FindClass("java/lang/reflect/Method");
-        assert!(!m.is_null(), "{context} java/lang/reflect/Method not found???");
-        let meth_rtyp = self.GetMethodID(meth_cl, "getReturnType", "()Ljava/lang/Class;");
-        assert!(!meth_rtyp.is_null(), "{context} java/lang/reflect/Method#getReturnType not found???");
-        //CallObjectMethodA
-        let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, m, meth_rtyp, null());
-        self.DeleteLocalRef(meth_cl);
-        self.DeleteLocalRef(m);
-        if rtc.is_null() {
-            if ty.eq("void") {
+        unsafe {
+            self.check_is_class(context, obj);
+            assert!(!methodID.is_null(), "{context} methodID is null");
+            let m = self.ToReflectedMethod(obj, methodID, true);
+            assert!(!m.is_null(), "{context} -> ToReflectedMethod returned null");
+            let meth_cl = self.FindClass("java/lang/reflect/Method");
+            assert!(!m.is_null(), "{context} java/lang/reflect/Method not found???");
+            let meth_rtyp = self.GetMethodID(meth_cl, "getReturnType", "()Ljava/lang/Class;");
+            assert!(!meth_rtyp.is_null(), "{context} java/lang/reflect/Method#getReturnType not found???");
+            //CallObjectMethodA
+            let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, m, meth_rtyp, null());
+            self.DeleteLocalRef(meth_cl);
+            self.DeleteLocalRef(m);
+            if rtc.is_null() {
+                if ty.eq("void") {
+                    return;
+                }
+
+                panic!("{context} return type of method is void but expected {ty}");
+            }
+            let class_cl = self.FindClass("java/lang/Class");
+            assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
+            let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
+            assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
+            //CallObjectMethodA
+            let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
+            assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
+            self.DeleteLocalRef(rtc);
+            let the_name = self
+                .GetStringUTFChars_as_string(name_str)
+                .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
+            self.DeleteLocalRef(class_cl);
+            self.DeleteLocalRef(name_str);
+            if the_name.as_str().eq(ty) {
                 return;
             }
 
-            panic!("{context} return type of method is void but expected {ty}");
-        }
-        let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
-        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
-        //CallObjectMethodA
-        let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
-        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
-        self.DeleteLocalRef(rtc);
-        let the_name = self
-            .GetStringUTFChars_as_string(name_str)
-            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
-        self.DeleteLocalRef(class_cl);
-        self.DeleteLocalRef(name_str);
-        if the_name.as_str().eq(ty) {
-            return;
-        }
-
-        if ty.eq("object") {
-            match the_name.as_str() {
-                "void" | "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
-                    panic!("{context} return type of method is {the_name} but expected object");
-                }
-                _ => {
-                    return;
+            if ty.eq("object") {
+                match the_name.as_str() {
+                    "void" | "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
+                        panic!("{context} return type of method is {the_name} but expected object");
+                    }
+                    _ => {
+                        return;
+                    }
                 }
             }
-        }
 
-        panic!("{context} return type of method is {the_name} but expected {ty}");
+            panic!("{context} return type of method is {the_name} but expected {ty}");
+        }
     }
 
     /// Checks if the parameter types for a static fn match
     #[cfg(feature = "asserts")]
     unsafe fn check_parameter_types_static<T: JType>(self, context: &str, clazz: jclass, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
-        self.check_is_class(context, clazz);
-        assert!(!methodID.is_null(), "{context} methodID is null");
-        let java_method = self.ToReflectedMethod(clazz, methodID, true);
-        assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
-        let meth_cl = self.FindClass("java/lang/reflect/Method");
-        assert!(!java_method.is_null(), "{context} java/lang/reflect/Method not found???");
-        let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
-        assert!(!meth_params.is_null(), "{context} java/lang/reflect/Method#getParameterTypes not found???");
+        unsafe {
+            self.check_is_class(context, clazz);
+            assert!(!methodID.is_null(), "{context} methodID is null");
+            let java_method = self.ToReflectedMethod(clazz, methodID, true);
+            assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
+            let meth_cl = self.FindClass("java/lang/reflect/Method");
+            assert!(!java_method.is_null(), "{context} java/lang/reflect/Method not found???");
+            let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
+            assert!(!meth_params.is_null(), "{context} java/lang/reflect/Method#getParameterTypes not found???");
 
-        //CallObjectMethodA
-        let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
-        self.DeleteLocalRef(meth_cl);
-        self.DeleteLocalRef(java_method);
-        assert!(!parameter_array.is_null(), "{context} java/lang/reflect/Method#getParameterTypes return null???");
-        let parameter_count = self.GetArrayLength(parameter_array);
-        assert_eq!(parameter_count, count, "{context} wrong number of method parameters");
-        let param1_class = self.GetObjectArrayElement(parameter_array, idx);
-        assert!(!param1_class.is_null(), "{context} java/lang/reflect/Method#getParameterTypes[{idx}] is null???");
-        self.DeleteLocalRef(parameter_array);
+            //CallObjectMethodA
+            let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
+            self.DeleteLocalRef(meth_cl);
+            self.DeleteLocalRef(java_method);
+            assert!(!parameter_array.is_null(), "{context} java/lang/reflect/Method#getParameterTypes return null???");
+            let parameter_count = self.GetArrayLength(parameter_array);
+            assert_eq!(parameter_count, count, "{context} wrong number of method parameters");
+            let param1_class = self.GetObjectArrayElement(parameter_array, idx);
+            assert!(!param1_class.is_null(), "{context} java/lang/reflect/Method#getParameterTypes[{idx}] is null???");
+            self.DeleteLocalRef(parameter_array);
 
-        let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
-        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
-        let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
-        assert!(!class_is_primitive.is_null(), "{context} java/lang/Class#isPrimitive not found???");
+            let class_cl = self.FindClass("java/lang/Class");
+            assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
+            let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
+            assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
+            let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
+            assert!(!class_is_primitive.is_null(), "{context} java/lang/Class#isPrimitive not found???");
 
-        //CallObjectMethodA
-        let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
-        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
-        //CallBooleanMethodA
-        let param1_is_primitive =
-            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
+            //CallObjectMethodA
+            let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
+            assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
+            //CallBooleanMethodA
+            let param1_is_primitive =
+                self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
 
-        let the_name = self
-            .GetStringUTFChars_as_string(name_str)
-            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
-        self.DeleteLocalRef(class_cl);
-        self.DeleteLocalRef(name_str);
+            let the_name = self
+                .GetStringUTFChars_as_string(name_str)
+                .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
+            self.DeleteLocalRef(class_cl);
+            self.DeleteLocalRef(name_str);
 
-        match T::jtype_id() {
-            'Z' => assert_eq!("boolean", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed boolean"),
-            'B' => assert_eq!("byte", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed byte"),
-            'S' => assert_eq!("short", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed short"),
-            'C' => assert_eq!("char", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed char"),
-            'I' => assert_eq!("int", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed int"),
-            'J' => assert_eq!("long", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed long"),
-            'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
-            'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
-            'L' => {
-                assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
-                let jt: jtype = param1.into();
-                let obj = jt.object;
-                if !obj.is_null() {
-                    assert!(
-                        self.IsInstanceOf(obj, param1_class),
-                        "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
-                    );
+            match T::jtype_id() {
+                'Z' => assert_eq!("boolean", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed boolean"),
+                'B' => assert_eq!("byte", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed byte"),
+                'S' => assert_eq!("short", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed short"),
+                'C' => assert_eq!("char", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed char"),
+                'I' => assert_eq!("int", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed int"),
+                'J' => assert_eq!("long", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed long"),
+                'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
+                'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
+                'L' => {
+                    assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
+                    let jt: jtype = param1.into();
+                    let obj = jt.object;
+                    if !obj.is_null() {
+                        assert!(
+                            self.IsInstanceOf(obj, param1_class),
+                            "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
+                        );
+                    }
                 }
+                _ => unreachable!("{}", T::jtype_id()),
             }
-            _ => unreachable!("{}", T::jtype_id()),
-        }
 
-        self.DeleteLocalRef(param1_class);
+            self.DeleteLocalRef(param1_class);
+        }
     }
 
     /// Checks if the parameter type matches the constructor
     #[cfg(feature = "asserts")]
     unsafe fn check_parameter_types_constructor<T: JType>(self, context: &str, clazz: jclass, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
-        self.check_ref_obj(context, clazz);
-        assert!(!clazz.is_null(), "{context} obj.class is null??");
-        assert!(!methodID.is_null(), "{context} methodID is null");
-        let java_method = self.ToReflectedMethod(clazz, methodID, false);
-        assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
-        let meth_cl = self.FindClass("java/lang/reflect/Method");
-        assert!(!java_method.is_null(), "{context} java/lang/reflect/Method not found???");
-        let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
-        assert!(!meth_params.is_null(), "{context} java/lang/reflect/Method#getParameterTypes not found???");
+        unsafe {
+            self.check_ref_obj(context, clazz);
+            assert!(!clazz.is_null(), "{context} obj.class is null??");
+            assert!(!methodID.is_null(), "{context} methodID is null");
+            let java_method = self.ToReflectedMethod(clazz, methodID, false);
+            assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
+            let meth_cl = self.FindClass("java/lang/reflect/Method");
+            assert!(!java_method.is_null(), "{context} java/lang/reflect/Method not found???");
+            let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
+            assert!(!meth_params.is_null(), "{context} java/lang/reflect/Method#getParameterTypes not found???");
 
-        //CallObjectMethodA
-        let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
-        self.DeleteLocalRef(meth_cl);
-        self.DeleteLocalRef(java_method);
-        assert!(!parameter_array.is_null(), "{context} java/lang/reflect/Method#getParameterTypes return null???");
-        let parameter_count = self.GetArrayLength(parameter_array);
-        assert_eq!(parameter_count, count, "{context} wrong number of method parameters");
-        let param1_class = self.GetObjectArrayElement(parameter_array, idx);
-        assert!(!param1_class.is_null(), "{context} java/lang/reflect/Method#getParameterTypes[{idx}] is null???");
-        self.DeleteLocalRef(parameter_array);
+            //CallObjectMethodA
+            let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
+            self.DeleteLocalRef(meth_cl);
+            self.DeleteLocalRef(java_method);
+            assert!(!parameter_array.is_null(), "{context} java/lang/reflect/Method#getParameterTypes return null???");
+            let parameter_count = self.GetArrayLength(parameter_array);
+            assert_eq!(parameter_count, count, "{context} wrong number of method parameters");
+            let param1_class = self.GetObjectArrayElement(parameter_array, idx);
+            assert!(!param1_class.is_null(), "{context} java/lang/reflect/Method#getParameterTypes[{idx}] is null???");
+            self.DeleteLocalRef(parameter_array);
 
-        let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
-        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
-        let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
-        assert!(!class_is_primitive.is_null(), "{context} java/lang/Class#isPrimitive not found???");
+            let class_cl = self.FindClass("java/lang/Class");
+            assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
+            let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
+            assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
+            let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
+            assert!(!class_is_primitive.is_null(), "{context} java/lang/Class#isPrimitive not found???");
 
-        //CallObjectMethodA
-        let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
-        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
-        //CallBooleanMethodA
-        let param1_is_primitive =
-            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
+            //CallObjectMethodA
+            let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
+            assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
+            //CallBooleanMethodA
+            let param1_is_primitive =
+                self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
 
-        let the_name = self
-            .GetStringUTFChars_as_string(name_str)
-            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
-        self.DeleteLocalRef(class_cl);
-        self.DeleteLocalRef(name_str);
+            let the_name = self
+                .GetStringUTFChars_as_string(name_str)
+                .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
+            self.DeleteLocalRef(class_cl);
+            self.DeleteLocalRef(name_str);
 
-        match T::jtype_id() {
-            'Z' => assert_eq!("boolean", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed boolean"),
-            'B' => assert_eq!("byte", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed byte"),
-            'S' => assert_eq!("short", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed short"),
-            'C' => assert_eq!("char", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed char"),
-            'I' => assert_eq!("int", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed int"),
-            'J' => assert_eq!("long", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed long"),
-            'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
-            'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
-            'L' => {
-                assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
-                let jt: jtype = param1.into();
-                let obj = jt.object;
-                if !obj.is_null() {
-                    assert!(
-                        self.IsInstanceOf(obj, param1_class),
-                        "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
-                    );
+            match T::jtype_id() {
+                'Z' => assert_eq!("boolean", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed boolean"),
+                'B' => assert_eq!("byte", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed byte"),
+                'S' => assert_eq!("short", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed short"),
+                'C' => assert_eq!("char", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed char"),
+                'I' => assert_eq!("int", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed int"),
+                'J' => assert_eq!("long", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed long"),
+                'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
+                'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
+                'L' => {
+                    assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
+                    let jt: jtype = param1.into();
+                    let obj = jt.object;
+                    if !obj.is_null() {
+                        assert!(
+                            self.IsInstanceOf(obj, param1_class),
+                            "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
+                        );
+                    }
                 }
+                _ => unreachable!("{}", T::jtype_id()),
             }
-            _ => unreachable!("{}", T::jtype_id()),
-        }
 
-        self.DeleteLocalRef(param1_class);
+            self.DeleteLocalRef(param1_class);
+        }
     }
 
     /// checks if the method parameter matches the provided argument
     #[cfg(feature = "asserts")]
     unsafe fn check_parameter_types_object<T: JType>(self, context: &str, obj: jobject, methodID: jmethodID, param1: T, idx: jsize, count: jsize) {
-        assert!(!obj.is_null(), "{context} obj is null");
-        self.check_ref_obj(context, obj);
-        let clazz = self.GetObjectClass(obj);
-        assert!(!clazz.is_null(), "{context} obj.class is null??");
-        assert!(!methodID.is_null(), "{context} methodID is null");
-        let java_method = self.ToReflectedMethod(clazz, methodID, false);
-        assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
-        self.DeleteLocalRef(clazz);
-        let meth_cl = self.FindClass("java/lang/reflect/Method");
-        assert!(!java_method.is_null(), "{context} java/lang/reflect/Method not found???");
-        let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
-        assert!(!meth_params.is_null(), "{context} java/lang/reflect/Method#getParameterTypes not found???");
+        unsafe {
+            assert!(!obj.is_null(), "{context} obj is null");
+            self.check_ref_obj(context, obj);
+            let clazz = self.GetObjectClass(obj);
+            assert!(!clazz.is_null(), "{context} obj.class is null??");
+            assert!(!methodID.is_null(), "{context} methodID is null");
+            let java_method = self.ToReflectedMethod(clazz, methodID, false);
+            assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
+            self.DeleteLocalRef(clazz);
+            let meth_cl = self.FindClass("java/lang/reflect/Method");
+            assert!(!java_method.is_null(), "{context} java/lang/reflect/Method not found???");
+            let meth_params = self.GetMethodID(meth_cl, "getParameterTypes", "()[Ljava/lang/Class;");
+            assert!(!meth_params.is_null(), "{context} java/lang/reflect/Method#getParameterTypes not found???");
 
-        //CallObjectMethodA
-        let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
-        self.DeleteLocalRef(meth_cl);
-        self.DeleteLocalRef(java_method);
-        assert!(!parameter_array.is_null(), "{context} java/lang/reflect/Method#getParameterTypes return null???");
-        let parameter_count = self.GetArrayLength(parameter_array);
-        assert_eq!(parameter_count, count, "{context} wrong number of method parameters");
-        let param1_class = self.GetObjectArrayElement(parameter_array, idx);
-        assert!(!param1_class.is_null(), "{context} java/lang/reflect/Method#getParameterTypes[{idx}] is null???");
-        self.DeleteLocalRef(parameter_array);
+            //CallObjectMethodA
+            let parameter_array = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, java_method, meth_params, null());
+            self.DeleteLocalRef(meth_cl);
+            self.DeleteLocalRef(java_method);
+            assert!(!parameter_array.is_null(), "{context} java/lang/reflect/Method#getParameterTypes return null???");
+            let parameter_count = self.GetArrayLength(parameter_array);
+            assert_eq!(parameter_count, count, "{context} wrong number of method parameters");
+            let param1_class = self.GetObjectArrayElement(parameter_array, idx);
+            assert!(!param1_class.is_null(), "{context} java/lang/reflect/Method#getParameterTypes[{idx}] is null???");
+            self.DeleteLocalRef(parameter_array);
 
-        let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
-        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
-        let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
-        assert!(!class_is_primitive.is_null(), "{context} java/lang/Class#isPrimitive not found???");
+            let class_cl = self.FindClass("java/lang/Class");
+            assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
+            let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
+            assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
+            let class_is_primitive = self.GetMethodID(class_cl, "isPrimitive", "()Z");
+            assert!(!class_is_primitive.is_null(), "{context} java/lang/Class#isPrimitive not found???");
 
-        //CallObjectMethodA
-        let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
-        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
-        //CallBooleanMethodA
-        let param1_is_primitive =
-            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
+            //CallObjectMethodA
+            let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, param1_class, class_name, null());
+            assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
+            //CallBooleanMethodA
+            let param1_is_primitive =
+                self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, param1_class, class_is_primitive, null());
 
-        let the_name = self
-            .GetStringUTFChars_as_string(name_str)
-            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
+            let the_name = self
+                .GetStringUTFChars_as_string(name_str)
+                .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
 
-        self.DeleteLocalRef(class_cl);
-        self.DeleteLocalRef(name_str);
+            self.DeleteLocalRef(class_cl);
+            self.DeleteLocalRef(name_str);
 
-        match T::jtype_id() {
-            'Z' => assert_eq!("boolean", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed boolean"),
-            'B' => assert_eq!("byte", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed byte"),
-            'S' => assert_eq!("short", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed short"),
-            'C' => assert_eq!("char", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed char"),
-            'I' => assert_eq!("int", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed int"),
-            'J' => assert_eq!("long", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed long"),
-            'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
-            'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
-            'L' => {
-                assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
-                let jt: jtype = param1.into();
-                let obj = jt.object;
-                if !obj.is_null() {
-                    assert!(
-                        self.IsInstanceOf(obj, param1_class),
-                        "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
-                    );
+            match T::jtype_id() {
+                'Z' => assert_eq!("boolean", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed boolean"),
+                'B' => assert_eq!("byte", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed byte"),
+                'S' => assert_eq!("short", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed short"),
+                'C' => assert_eq!("char", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed char"),
+                'I' => assert_eq!("int", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed int"),
+                'J' => assert_eq!("long", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed long"),
+                'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
+                'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
+                'L' => {
+                    assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
+                    let jt: jtype = param1.into();
+                    let obj = jt.object;
+                    if !obj.is_null() {
+                        assert!(
+                            self.IsInstanceOf(obj, param1_class),
+                            "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
+                        );
+                    }
                 }
+                _ => unreachable!("{}", T::jtype_id()),
             }
-            _ => unreachable!("{}", T::jtype_id()),
-        }
 
-        self.DeleteLocalRef(param1_class);
+            self.DeleteLocalRef(param1_class);
+        }
     }
 
     /// Checks if the function returns an object
     #[cfg(feature = "asserts")]
     unsafe fn check_return_type_object(self, context: &str, obj: jobject, methodID: jmethodID, ty: &str) {
-        assert!(!obj.is_null(), "{context} obj is null");
-        self.check_ref_obj(context, obj);
-        let clazz = self.GetObjectClass(obj);
-        assert!(!clazz.is_null(), "{context} obj.class is null??");
-        assert!(!methodID.is_null(), "{context} methodID is null");
-        let m = self.ToReflectedMethod(clazz, methodID, false);
-        self.DeleteLocalRef(clazz);
-        assert!(!m.is_null(), "{context} -> ToReflectedMethod returned null");
-        let meth_cl = self.FindClass("java/lang/reflect/Method");
-        assert!(!m.is_null(), "{context} java/lang/reflect/Method not found???");
-        let meth_rtyp = self.GetMethodID(meth_cl, "getReturnType", "()Ljava/lang/Class;");
-        assert!(!meth_rtyp.is_null(), "{context} java/lang/reflect/Method#getReturnType not found???");
-        //CallObjectMethodA
-        let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, m, meth_rtyp, null());
-        self.DeleteLocalRef(meth_cl);
-        self.DeleteLocalRef(m);
-        if rtc.is_null() {
-            if ty.eq("void") {
+        unsafe {
+            assert!(!obj.is_null(), "{context} obj is null");
+            self.check_ref_obj(context, obj);
+            let clazz = self.GetObjectClass(obj);
+            assert!(!clazz.is_null(), "{context} obj.class is null??");
+            assert!(!methodID.is_null(), "{context} methodID is null");
+            let m = self.ToReflectedMethod(clazz, methodID, false);
+            self.DeleteLocalRef(clazz);
+            assert!(!m.is_null(), "{context} -> ToReflectedMethod returned null");
+            let meth_cl = self.FindClass("java/lang/reflect/Method");
+            assert!(!m.is_null(), "{context} java/lang/reflect/Method not found???");
+            let meth_rtyp = self.GetMethodID(meth_cl, "getReturnType", "()Ljava/lang/Class;");
+            assert!(!meth_rtyp.is_null(), "{context} java/lang/reflect/Method#getReturnType not found???");
+            //CallObjectMethodA
+            let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, m, meth_rtyp, null());
+            self.DeleteLocalRef(meth_cl);
+            self.DeleteLocalRef(m);
+            if rtc.is_null() {
+                if ty.eq("void") {
+                    return;
+                }
+
+                panic!("{context} return type of method is void but expected {ty}");
+            }
+            let class_cl = self.FindClass("java/lang/Class");
+            assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
+            let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
+            assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
+            //CallObjectMethodA
+            let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
+            assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
+            self.DeleteLocalRef(rtc);
+            let the_name = self
+                .GetStringUTFChars_as_string(name_str)
+                .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
+            self.DeleteLocalRef(class_cl);
+            self.DeleteLocalRef(name_str);
+            if the_name.as_str().eq(ty) {
                 return;
             }
 
-            panic!("{context} return type of method is void but expected {ty}");
-        }
-        let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
-        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
-        //CallObjectMethodA
-        let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
-        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
-        self.DeleteLocalRef(rtc);
-        let the_name = self
-            .GetStringUTFChars_as_string(name_str)
-            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
-        self.DeleteLocalRef(class_cl);
-        self.DeleteLocalRef(name_str);
-        if the_name.as_str().eq(ty) {
-            return;
-        }
-
-        if ty.eq("object") {
-            match the_name.as_str() {
-                "void" | "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
-                    panic!("{context} return type of method is {the_name} but expected object");
-                }
-                _ => {
-                    return;
+            if ty.eq("object") {
+                match the_name.as_str() {
+                    "void" | "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
+                        panic!("{context} return type of method is {the_name} but expected object");
+                    }
+                    _ => {
+                        return;
+                    }
                 }
             }
-        }
 
-        panic!("{context} return type of method is {the_name} but expected {ty}");
+            panic!("{context} return type of method is {the_name} but expected {ty}");
+        }
     }
 
     /// checks if the field type is any object.
     #[cfg(feature = "asserts")]
     unsafe fn check_field_type_object(self, context: &str, obj: jclass, fieldID: jfieldID, ty: &str) {
-        assert!(!obj.is_null(), "{context} obj is null");
-        let clazz = self.GetObjectClass(obj);
-        assert!(!clazz.is_null(), "{context} obj.class is null??");
-        assert!(!fieldID.is_null(), "{context} fieldID is null");
-        let f = self.ToReflectedField(clazz, fieldID, false);
-        assert!(!f.is_null(), "{context} -> ToReflectedField returned null");
-        let field_cl = self.FindClass("java/lang/reflect/Field");
-        assert!(!f.is_null(), "{context} java/lang/reflect/Method not found???");
-        let field_rtyp = self.GetMethodID(field_cl, "getType", "()Ljava/lang/Class;");
-        assert!(!field_rtyp.is_null(), "{context} java/lang/reflect/Field#getType not found???");
-        //CallObjectMethodA
-        let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, f, field_rtyp, null());
-        assert!(!rtc.is_null(), "{context} java/lang/reflect/Field#getType returned null???");
-        self.DeleteLocalRef(field_cl);
-        self.DeleteLocalRef(f);
-        let class_cl = self.FindClass("java/lang/Class");
-        assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
-        let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
-        assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
-        //CallObjectMethodA
-        let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
-        assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
-        self.DeleteLocalRef(rtc);
-        let the_name = self
-            .GetStringUTFChars_as_string(name_str)
-            .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
-        self.DeleteLocalRef(class_cl);
-        self.DeleteLocalRef(name_str);
-        if the_name.as_str().eq(ty) {
-            return;
-        }
+        unsafe {
+            assert!(!obj.is_null(), "{context} obj is null");
+            let clazz = self.GetObjectClass(obj);
+            assert!(!clazz.is_null(), "{context} obj.class is null??");
+            assert!(!fieldID.is_null(), "{context} fieldID is null");
+            let f = self.ToReflectedField(clazz, fieldID, false);
+            assert!(!f.is_null(), "{context} -> ToReflectedField returned null");
+            let field_cl = self.FindClass("java/lang/reflect/Field");
+            assert!(!f.is_null(), "{context} java/lang/reflect/Method not found???");
+            let field_rtyp = self.GetMethodID(field_cl, "getType", "()Ljava/lang/Class;");
+            assert!(!field_rtyp.is_null(), "{context} java/lang/reflect/Field#getType not found???");
+            //CallObjectMethodA
+            let rtc = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, f, field_rtyp, null());
+            assert!(!rtc.is_null(), "{context} java/lang/reflect/Field#getType returned null???");
+            self.DeleteLocalRef(field_cl);
+            self.DeleteLocalRef(f);
+            let class_cl = self.FindClass("java/lang/Class");
+            assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
+            let class_name = self.GetMethodID(class_cl, "getName", "()Ljava/lang/String;");
+            assert!(!class_name.is_null(), "{context} java/lang/Class#getName not found???");
+            //CallObjectMethodA
+            let name_str = self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jobject>(36)(self.vtable, rtc, class_name, null());
+            assert!(!name_str.is_null(), "{context} java/lang/Class#getName returned null??? Class has no name???");
+            self.DeleteLocalRef(rtc);
+            let the_name = self
+                .GetStringUTFChars_as_string(name_str)
+                .unwrap_or_else(|| panic!("{context} failed to get/parse classname???"));
+            self.DeleteLocalRef(class_cl);
+            self.DeleteLocalRef(name_str);
+            if the_name.as_str().eq(ty) {
+                return;
+            }
 
-        if ty.eq("object") {
-            match the_name.as_str() {
-                "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
-                    panic!("{context} type of field is {the_name} but expected object");
-                }
-                _ => {
-                    return;
+            if ty.eq("object") {
+                match the_name.as_str() {
+                    "long" | "int" | "short" | "byte" | "char" | "float" | "double" | "boolean" => {
+                        panic!("{context} type of field is {the_name} but expected object");
+                    }
+                    _ => {
+                        return;
+                    }
                 }
             }
-        }
 
-        panic!("{context} type of field is {the_name} but expected {ty}");
+            panic!("{context} type of field is {the_name} but expected {ty}");
+        }
     }
 }
 
@@ -22874,9 +23611,9 @@ impl JNIEnv {
 /// using `System.load` or `System.loadLibrary`
 #[cfg(feature = "dynlink")]
 mod dynlink {
-    use crate::{jint, jsize, JNIEnv, JNIInvPtr, JavaVMInitArgs};
+    use crate::{JNIEnv, JNIInvPtr, JavaVMInitArgs, jint, jsize};
 
-    extern "system" {
+    unsafe extern "system" {
         pub fn JNI_CreateJavaVM(invoker: *mut JNIInvPtr, env: *mut JNIEnv, initargs: *mut JavaVMInitArgs) -> jint;
         pub fn JNI_GetCreatedJavaVMs(array: *mut JNIInvPtr, len: jsize, out: *mut jsize) -> jint;
     }
@@ -22884,11 +23621,11 @@ mod dynlink {
 
 /// type signature for the extern fn in the jvm
 #[cfg(not(feature = "dynlink"))]
-type JNI_CreateJavaVM = extern "C" fn(*mut JNIInvPtr, *mut JNIEnv, *mut JavaVMInitArgs) -> jint;
+type JNI_CreateJavaVM = unsafe extern "C" fn(*mut JNIInvPtr, *mut JNIEnv, *mut JavaVMInitArgs) -> jint;
 
 /// type signature for the extern fn in the jvm
 #[cfg(not(feature = "dynlink"))]
-type JNI_GetCreatedJavaVMs = extern "C" fn(*mut JNIInvPtr, jsize, *mut jsize) -> jint;
+type JNI_GetCreatedJavaVMs = unsafe extern "C" fn(*mut JNIInvPtr, jsize, *mut jsize) -> jint;
 
 /// Data holder for the raw JVM function pointers.
 #[cfg(not(feature = "dynlink"))]
@@ -22994,7 +23731,7 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
     use std::sync::atomic::{AtomicBool, Ordering};
     let latch = AtomicBool::new(false);
 
-    LINK.get_or_try_init(|| {
+    LINK.get_or_try_init(|| unsafe {
         latch.store(true, Ordering::SeqCst);
         let lib = libloading::Library::new(path).map_err(|e| alloc::format!("Failed to load jvm from {path} reason: {e}"))?;
 
@@ -23064,7 +23801,7 @@ pub unsafe fn load_jvm_from_library(_: &str) -> Result<(), String> {
 #[cfg(feature = "loadjvm")]
 pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
     let java_home = std::env::var("JAVA_HOME").map_err(|_| "JAVA_HOME is not set or invalid".to_string())?;
-    load_jvm_from_java_home_folder(&java_home)
+    unsafe { load_jvm_from_java_home_folder(&java_home) }
 }
 
 /// Convinience method to load the jvm from a given path to a java installation.
@@ -23100,7 +23837,9 @@ pub unsafe fn load_jvm_from_java_home_folder(java_home: &str) -> Result<(), Stri
         if buf.try_exists().unwrap_or(false) {
             let full_path = buf.to_str().ok_or_else(|| alloc::format!("JAVA_HOME {java_home} is invalid"))?;
 
-            return load_jvm_from_library(full_path);
+            unsafe {
+                return load_jvm_from_library(full_path);
+            }
         }
     }
 
@@ -23150,7 +23889,7 @@ pub unsafe fn JNI_GetCreatedJavaVMs(vms: &mut [Option<JavaVM>]) -> Result<usize,
     //I will worry about this when it actually becomes a problem
     let mut buf: [JNIInvPtr; 64] = [SyncMutPtr::null(); 64];
     let mut count: jint = 0;
-    let res = link(buf.as_mut_ptr(), 64, &raw mut count);
+    let res = unsafe { link(buf.as_mut_ptr(), 64, &raw mut count) };
     if res != JNI_OK {
         return Err(res);
     }
@@ -23189,9 +23928,11 @@ pub unsafe fn JNI_GetCreatedJavaVMs(vms: &mut [Option<JavaVM>]) -> Result<usize,
 /// The Safety of this fn is implementation dependant.
 ///
 pub unsafe fn JNI_GetCreatedJavaVMs_first() -> Result<Option<JavaVM>, jint> {
-    let mut vm = [None];
-    _ = JNI_GetCreatedJavaVMs(vm.as_mut())?;
-    Ok(vm[0])
+    unsafe {
+        let mut vm = [None];
+        _ = JNI_GetCreatedJavaVMs(vm.as_mut())?;
+        Ok(vm[0])
+    }
 }
 
 ///
@@ -23223,7 +23964,7 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
     let mut jvm: JNIInvPtr = SyncMutPtr::null();
     let mut env: JNIEnv = JNIEnv { vtable: null_mut() };
 
-    let res = link(&raw mut jvm, &raw mut env, arguments);
+    let res = unsafe { link(&raw mut jvm, &raw mut env, arguments) };
     if res != JNI_OK {
         return Err(res);
     }
@@ -23315,38 +24056,40 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
 /// ```
 ///
 pub unsafe fn JNI_CreateJavaVM_with_string_args<T: AsRef<str>>(version: jint, arguments: &[T], ignore_unrecognized_options: bool) -> Result<(JavaVM, JNIEnv), jint> {
-    /// inner helper struct to ensure that the `CStrings` are free'd in any case.
-    struct DropGuard(*mut c_char);
-    impl Drop for DropGuard {
-        fn drop(&mut self) {
-            unsafe {
-                _ = CString::from_raw(self.0);
+    unsafe {
+        /// inner helper struct to ensure that the `CStrings` are free'd in any case.
+        struct DropGuard(*mut c_char);
+        impl Drop for DropGuard {
+            fn drop(&mut self) {
+                unsafe {
+                    _ = CString::from_raw(self.0);
+                }
             }
         }
+
+        let mut vm_args: Vec<JavaVMOption> = Vec::with_capacity(arguments.len());
+        let mut dealloc_list = Vec::with_capacity(arguments.len());
+        for arg in arguments {
+            let jvm_arg = CString::new(arg.as_ref()).expect("Argument contains 0 byte").into_raw();
+            dealloc_list.push(DropGuard(jvm_arg));
+
+            vm_args.push(JavaVMOption {
+                optionString: jvm_arg,
+                extraInfo: null_mut(),
+            });
+        }
+
+        let mut args = JavaVMInitArgs {
+            version,
+            nOptions: i32::try_from(vm_args.len()).expect("Too many arguments"),
+            options: vm_args.as_mut_ptr(),
+            ignoreUnrecognized: u8::from(ignore_unrecognized_options),
+        };
+
+        let result = JNI_CreateJavaVM(&raw mut args);
+        drop(dealloc_list);
+        result
     }
-
-    let mut vm_args: Vec<JavaVMOption> = Vec::with_capacity(arguments.len());
-    let mut dealloc_list = Vec::with_capacity(arguments.len());
-    for arg in arguments {
-        let jvm_arg = CString::new(arg.as_ref()).expect("Argument contains 0 byte").into_raw();
-        dealloc_list.push(DropGuard(jvm_arg));
-
-        vm_args.push(JavaVMOption {
-            optionString: jvm_arg,
-            extraInfo: null_mut(),
-        });
-    }
-
-    let mut args = JavaVMInitArgs {
-        version,
-        nOptions: i32::try_from(vm_args.len()).expect("Too many arguments"),
-        options: vm_args.as_mut_ptr(),
-        ignoreUnrecognized: u8::from(ignore_unrecognized_options),
-    };
-
-    let result = JNI_CreateJavaVM(&raw mut args);
-    drop(dealloc_list);
-    result
 }
 
 impl JavaVM {
@@ -23369,10 +24112,12 @@ impl JavaVM {
     /// This fn must not be called on a `JavaVM` object that has been destroyed or is in the process of being destroyed.
     ///
     pub unsafe fn AttachCurrentThread_str(&self, version: jint, thread_name: impl UseCString, thread_group: jobject) -> Result<JNIEnv, jint> {
-        thread_name.use_as_const_c_char(|thread_name| {
-            let mut args = JavaVMAttachArgs::new(version, thread_name, thread_group);
-            self.AttachCurrentThread(&raw mut args)
-        })
+        unsafe {
+            thread_name.use_as_const_c_char(|thread_name| {
+                let mut args = JavaVMAttachArgs::new(version, thread_name, thread_group);
+                self.AttachCurrentThread(&raw mut args)
+            })
+        }
     }
 
     ///
@@ -23389,20 +24134,22 @@ impl JavaVM {
     /// This fn must not be called on a `JavaVM` object that has been destroyed or is in the process of being destroyed.
     ///
     pub unsafe fn AttachCurrentThread(&self, args: *mut JavaVMAttachArgs) -> Result<JNIEnv, jint> {
-        #[cfg(feature = "asserts")]
-        {
-            assert!(!args.is_null(), "AttachCurrentThread args must not be null");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                assert!(!args.is_null(), "AttachCurrentThread args must not be null");
+            }
+            let mut envptr: JNIEnvVTable = null_mut();
+
+            let result = self.ivk::<extern "system" fn(JNIInvPtr, *mut JNIEnvVTable, *mut JavaVMAttachArgs) -> jint>(4)(self.vtable, &raw mut envptr, args);
+            if result != JNI_OK {
+                return Err(result);
+            }
+
+            assert!(!envptr.is_null(), "AttachCurrentThread returned JNI_OK but did not set the JNIEnv pointer!");
+
+            Ok(JNIEnv { vtable: envptr })
         }
-        let mut envptr: JNIEnvVTable = null_mut();
-
-        let result = self.ivk::<extern "system" fn(JNIInvPtr, *mut JNIEnvVTable, *mut JavaVMAttachArgs) -> jint>(4)(self.vtable, &raw mut envptr, args);
-        if result != JNI_OK {
-            return Err(result);
-        }
-
-        assert!(!envptr.is_null(), "AttachCurrentThread returned JNI_OK but did not set the JNIEnv pointer!");
-
-        Ok(JNIEnv { vtable: envptr })
     }
 
     ///
@@ -23416,10 +24163,12 @@ impl JavaVM {
     /// This fn must not be called on a `JavaVM` object that has been destroyed or is in the process of being destroyed.
     ///
     pub unsafe fn AttachCurrentThreadAsDaemon_str(&self, version: jint, thread_name: impl UseCString, thread_group: jobject) -> Result<JNIEnv, jint> {
-        thread_name.use_as_const_c_char(|thread_name| {
-            let mut args = JavaVMAttachArgs::new(version, thread_name, thread_group);
-            self.AttachCurrentThreadAsDaemon(&raw mut args)
-        })
+        unsafe {
+            thread_name.use_as_const_c_char(|thread_name| {
+                let mut args = JavaVMAttachArgs::new(version, thread_name, thread_group);
+                self.AttachCurrentThreadAsDaemon(&raw mut args)
+            })
+        }
     }
 
     ///
@@ -23436,21 +24185,23 @@ impl JavaVM {
     /// This fn must not be called on a `JavaVM` object that has been destroyed or is in the process of being destroyed.
     ///
     pub unsafe fn AttachCurrentThreadAsDaemon(&self, args: *mut JavaVMAttachArgs) -> Result<JNIEnv, jint> {
-        #[cfg(feature = "asserts")]
-        {
-            assert!(!args.is_null(), "AttachCurrentThreadAsDaemon args must not be null");
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                assert!(!args.is_null(), "AttachCurrentThreadAsDaemon args must not be null");
+            }
+            let mut envptr: JNIEnvVTable = null_mut();
+
+            let result = self.ivk::<extern "system" fn(JNIInvPtr, *mut JNIEnvVTable, *mut JavaVMAttachArgs) -> jint>(7)(self.vtable, &raw mut envptr, args);
+
+            if result != JNI_OK {
+                return Err(result);
+            }
+
+            assert!(!envptr.is_null(), "AttachCurrentThreadAsDaemon returned JNI_OK but did not set the JNIEnv pointer!");
+
+            Ok(JNIEnv { vtable: envptr })
         }
-        let mut envptr: JNIEnvVTable = null_mut();
-
-        let result = self.ivk::<extern "system" fn(JNIInvPtr, *mut JNIEnvVTable, *mut JavaVMAttachArgs) -> jint>(7)(self.vtable, &raw mut envptr, args);
-
-        if result != JNI_OK {
-            return Err(result);
-        }
-
-        assert!(!envptr.is_null(), "AttachCurrentThreadAsDaemon returned JNI_OK but did not set the JNIEnv pointer!");
-
-        Ok(JNIEnv { vtable: envptr })
     }
 
     ///
@@ -23494,29 +24245,31 @@ impl JavaVM {
     /// ```
     ///
     pub unsafe fn GetEnv<T: SealedEnvVTable>(&self, jni_version: jint) -> Result<T, jint> {
-        let mut envptr: *mut c_void = null_mut();
-        #[cfg(feature = "asserts")]
-        {
-            assert!(
-                jni_version & 0x3000_0000 != 0x3000_0000 || T::can_jvmti(),
-                "type parameter T cannot receive a JVMTI function VTable but jni_version 0x{jni_version:X} would likely request one. Using the resulting VTable would be UB."
-            );
+        unsafe {
+            let mut envptr: *mut c_void = null_mut();
+            #[cfg(feature = "asserts")]
+            {
+                assert!(
+                    jni_version & 0x3000_0000 != 0x3000_0000 || T::can_jvmti(),
+                    "type parameter T cannot receive a JVMTI function VTable but jni_version 0x{jni_version:X} would likely request one. Using the resulting VTable would be UB."
+                );
 
-            assert!(
-                jni_version & 0x3000_0000 != 0x0000_0000 || T::can_jni(),
-                "type parameter T cannot receive a JNI function VTable but jni_version 0x{jni_version:X} would likely request one. Using the resulting VTable would be UB."
-            );
+                assert!(
+                    jni_version & 0x3000_0000 != 0x0000_0000 || T::can_jni(),
+                    "type parameter T cannot receive a JNI function VTable but jni_version 0x{jni_version:X} would likely request one. Using the resulting VTable would be UB."
+                );
+            }
+
+            let result = self.ivk::<extern "system" fn(JNIInvPtr, *mut *mut c_void, jint) -> jint>(6)(self.vtable, &raw mut envptr, jni_version);
+
+            if result != JNI_OK {
+                return Err(result);
+            }
+
+            assert!(!envptr.is_null(), "GetEnv returned JNI_OK but did not set the JNIEnv pointer!");
+
+            Ok(T::from(envptr))
         }
-
-        let result = self.ivk::<extern "system" fn(JNIInvPtr, *mut *mut c_void, jint) -> jint>(6)(self.vtable, &raw mut envptr, jni_version);
-
-        if result != JNI_OK {
-            return Err(result);
-        }
-
-        assert!(!envptr.is_null(), "GetEnv returned JNI_OK but did not set the JNIEnv pointer!");
-
-        Ok(T::from(envptr))
     }
 
     ///
@@ -23529,7 +24282,7 @@ impl JavaVM {
     ///
     #[must_use]
     pub unsafe fn DetachCurrentThread(&self) -> jint {
-        self.ivk::<extern "system" fn(JNIInvPtr) -> jint>(5)(self.vtable)
+        unsafe { self.ivk::<extern "system" fn(JNIInvPtr) -> jint>(5)(self.vtable) }
     }
 
     ///
@@ -23554,7 +24307,9 @@ impl JavaVM {
     ///
     ///
     pub unsafe fn DestroyJavaVM(&self) {
-        self.ivk::<extern "system" fn(JNIInvPtr) -> ()>(3)(self.vtable);
+        unsafe {
+            self.ivk::<extern "system" fn(JNIInvPtr) -> ()>(3)(self.vtable);
+        }
     }
 }
 

@@ -11,31 +11,33 @@ pub mod test {
     static MUTEX: Mutex<()> = Mutex::new(());
 
     unsafe fn get_env() -> JNIEnv {
-        if !is_jvm_loaded() {
-            load_jvm_from_java_home().expect("failed to load jvm");
-        }
-
-        let thr = JNI_GetCreatedJavaVMs_first().expect("failed to get jvm");
-        if thr.is_none() {
-            //let args: Vec<String> = vec!["-Xcheck:jni".to_string()];
-            //let args: Vec<String> = vec!["-Xint".to_string()];
-            let args: Vec<String> = vec![];
-
-            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create jvm");
-            return env;
-        }
-
-        let jvm = thr.unwrap().clone();
-        let env = jvm.GetEnv(JNI_VERSION_1_8);
-        let env = env.unwrap_or_else(|c| {
-            if c != JNI_EDETACHED {
-                panic!("JVM ERROR {}", c);
+        unsafe {
+            if !is_jvm_loaded() {
+                load_jvm_from_java_home().expect("failed to load jvm");
             }
 
-            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, (), null_mut()).expect("failed to attach thread")
-        });
+            let thr = JNI_GetCreatedJavaVMs_first().expect("failed to get jvm");
+            if thr.is_none() {
+                //let args: Vec<String> = vec!["-Xcheck:jni".to_string()];
+                //let args: Vec<String> = vec!["-Xint".to_string()];
+                let args: Vec<String> = vec![];
 
-        env
+                let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create jvm");
+                return env;
+            }
+
+            let jvm = thr.unwrap().clone();
+            let env = jvm.GetEnv(JNI_VERSION_1_8);
+            let env = env.unwrap_or_else(|c| {
+                if c != JNI_EDETACHED {
+                    panic!("JVM ERROR {}", c);
+                }
+
+                jvm.AttachCurrentThread_str(JNI_VERSION_1_8, (), null_mut()).expect("failed to attach thread")
+            });
+
+            env
+        }
     }
 
     #[test]

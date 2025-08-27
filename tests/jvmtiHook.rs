@@ -2,12 +2,12 @@
 #[cfg(feature = "loadjvm")]
 pub mod test {
     use jni_simple::{
-        jint, jniNativeInterface, load_jvm_from_java_home, JNIEnv, JNILinkage, JNI_CreateJavaVM_with_string_args, JVMTIEnv, JNI_VERSION_1_8, JVMTI_ERROR_NONE, JVMTI_VERSION_1_2,
+        JNI_CreateJavaVM_with_string_args, JNI_VERSION_1_8, JNIEnv, JNILinkage, JVMTI_ERROR_NONE, JVMTI_VERSION_1_2, JVMTIEnv, jint, jniNativeInterface, load_jvm_from_java_home,
     };
     use std::ffi::c_void;
+    use std::sync::OnceLock;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering::SeqCst;
-    use std::sync::OnceLock;
 
     static ORIGINAL_FUNCTIONS: OnceLock<jniNativeInterface> = OnceLock::new();
     static COUNTER: AtomicUsize = AtomicUsize::new(0);

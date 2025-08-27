@@ -1,4 +1,4 @@
-use jni_simple::{jvmtiError, JvmtiError};
+use jni_simple::{JvmtiError, jvmtiError};
 use std::ffi::c_int;
 
 #[test]
