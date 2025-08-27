@@ -1,13 +1,16 @@
 #[cfg(feature = "loadjvm")]
+#[cfg(not(miri))]
 pub mod test {
     use jni_simple::*;
-    use std::ffi::{c_void, CString};
+    use std::ffi::{CString, c_void};
     use std::ptr::null_mut;
 
     unsafe extern "system" fn t1(env: JNIEnv, _: jclass, param: jobject) {
-        assert!(!param.is_null());
-        let data = env.GetStringUTFChars_as_string(param).unwrap();
-        assert_eq!(data.as_str(), "test_string");
+        unsafe {
+            assert!(!param.is_null());
+            let data = env.GetStringUTFChars_as_string(param).unwrap();
+            assert_eq!(data.as_str(), "test_string");
+        }
     }
 
     unsafe extern "system" fn t2(_env: JNIEnv, _: jclass, param: jdouble) {
@@ -19,7 +22,7 @@ pub mod test {
         unsafe {
             load_jvm_from_java_home().expect("failed to load jvm");
             let args: Vec<String> = vec![];
-            let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
+            let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create java VM");
 
             let class_blob = include_bytes!("../java_testcode/RegisterTest.class");
 

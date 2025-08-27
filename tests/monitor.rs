@@ -1,4 +1,5 @@
 #[cfg(feature = "loadjvm")]
+#[cfg(not(miri))]
 pub mod test {
     use jni_simple::*;
     use std::ptr::null_mut;
@@ -10,7 +11,7 @@ pub mod test {
         unsafe {
             load_jvm_from_java_home().expect("failed to load jvm");
             let args: Vec<String> = vec![];
-            let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create java VM");
+            let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create java VM");
             let clz = env.FindClass("Ljava/lang/Object;");
             let local = env.AllocObject(clz);
             let global = env.NewGlobalRef(local);
@@ -25,7 +26,7 @@ pub mod test {
             let vm_clone = vm.clone();
             let jh = std::thread::spawn(move || {
                 let global: jobject = sp.into();
-                let env = vm_clone.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).unwrap();
+                let env = vm_clone.AttachCurrentThread_str(JNI_VERSION_1_8, (), null_mut()).unwrap();
                 env.MonitorEnter(global);
                 let _g2 = l2.0.lock().unwrap();
                 l2.1.notify_all();

@@ -11,16 +11,144 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin' # See 'Supported distributions' for available options
-        java-version: '8'
-    - name: Build
-      run: cargo build --verbose --features loadjvm,asserts
-    - name: Run tests
-      run: cargo test --verbose --release --features loadjvm,asserts
+      - uses: actions/checkout@v4
+      - name: Build no-std
+        run: cargo build --verbose --no-default-features
+      - name: Build no-std+dynlink
+        run: cargo build --verbose --no-default-features --features dynlink
+      - name: Build default
+        run: cargo build --verbose
+      - name: Build asserts
+        run: cargo build --verbose --features asserts
+      - name: Build asserts+dynlink
+        run: cargo build --verbose --features asserts,dynlink
+      - name: Build loadjvm
+        run: cargo build --verbose --features loadjvm
+      - name: Build asserts+loadjvm
+        run: cargo build --verbose --features asserts,loadjvm
+
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: cargo fmt
+        run: cargo fmt --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clippy no-std
+        run: cargo clippy --no-default-features -- --deny warnings
+      - name: Clippy no-std+dynlink
+        run: cargo clippy --no-default-features --features dynlink -- --deny warnings
+      - name: Clippy default
+        run: cargo clippy -- --deny warnings
+      - name: Clippy loadjvm
+        run: cargo clippy --features loadjvm -- --deny warnings
+      - name: Clippy dynlink
+        run: cargo clippy --features dynlink -- --deny warnings
+      - name: Clippy asserts
+        run: cargo clippy --features asserts -- --deny warnings
+      - name: Clippy asserts+loadjvm
+        run: cargo clippy --features asserts,loadjvm -- --deny warnings
+      - name: Clippy asserts+dynlink
+        run: cargo clippy --features asserts,dynlink -- --deny warnings
+
+  miri:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust (with nightly toolchain)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: miri
+      - name: Test with miri
+        run: cargo +nightly miri test --verbose
+
+
+  no-jvm-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests that dont need a jvm
+        run: cargo test --verbose --release
+
+  linux-jdk8:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '8'
+      - name: Build JVMTI Shim
+        run: cd jvmti_shim && cargo build --release
+      - name: Run tests with asserts
+        run: cargo test --verbose --release --features loadjvm,asserts
+      - name: Run tests without asserts
+        run: cargo test --verbose --release --features loadjvm
+
+  linux-jdk-11:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+      - name: Build JVMTI Shim
+        run: cd jvmti_shim && cargo build --release
+      - name: Run tests with asserts
+        run: cargo test --verbose --release --features loadjvm,asserts
+      - name: Run tests without asserts
+        run: cargo test --verbose --release --features loadjvm
+
+  linux-jdk-17:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Build JVMTI Shim
+        run: cd jvmti_shim && cargo build --release
+      - name: Run tests with asserts
+        run: cargo test --verbose --release --features loadjvm,asserts
+      - name: Run tests without asserts
+        run: cargo test --verbose --release --features loadjvm
+
+  linux-jdk-21:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - name: Build JVMTI Shim
+        run: cd jvmti_shim && cargo build --release
+      - name: Run tests with asserts
+        run: cargo test --verbose --release --features loadjvm,asserts
+      - name: Run tests without asserts
+        run: cargo test --verbose --release --features loadjvm
+
+  linux-jdk-24:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '24'
+      - name: Build JVMTI Shim
+        run: cd jvmti_shim && cargo build --release
+      - name: Run tests with asserts
+        run: cargo test --verbose --release --features loadjvm,asserts
+      - name: Run tests without asserts
+        run: cargo test --verbose --release --features loadjvm

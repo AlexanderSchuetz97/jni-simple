@@ -1,4 +1,5 @@
 #[cfg(feature = "loadjvm")]
+#[cfg(not(miri))]
 pub mod test {
     use jni_simple::*;
     use std::ffi::c_char;
@@ -9,31 +10,31 @@ pub mod test {
     static MUTEX: Mutex<()> = Mutex::new(());
 
     unsafe fn get_env() -> JNIEnv {
-        if !is_jvm_loaded() {
-            load_jvm_from_java_home().expect("failed to load jvm");
-        }
-
-        let thr = JNI_GetCreatedJavaVMs().expect("failed to get jvm");
-        if thr.is_empty() {
-            //let args: Vec<String> = vec!["-Xcheck:jni".to_string()];
-            //let args: Vec<String> = vec!["-Xint".to_string()];
-            let args: Vec<String> = vec![];
-
-            let (_, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
-            return env;
-        }
-
-        let jvm = thr.first().unwrap().clone();
-        let env = jvm.GetEnv(JNI_VERSION_1_8);
-        let env = env.unwrap_or_else(|c| {
-            if c != JNI_EDETACHED {
-                panic!("JVM ERROR {}", c);
+        unsafe {
+            if !is_jvm_loaded() {
+                load_jvm_from_java_home().expect("failed to load jvm");
             }
 
-            jvm.AttachCurrentThread_str(JNI_VERSION_1_8, None, null_mut()).expect("failed to attach thread")
-        });
+            let thr = JNI_GetCreatedJavaVMs_first().expect("failed to get jvm");
+            if thr.is_none() {
+                //let args: Vec<String> = vec!["-Xcheck:jni".to_string()];
+                //let args: Vec<String> = vec!["-Xint".to_string()];
+                let (_, env) = JNI_CreateJavaVM_with_string_args::<&str>(JNI_VERSION_1_8, &[], false).expect("failed to create jvm");
+                return env;
+            }
 
-        env
+            let jvm = thr.unwrap().clone();
+            let env = jvm.GetEnv(JNI_VERSION_1_8);
+            let env = env.unwrap_or_else(|c| {
+                if c != JNI_EDETACHED {
+                    panic!("JVM ERROR {}", c);
+                }
+
+                jvm.AttachCurrentThread_str(JNI_VERSION_1_8, (), null_mut()).expect("failed to attach thread")
+            });
+
+            env
+        }
     }
 
     #[test]
@@ -62,7 +63,10 @@ pub mod test {
             env.GetStringRegion(str, 0, data.len() as jsize, data.as_mut_ptr());
             env.DeleteLocalRef(str);
             assert_eq!(
-                ['T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16].as_slice(),
+                [
+                    'T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16
+                ]
+                .as_slice(),
                 data.as_slice()
             );
         }
@@ -142,11 +146,31 @@ pub mod test {
             let cstr = env.GetStringChars(str, null_mut());
             let sl = std::slice::from_raw_parts(cstr, (env.GetStringLength(str) + 1) as usize);
             assert_eq!(
-                ['T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16, 0].as_slice(),
+                [
+                    'T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16, 0
+                ]
+                .as_slice(),
                 sl
             );
             env.ReleaseStringChars(str, cstr);
             env.DeleteLocalRef(str);
+        }
+    }
+
+    #[test]
+    fn test_get_utf_len_j24() {
+        let _lock = MUTEX.lock().unwrap();
+
+        unsafe {
+            let env = get_env();
+            if env.GetVersion() < JNI_VERSION_24 {
+                //CANT TEST THIS WITH THIS JDK
+                return;
+            }
+            let str = env.NewStringUTF("Test String");
+            let utf_len = env.GetStringUTFLengthAsLong(str);
+            env.DeleteLocalRef(str);
+            assert_eq!(utf_len, 11);
         }
     }
 
@@ -165,7 +189,10 @@ pub mod test {
             assert!(!arr.is_null());
             let slice = std::slice::from_raw_parts(n, l as usize);
             assert_eq!(
-                ['T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16].as_slice(),
+                [
+                    'T' as u16, 'e' as u16, 's' as u16, 't' as u16, ' ' as u16, 'S' as u16, 't' as u16, 'r' as u16, 'i' as u16, 'n' as u16, 'g' as u16
+                ]
+                .as_slice(),
                 slice
             );
             env.ReleaseStringCritical(str, n);

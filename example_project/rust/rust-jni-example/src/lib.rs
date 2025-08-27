@@ -40,13 +40,13 @@ pub unsafe extern "system" fn Java_org_example_JNITest_test(env: JNIEnv, _class:
         thread::sleep(Duration::from_millis(2000));
 
         //This can be done anywhere in the application at any time.
-        let vms : JavaVM = *jni_simple::JNI_GetCreatedJavaVMs().unwrap() // error code is once again a jint.
-            .first().unwrap(); //There can only be one JavaVM per process as per oracle spec.
+        let vms : JavaVM = jni_simple::JNI_GetCreatedJavaVMs_first().unwrap() // the error code is once again a jint.
+            .unwrap(); //There can only be one JavaVM per process as per oracle spec.
 
         //You could also provide a thread name or thread group here.
         let mut n = JavaVMAttachArgs::new(JNI_VERSION_1_8, null(), null_mut());
         vms.AttachCurrentThread(&mut n).unwrap();
-        let env = vms.GetEnv(JNI_VERSION_1_8).unwrap();
+        let env = vms.GetEnv::<JNIEnv>(JNI_VERSION_1_8).unwrap();
         let sys = env.FindClass("java/lang/System");
         let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
         let nanos = env.CallStaticLongMethodA(sys, nano_time, null());

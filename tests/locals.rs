@@ -1,4 +1,5 @@
 #[cfg(feature = "loadjvm")]
+#[cfg(not(miri))]
 pub mod test {
     use jni_simple::*;
 
@@ -9,7 +10,7 @@ pub mod test {
 
             let args: Vec<String> = vec![];
 
-            let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
+            let (vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create jvm");
 
             let clazz = env.FindClass("java/lang/Object");
             assert_eq!(JNI_OK, env.EnsureLocalCapacity(128));
