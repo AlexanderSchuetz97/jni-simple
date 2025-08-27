@@ -10,17 +10,87 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  linux-jdk8:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-java@v4
       with:
-        distribution: 'temurin' # See 'Supported distributions' for available options
+        distribution: 'temurin'
         java-version: '8'
     - name: Build JVMTI Shim
       run: cd jvmti_shim && cargo build --release
     - name: Build
       run: cargo build --verbose --features loadjvm,asserts
-    - name: Run tests
+    - name: Run tests with asserts
       run: cargo test --verbose --release --features loadjvm,asserts
+    - name: Run tests without asserts
+      run: cargo test --verbose --release --features loadjvm
+
+  linux-jdk-11:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+      - name: Build JVMTI Shim
+        run: cd jvmti_shim && cargo build --release
+      - name: Build
+        run: cargo build --verbose --features loadjvm,asserts
+      - name: Run tests with asserts
+        run: cargo test --verbose --release --features loadjvm,asserts
+      - name: Run tests without asserts
+        run: cargo test --verbose --release --features loadjvm
+
+  linux-jdk-17:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Build JVMTI Shim
+        run: cd jvmti_shim && cargo build --release
+      - name: Build
+        run: cargo build --verbose --features loadjvm,asserts
+      - name: Run tests with asserts
+        run: cargo test --verbose --release --features loadjvm,asserts
+      - name: Run tests without asserts
+        run: cargo test --verbose --release --features loadjvm
+
+  linux-jdk-21:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - name: Build JVMTI Shim
+        run: cd jvmti_shim && cargo build --release
+      - name: Build
+        run: cargo build --verbose --features loadjvm,asserts
+      - name: Run tests with asserts
+        run: cargo test --verbose --release --features loadjvm,asserts
+      - name: Run tests without asserts
+        run: cargo test --verbose --release --features loadjvm
+
+  linux-jdk-24:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '24'
+      - name: Build JVMTI Shim
+        run: cd jvmti_shim && cargo build --release
+      - name: Build
+        run: cargo build --verbose --features loadjvm,asserts
+      - name: Run tests with asserts
+        run: cargo test --verbose --release --features loadjvm,asserts
+      - name: Run tests without asserts
+        run: cargo test --verbose --release --features loadjvm

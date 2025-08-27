@@ -149,6 +149,23 @@ pub mod test {
     }
 
     #[test]
+    fn test_get_utf_len_j24() {
+        let _lock = MUTEX.lock().unwrap();
+
+        unsafe {
+            let env = get_env();
+            if env.GetVersion() < JNI_VERSION_24 {
+                //CANT TEST THIS WITH THIS JDK
+                return;
+            }
+            let str = env.NewStringUTF("Test String");
+            let utf_len = env.GetStringUTFLengthAsLong(str);
+            env.DeleteLocalRef(str);
+            assert_eq!(utf_len, 11);
+        }
+    }
+
+    #[test]
     fn test_crit_normal() {
         let _lock = MUTEX.lock().unwrap();
 

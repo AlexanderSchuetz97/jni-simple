@@ -1,6 +1,5 @@
 use jni_simple::{
-    jint, jniNativeInterface, jvmtiPhase, load_jvm_from_java_home, JNIEnv, JNILinkage, JNI_CreateJavaVM_with_string_args, JVMTIEnv, JNI_VERSION_1_8, JVMTI_ERROR_NONE,
-    JVMTI_VERSION_1_2,
+    jint, jniNativeInterface, load_jvm_from_java_home, JNIEnv, JNILinkage, JNI_CreateJavaVM_with_string_args, JVMTIEnv, JNI_VERSION_1_8, JVMTI_ERROR_NONE, JVMTI_VERSION_1_2,
 };
 use std::ffi::c_void;
 use std::sync::atomic::AtomicUsize;

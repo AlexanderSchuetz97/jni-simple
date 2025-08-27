@@ -26,14 +26,14 @@ fn test() {
         //    jni_simple::load_jvm_from_library("C:\\Program Files\\Java\\jdk-17.0.1\\jre\\bin\\server\\jvm.dll")
         //        .expect("failed to load jvm");
 
-        // Works on Both, but requires JAVA_HOME environment variable to be set.
+        // Works on Both but requires the JAVA_HOME environment variable to be set.
         // This is usually done by the java installer.
         // Fails if JAVA_HOME is not set.
         //jni_simple::load_jvm_from_java_home().expect("failed to load jvm");
         
 
-        //Adjust JVM version and arguments here, args are just like the args you pass on the command line.
-        //You could provide your classpath here for example or configure the jvm heap size.
+        //Adjust JVM version and arguments here; args are just like the args you pass on the command line.
+        //You could provide your classpath here, for example, or configure the jvm heap size.
         //Default arguments (none) will do for this example.
         let args : Vec<String> = vec![];
         let (_jvm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args).expect("failed to create jvm");
@@ -99,7 +99,7 @@ pub unsafe extern "system" fn Java_org_example_JNITest_test(env: JNIEnv, _class:
         //You could also provide a thread name or thread group here.
         let mut attach_args = JavaVMAttachArgs::new(JNI_VERSION_1_8, null(), null_mut());
         vms.AttachCurrentThread(&mut attach_args).unwrap();
-        let env = vms.GetEnv(JNI_VERSION_1_8).unwrap();
+        let env = vms.GetEnv::<JNIEnv>(JNI_VERSION_1_8).unwrap();
         let sys = env.FindClass("java/lang/System");
         let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");
         let nanos = env.CallStaticLongMethodA(sys, nano_time, null());
@@ -127,7 +127,7 @@ use std::ffi::c_void;
 use jni_simple::*;
 
 #[unsafe(no_mangle)]
-extern "system" unsafe fn Agent_OnLoad(vm: JavaVM, _command_line_options: *const char, _: *mut c_void) -> i32 {
+unsafe extern "system" fn Agent_OnLoad(vm: JavaVM, _command_line_options: *const char, _: *mut c_void) -> i32 {
   let Ok(jvmti) = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2) else {
     eprintln!("Agent_OnLoad failed to get JVMTI_VERSION_1_2 environment");
     return -1;
@@ -152,10 +152,12 @@ extern "system" unsafe fn Agent_OnLoad(vm: JavaVM, _command_line_options: *const
 ```
 
 ### Using JVMTI from JNI
-Note: Its probably not a good idea to do this in productive code, but can be useful in some debugging situations.
+Note: It's probably not a good idea to do this in productive code, but can be useful in some debugging situations.
 Note: this example assumes the `dynlink` feature is enabled!
 ```rust
 #![allow(non_snake_case)]
+
+use std::ffi::c_void;
 use jni_simple::{*};
 
 //This could also be an ordinary native method invoked from java.
@@ -179,7 +181,7 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> 
 ## Main goals of this crate
 
 ### Dont pretend that JNI is "safe"
-JNI is inherently unsafe (from a rust point of view) and any attempt to enforce safety will lead to 
+JNI is inherently unsafe (from a rust point of view), and any attempt to enforce safety will lead to 
 performance or API complexity issues. All JNI methods provided by this crate are 
 marked as "unsafe" as they should be.
 
@@ -221,7 +223,7 @@ The implementation is mature and has been used in production without any known i
 Test coverage is very low.
 
 The overall maturity of the JVMTI Api provided in the current version of jni-simple is low.
-Expect some bugs that will cause undefined behavior in functions that I have not yet tested.
+Expect bugs that will cause undefined behavior in functions that I have not yet tested.
 (due to human error when manually translating the jvmti specification into rust code)
 
 I have mostly prepared this JVMTI implementation ahead of time for when I need it,
@@ -229,7 +231,9 @@ so it may take some time until everything is tested and fixed.
 Naturally, this has no impact on JNI and should not affect many people 
 as JVMTI is not needed for 99% of programs.
 
-If you encounter a bug and need an urgent fix, then open up an issue on github or make a pull request.
+If you encounter a bug and need an urgent fix, then open up an issue on GitHub or make a pull request.
+
+Naturally, if you wish to submit tests, then that would also be appreciated.
 
 ## Features
 
@@ -237,7 +241,7 @@ If you encounter a bug and need an urgent fix, then open up an issue on github o
 This feature is enabled by default!
 Adds support for some types in the rust standard library.
 
-If you wish to compile your library/launcher app without the rust standard library then disable default features.
+If you wish to compile your library/launcher app without the rust standard library, then disable default features.
 
 ### loadjvm
 This feature is not enabled by default!
@@ -313,8 +317,8 @@ In addition to that, jvmti is not needed for most use cases, so I suspect that i
 
 ### String handling
 
-Many JNI methods take a zero terminated utf-8 string as parameter. It is possible to call all those fn's
-with all commonly used rust string types as well as raw *const c_char pointers.
+Many JNI functions accept a zero-terminated utf-8 string as a parameter. 
+It is possible to call all those functions with all commonly used rust string types as well as raw *const c_char pointers.
 
 The following types are supported:
 - &str
@@ -336,14 +340,15 @@ The following types are supported:
   - \* mut u8
   - \* mut i8
 
-Because JNI expects a zero terminated string, some types are copied if necessary and a zero byte is appended.
+Because JNI expects a zero terminated string, some types are copied if necessary, and a zero byte is appended.
 Raw pointer types are assumed to already be zero terminated and are passed as is.
-If a string already contains a 0 byte then is not copied and passed to jni as is. Should the 0 byte be somewhere
-in the middle of the string then this 0 byte effectively truncates the string at that point for the jni call.
+If a string already contains a 0-byte, then it is not copied and passed to jni as is. Should the 0-byte be somewhere
+in the middle of the string, then this 0-byte effectively truncates the string at that point for the jni call.
 
 Example:
 ```rust
 use std::ptr::null;
+use std::ffi::c_char;
 use jni_simple::{*};
 
 #[no_mangle]
@@ -357,9 +362,9 @@ pub unsafe extern "system" fn Java_some_package_ClassName_method(env: JNIEnv, cl
     let exception = env.FindClass("java/lang/Exception");
     env.ThrowNew(exception, "This is a message");
     
-    //This fn accepts different types of raw pointers so we unfortunately have to specify the type here.
+    //This fn accepts different types of raw pointers, so we unfortunately have to specify the type here.
     env.ThrowNew(exception, null::<c_char>());
-    //To make this a bit shorter you can also use the unit type.
+    //To make this a bit shorter, you can also use the unit type.
     //This is equivalent to passing null::<c_char>()
     env.ThrowNew(exception, ());
     
@@ -381,23 +386,23 @@ JNI provides 3 ways of up-calling into JVM code:
 2. CallStatic(TYPE)MethodA(class, methodID, jtype*) 
 3. CallStatic(TYPE)MethodV(class, methodID, va_list)
 
-Substitute (TYPE) for the return type of the java method called. For example "Object" or "Int".
+Substitute (TYPE) for the return type of the java method called. For example, "Object" or "Int".
 
-This crate only implements variant 1 and 2.
-Variant 3 is not implemented by this crate because "va_list" cannot be created inside rust code.
+This crate only implements variants 1 and 2.
+This crate does not implement variant 3 because "va_list" cannot be created inside rust code.
 
 Variant 2 is relatively straight forward and fully supported by this crate. 
 This means you can call ANY java method using Variant 2.
 
-Variant 1 has a Variadic parameter. This is what Variadic up-calls refers to.
+Variant 1 has a Variadic parameter. This is what Variadic up-calls refer to.
 Rust does support this but only for explicit extern "C" functions and not for any
 functions implemented in rust itself. To call Variant 1 this crate provides concrete
 implementations to call this Variadic function with 0, 1, 2 and 3 parameters.
 This should cover 99% of your up-call needs. 
-To call methods with more than 3 parameters simply use Variant 2.
+To call methods with more than 3 parameters, simply use Variant 2.
 
-As you can see calling Variant 2 is a bit unwieldy so for most smaller functions using
-Variant 1 of up-calling is probably the better choice.
+As you can see below, calling Variant 2 is a bit unwieldy, 
+so it is probably the better choice to use Variant 1 of up-calling for most smaller functions.
 Example:
 ```rust
 use std::ptr::null;
@@ -409,16 +414,16 @@ pub unsafe extern "system" fn Java_some_package_ClassName_method(env: JNIEnv, cl
     let meth1 = env.GetStaticMethodID(class, "methodWith1IntParams", "(I)V");
     let meth2 = env.GetStaticMethodID(class, "methodWith2IntParams", "(II)V");
     let meth3 = env.GetStaticMethodID(class, "methodWith3IntParams", "(III)V");
-    //for example: public static void methodWith4IntParams(int a, int b, int c, int d) {}
+    //for example, public static void methodWith4IntParams(int a, int b, int c, int d) {}
     let meth4 = env.GetStaticMethodID(class, "methodWith4IntParams", "(IIII)V");
 
     //Variant 1: Variadic up-calls:
-    //BE CAREFUL, this method is sensitive to difference between i32/i16/i8 etc. 
+    //BE CAREFUL, this method is sensitive to the difference between i32/i16/i8 etc. 
     //So always specify the type so that it matches the type of the Java Method.
     //Letting the compiler choose the type may or may not work!
     //Passing a different argument than what the Java Method has is UB!
     //A sealed trait ensures that only parameters that the JVM can understand can be passed here
-    //So for example accidentally passing a &str to these methods will not compile.
+    //So for example, accidentally passing a &str to these methods will not compile.
     env.CallStaticVoidMethod0(class, meth0);
     env.CallStaticVoidMethod1(class, meth1, 1i32);
     env.CallStaticVoidMethod2(class, meth2, 1i32, 2i32);

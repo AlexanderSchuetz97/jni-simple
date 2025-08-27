@@ -3,14 +3,15 @@ use jni_simple::{
     jboolean, jmethodID, jthread, jvalue, jvmtiCapabilities, jvmtiEvent, jvmtiEventCallbacks, load_jvm_from_java_home, JNIEnv, JNI_CreateJavaVM_with_string_args, JVMTIEnv, JavaVM,
     JNI_VERSION_1_8, JVMTI_VERSION_1_2,
 };
-use std::ffi::c_void;
+use std::ffi::{c_void, CStr};
 use std::ptr::{null, null_mut};
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
+use std::sync::atomic::{AtomicI64, AtomicUsize};
 use std::sync::OnceLock;
 
 static DEBUGGER: OnceLock<JVMTIEnv> = OnceLock::new();
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
+static LAST_VALUE: AtomicI64 = AtomicI64::new(0);
 
 unsafe extern "C" fn shim_agent(vm: JavaVM, _options: *const char, _reserved: *mut c_void) -> i32 {
     let jvmti = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2).expect("failed to get JVMTI environment");
@@ -21,8 +22,17 @@ unsafe extern "C" fn shim_agent(vm: JavaVM, _options: *const char, _reserved: *m
     _ = DEBUGGER.set(jvmti);
     0
 }
-extern "system" fn blah(_jvmti_env: JVMTIEnv, _jni_env: JNIEnv, _thread: jthread, _method: jmethodID, _was_popped_by_exception: jboolean, _return_value: jvalue) {
-    COUNTER.fetch_add(1, SeqCst);
+extern "system" fn blah(jvmti_env: JVMTIEnv, _jni_env: JNIEnv, _thread: jthread, method: jmethodID, _was_popped_by_exception: jboolean, return_value: jvalue) {
+    unsafe {
+        COUNTER.fetch_add(1, SeqCst);
+        let mut name = null_mut();
+        assert!(jvmti_env.GetMethodName(method, &mut name, null_mut(), null_mut()).is_ok());
+        let r_name = CStr::from_ptr(name).to_string_lossy().to_string();
+        if r_name.as_str() == "nanoTime" {
+            let long = return_value.long();
+            LAST_VALUE.store(long, SeqCst);
+        }
+    }
 }
 
 #[test]
@@ -48,10 +58,12 @@ pub fn test() {
 
         let g = jvmti.SetEventNotificationMode(JVMTI_ENABLE, jvmtiEvent::JVMTI_EVENT_METHOD_EXIT, null_mut());
         assert!(g.is_ok(), "{}", g.into_enum());
-        _ = env.CallStaticLongMethodA(sys, nano_time, null());
+        let val = env.CallStaticLongMethodA(sys, nano_time, null());
         #[cfg(feature = "asserts")]
-        assert_eq!(COUNTER.load(SeqCst), 3); //The asserts also call a bunch of methods, this 3 is not set in stone and can be changed.
+        assert_eq!(COUNTER.load(SeqCst), 3); //The asserts feature also calls a bunch of methods, this 3 is not set in stone and can be changed.
         #[cfg(not(feature = "asserts"))]
         assert_eq!(COUNTER.load(SeqCst), 1);
+
+        assert_eq!(LAST_VALUE.load(SeqCst), val);
     }
 }

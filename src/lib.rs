@@ -23570,3 +23570,7 @@ const fn test_sync() {
     static_assertions::assert_impl_all!(JVMTIEnv: Sync);
     static_assertions::assert_impl_all!(JVMTIEnv: Send);
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDocTests;
