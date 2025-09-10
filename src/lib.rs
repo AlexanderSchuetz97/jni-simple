@@ -18081,16 +18081,16 @@ impl JNIEnv {
 
         let len = utf16.len();
         let Ok(len) = jsize::try_from(len) else {
-            panic!("string was too long to represent in java. It requires {len} utf-16 characters to represent, but java only supports up to {} characters in a String.", jsize::MAX);
+            panic!(
+                "string was too long to represent in java. It requires {len} utf-16 characters to represent, but java only supports up to {} characters in a String.",
+                jsize::MAX
+            );
         };
 
-        unsafe {
-            self.NewString(utf16.as_ptr(), len)
-        }
+        unsafe { self.NewString(utf16.as_ptr(), len) }
     }
 
-
-        ///
+    ///
     /// Returns the string length in jchar's. This is neither the amount of bytes in utf-8 encoding nor the amount of characters.
     /// 3 and 4 byte utf-8 characters take 2 jchars to encode. This is equivalent to calling `String.length()` in java.
     ///
@@ -18225,7 +18225,6 @@ impl JNIEnv {
                 //Empty string, we are done.
                 return Some(String::new());
             }
-
 
             let str = self.GetStringChars(string, null_mut());
             if str.is_null() {
@@ -18501,7 +18500,7 @@ impl JNIEnv {
     ///
     /// An alternative, but slower version of this function is called `GetStringChars_as_string` which does not have this problem
     /// because instead of using the utf-8 representation of the string it uses the utf-16 representation,
-    /// but it is much slower than this function with java 17 or newer. If your application is expected to process Strings contains
+    /// but it is much slower than this function with java 17 or newer. If your application is expected to process Strings containing
     /// the problematic characters then accepting the performance penalty is probably worth it.
     ///
     /// # Returns
