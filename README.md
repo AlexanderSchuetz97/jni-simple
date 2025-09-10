@@ -386,6 +386,24 @@ pub unsafe extern "system" fn Java_some_package_ClassName_method(env: JNIEnv, cl
 }
 ```
 
+#### Beware of Strings that contain supplementary characters.
+Java uses a "modified" utf-8 encoding (Sometimes it is called CESU-8 encoding) 
+that is different from rusts utf-8 encoding for supplementary characters.
+All functions that accept a 0-terminated utf-8 string are implemented
+in the jvm to use the "modified" utf-8 encoding. This crate makes no attempt at 
+re-encoding the strings to the "modified" utf-8 encoding, mainly because it only 
+matters if your string contains non-language symbols. (Such as Emoji characters) 
+Even if by accident (or user input) it does contain such a symbol, 
+then that does NOT appear to cause UB in the jvm. The string simply will 
+contain "random" characters instead of the characters that it should contain.
+
+If this is relevant to you, then I recommend using the functions that accept a jstring instead of a 0-terminated utf-8 string.
+A jstring can be constructed from and turned into an utf-16 array which does properly handle all supplementary characters.
+Convenience functions exist to transform String and its friends to jstring and back via this utf-16 transformation. 
+However, since those functions have to perform re-encoding of Strings as well as allocation of the required buffers to do so, 
+they are most likely slower than their utf-8/"modified" utf-8 counterparts.
+
+
 
 ### Variadic up-calls
 Currently, variadic up-calls into JVM code are only implemented for 0 to 3 parameters.

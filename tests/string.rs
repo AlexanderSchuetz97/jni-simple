@@ -271,4 +271,18 @@ pub mod test {
             assert_eq!("abcð\u{9d}\u{95}\u{8a}", and_back_again.as_str()); //This is different because 𝕊 is a supplementary character.
         }
     }
+
+    #[test]
+    #[cfg(not(feature = "asserts"))] //The assertions would panic on this test.
+    fn test_illegal() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            let env = get_env();
+            let invalid_string = [b'a', 0b1100_1111, b'a', 0b1001_1111, b'a', 0u8];
+            let java_string: jstring = env.NewStringUTF(invalid_string.as_ptr());
+            assert!(!java_string.is_null());
+            let and_back_again: String = env.GetStringChars_as_string(java_string).unwrap();
+            assert_eq!("aÏa\u{9f}", and_back_again.as_str());
+        }
+    }
 }
