@@ -18030,7 +18030,67 @@ impl JNIEnv {
         }
     }
 
+    /// Convenience function to create a `jstring` from any rust string.
     ///
+    /// This function will, after performing some transformations, call `NewString`.
+    /// This function is quite slow compared to all other alternatives but unlike for example `NewStringUTF`,
+    /// it works with strings that contain 0 characters or supplementary characters.
+    ///
+    /// This function will always be slower than `NewStringUTF`.
+    ///
+    /// # Returns
+    /// return value of `NewString`
+    ///
+    /// # Safety
+    /// Same as the `NewString` fn
+    ///
+    /// # Panics
+    /// If the string is too long to be represented in Java:
+    /// * This always the case if the `string.chars().count()` is more than `i32::MAX`.
+    /// * This might be the case if `string.chars().count()` is between `i32::MAX` and `i32::MAX / 2`
+    ///   if the string contains enough characters that would require 32 bit encoding in utf-16.
+    /// * This is never the case if `string.chars().count()` is less than `i32::MAX / 2`.
+    ///
+    /// Sidenote: This function does not call `string.chars().count()`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{jstring, JNIEnv};
+    ///
+    /// fn example(env: JNIEnv) {
+    ///     unsafe {
+    ///         let my_string = "𝕊"; //U+1D54A MATHEMATICAL DOUBLE-STRUCK CAPITAL S
+    ///         let java_string: jstring = env.NewString_from_str(my_string);
+    ///         let and_back_again: String = env.GetStringChars_as_string(java_string).unwrap();
+    ///         assert_eq!(my_string, and_back_again.as_str());
+    ///     }
+    /// }
+    /// ```
+    ///
+    pub unsafe fn NewString_from_str(&self, string: impl AsRef<str>) -> jstring {
+        let mut utf16 = Vec::new();
+        let str = string.as_ref();
+
+        //This over allocates up to 4 times capacity depending on how many 2,3,4 byte utf-8 charactes the string contains.
+        //We cap the allocation at 64k (128k bytes) just in case.
+        utf16.reserve(str.len().min(0x1_00_00));
+
+        for utf in string.as_ref().encode_utf16() {
+            utf16.push(utf);
+        }
+
+        let len = utf16.len();
+        let Ok(len) = jsize::try_from(len) else {
+            panic!("string was too long to represent in java. It requires {len} utf-16 characters to represent, but java only supports up to {} characters in a String.", jsize::MAX);
+        };
+
+        unsafe {
+            self.NewString(utf16.as_ptr(), len)
+        }
+    }
+
+
+        ///
     /// Returns the string length in jchar's. This is neither the amount of bytes in utf-8 encoding nor the amount of characters.
     /// 3 and 4 byte utf-8 characters take 2 jchars to encode. This is equivalent to calling `String.length()` in java.
     ///
@@ -18120,6 +18180,64 @@ impl JNIEnv {
         }
     }
 
+    /// Convenience method that calls `GetStringChars` & `GetStringLength`, copies the result
+    /// into a rust String and then calls `ReleaseStringChars`.
+    ///
+    /// This function calls `ReleaseStringChars` in all error cases where it has to be called!
+    ///
+    /// # Returns
+    /// On failure this method return None.
+    /// There are 3 different causes for returning None:
+    /// 1. `GetStringLength` returns a negative number.
+    ///     * This is unlikely unless something has gone horribly wrong.
+    /// 2. `GetStringChars` fails, in this case more information should be gathered from `ExceptionCheck`.
+    /// 3. The characters returned by the JVM are not valid utf-16. In this case `ExceptionCheck` should yield None.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
+    ///
+    /// `string` must not be null, must refer to a string and not already be garbage collected.
+    ///
+    pub unsafe fn GetStringChars_as_string(&self, string: jstring) -> Option<String> {
+        unsafe {
+            #[cfg(feature = "asserts")]
+            {
+                self.check_not_critical("GetStringChars_as_string");
+                self.check_no_exception("GetStringChars_as_string");
+                assert!(!string.is_null(), "GetStringChars_as_string string must not be null");
+                self.check_if_arg_is_string("GetStringChars_as_string", string);
+            }
+
+            let Ok(len) = usize::try_from(self.GetStringLength(string)) else {
+                //Unlikely
+                return None;
+            };
+
+            if len == 0 {
+                //Empty string, we are done.
+                return Some(String::new());
+            }
+
+
+            let str = self.GetStringChars(string, null_mut());
+            if str.is_null() {
+                return None;
+            }
+
+            let parsed = String::from_utf16(core::slice::from_raw_parts(str, len));
+            self.ReleaseStringChars(string, str);
+            parsed.ok()
+        }
+    }
+
     ///
     /// Frees a char array returned by `GetStringChars`.
     ///
@@ -18166,6 +18284,13 @@ impl JNIEnv {
     ///
     /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#NewString>
     ///
+    /// # IMPORTANT
+    /// Java uses a modified utf-8 encoding for strings. If your rust string contains any
+    /// supplementary characters then the resulting java string will not contain the same characters.
+    /// If this is a concern for you use the much slower method `NewString_from_str` which
+    /// will properly handle all characters. Using this method despite it containing
+    /// supplementary does NOT cause UB, it just creates a java string that contains 'random'
+    /// characters.
     ///
     /// # Arguments
     /// * `bytes` - pointer to the c like zero terminated utf-8 string
@@ -18355,17 +18480,36 @@ impl JNIEnv {
         }
     }
 
-    ///
     /// Convenience method that calls `GetStringUTFChars`, copies the result
     /// into a rust String and then calls `ReleaseStringUTFChars`.
     ///
     /// This function calls `ReleaseStringUTFChars` in all error cases where it has to be called!
     ///
+    /// # IMPORTANT
+    /// This function parses the bytes using `CStr::from_ptr(...).to_str()`
+    ///
+    /// This function may return None or rust strings that contain
+    /// unexpected characters which are not actually present in the Java String. <br>
+    /// This happens when the utf-8 and the modified-utf-8 encoding differ.<br>
+    /// See <https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/io/DataInput.html#modified-utf-8> <br>
+    /// This is the case when the string contains one of the following characters:
+    /// * \0, null character 0 byte.
+    /// * any supplementary character. (Any character that would require 4 bytes in normal utf-8 encoding)
+    ///
+    /// While this may cause an unexpected return value, it will still never cause UB regardless
+    /// of what characters the java string contains. Only use this function if you have understood this caveat.
+    ///
+    /// An alternative, but slower version of this function is called `GetStringChars_as_string` which does not have this problem
+    /// because instead of using the utf-8 representation of the string it uses the utf-16 representation,
+    /// but it is much slower than this function with java 17 or newer. If your application is expected to process Strings contains
+    /// the problematic characters then accepting the performance penalty is probably worth it.
+    ///
     /// # Returns
     /// On failure this method return None.
     /// There are 2 different causes for returning None:
     /// 1. `GetStringUTFChars` fails, in this case more information should be gathered from `ExceptionCheck`.
-    /// 2. The String returned by the JVM is not valid utf-8. This case is unlikely. In this case `ExceptionCheck` should yield None.
+    /// 2. The String returned by the JVM is not valid utf-8. In this case `ExceptionCheck` should yield None.
+    ///     * see the IMPORTANT section for when this happens.
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
@@ -18379,7 +18523,6 @@ impl JNIEnv {
     /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
     /// `string` must not be null, must refer to a string and not already be garbage collected.
-    ///
     ///
     pub unsafe fn GetStringUTFChars_as_string(&self, string: jstring) -> Option<String> {
         unsafe {

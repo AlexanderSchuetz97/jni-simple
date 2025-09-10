@@ -252,4 +252,23 @@ pub mod test {
             env.DeleteLocalRef(array2);
         }
     }
+
+    #[test]
+    fn test_supplementary_character() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            let env = get_env();
+            let my_string = "abc𝕊abc"; //U+1D54A MATHEMATICAL DOUBLE-STRUCK CAPITAL S
+            let java_string: jstring = env.NewString_from_str(my_string);
+            assert!(!java_string.is_null());
+            let and_back_again: String = env.GetStringChars_as_string(java_string).unwrap();
+            assert_eq!(my_string, and_back_again.as_str());
+            assert_eq!(None, env.GetStringUTFChars_as_string(java_string));
+
+            let unhappy_string = env.NewStringUTF(my_string);
+            assert!(!unhappy_string.is_null());
+            let and_back_again: String = env.GetStringChars_as_string(unhappy_string).unwrap();
+            assert_eq!("abcð\u{9d}\u{95}\u{8a}", and_back_again.as_str()); //This is different because 𝕊 is a supplementary character.
+        }
+    }
 }
