@@ -104,7 +104,10 @@ pub mod test {
             #[cfg(target_os = "linux")]
             assert_eq!(uw, "linux");
             #[cfg(target_os = "windows")]
-            assert_eq!(uw, "windows");
+            assert!(uw.contains("windows"), "{}", &uw);
+            #[cfg(target_os = "macos")]
+            assert!(uw.contains("macos"), "{}", &uw);
+
 
             let set_prop = env.GetStaticMethodID(sys, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
             let str = env.NewStringUTF("some_prop");
