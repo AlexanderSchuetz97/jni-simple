@@ -41,12 +41,19 @@ pub mod test {
     }
 
     #[test]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     pub fn test() {
         unsafe {
             load_jvm_from_java_home().expect("failed to load jvm");
 
             let ptr = shim_agent as usize;
+
+            #[cfg(target_os = "linux")]
             let args: Vec<String> = vec![format!("-agentpath:jvmti_shim/target/release/libjvmti_shim.so={ptr}")];
+            #[cfg(target_os = "windows")]
+            let args: Vec<String> = vec![format!("-agentpath:jvmti_shim\\target\\release\\jvmti_shim.dll={ptr}")];
+            #[cfg(target_os = "macos")]
+            let args: Vec<String> = vec![format!("-agentpath:jvmti_shim/target/release/libjvmti_shim.dylib={ptr}")];
 
             let (_vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create java VM");
             let jvmti = DEBUGGER.get().copied().unwrap();

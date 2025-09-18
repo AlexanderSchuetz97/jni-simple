@@ -23910,7 +23910,7 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
 }
 
 ///
-/// Convenience method to load the jvm from a path to libjvm.so or jvm.dll.
+/// Convenience method to load the jvm from a path to libjvm.so, jvm.dll or libjvm.dylib.
 ///
 /// On success this method does NOT close the handle to the shared object.
 /// This is usually fine because unloading the jvm is not supported anyway.
@@ -23957,7 +23957,7 @@ pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
 /// The Safety of this fn depends on the shared object that will be loaded as a result of this call.
 #[cfg(feature = "loadjvm")]
 pub unsafe fn load_jvm_from_java_home_folder(java_home: &str) -> Result<(), String> {
-    ///All (most) jvm layouts that I am aware of on windows+linux.
+    ///All (most) jvm layouts that I am aware of on windows+linux+macos.
     const COMMON_LIBJVM_PATHS: &[&[&str]] = &[
         &["lib", "server", "libjvm.so"],                   //LINUX JAVA 11+
         &["jre", "lib", "amd64", "server", "libjvm.so"],   //LINUX JDK JAVA <= 8 amd64
@@ -23966,8 +23966,14 @@ pub unsafe fn load_jvm_from_java_home_folder(java_home: &str) -> Result<(), Stri
         &["lib", "aarch32", "server", "libjvm.so"],        //LINUX JRE JAVA <= 8 arm 32
         &["jre", "lib", "aarch64", "server", "libjvm.so"], //LINUX JDK JAVA <= 8 arm 64
         &["lib", "aarch64", "server", "libjvm.so"],        //LINUX JRE JAVA <= 8 arm 64
-        &["jre", "bin", "server", "jvm.dll"],              //WINDOWS JDK <= 8
-        &["bin", "server", "jvm.dll"],                     //WINDOWS JRE <= 8 AND WINDOWS JDK/JRE 11+
+        //
+        &["jre", "bin", "server", "jvm.dll"], //WINDOWS JDK <= 8
+        &["bin", "server", "jvm.dll"],        //WINDOWS JRE <= 8 AND WINDOWS JDK/JRE 11+
+        //
+        &["jre", "lib", "server", "libjvm.dylib"],                     //MACOS Java <= 8
+        &["Contents", "Home", "jre", "lib", "server", "libjvm.dylib"], //MACOS Java <= 8
+        &["lib", "server", "libjvm.dylib"],                            //MACOS Java 11+
+        &["Contents", "Home", "lib", "server", "libjvm.dylib"],        //MACOS Java 11+
     ];
 
     for parts in COMMON_LIBJVM_PATHS {
