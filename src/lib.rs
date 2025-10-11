@@ -5456,9 +5456,9 @@ impl private::SealedUseCString for *const i8 {
             }
 
             unsafe {
-                let to_check: &[u8] = std::slice::from_raw_parts(self.cast(), size);
+                let to_check: &[u8] = core::slice::from_raw_parts(self.cast(), size);
                 assert!(
-                    std::str::from_utf8(to_check).is_ok(),
+                    core::str::from_utf8(to_check).is_ok(),
                     "use_as_const_c_char called on a non utf-8 *const i8. string was only checked until first 0 byte or end of string. data={to_check:?}"
                 );
             }
@@ -5490,9 +5490,9 @@ impl private::SealedUseCString for *const u8 {
             }
 
             unsafe {
-                let to_check = std::slice::from_raw_parts(self, size);
+                let to_check = core::slice::from_raw_parts(self, size);
                 assert!(
-                    std::str::from_utf8(to_check).is_ok(),
+                    core::str::from_utf8(to_check).is_ok(),
                     "use_as_const_c_char called on a non utf-8 *const u8. string was only checked until first 0 byte or end of string. data={to_check:?}"
                 );
             }
@@ -5574,7 +5574,7 @@ impl private::SealedUseCString for Vec<u8> {
             let len = self.iter().position(|r| *r == 0).unwrap_or(self.len());
             let to_check = &self[..len];
             assert!(
-                std::str::from_utf8(to_check).is_ok(),
+                core::str::from_utf8(to_check).is_ok(),
                 "use_as_const_c_char called with non utf-8 string. string was only checked until first 0 byte or end of string. data={to_check:?}"
             );
         }
@@ -5623,7 +5623,7 @@ impl private::SealedUseCString for &[u8] {
             let len = self.iter().position(|r| *r == 0).unwrap_or(self.len());
             let to_check = &self[..len];
             assert!(
-                std::str::from_utf8(to_check).is_ok(),
+                core::str::from_utf8(to_check).is_ok(),
                 "use_as_const_c_char called with non utf-8 string. string was only checked until first 0 byte or end of string. data={to_check:?}",
             );
         }
@@ -18749,6 +18749,7 @@ impl JNIEnv {
     }
 
     #[cfg(feature = "asserts")]
+    #[cfg(feature = "std")]
     std::thread_local! {
         //The "Critical Section" created by GetStringCritical has a lot of restrictions placed upon it.
         //This attempts to track "some" of them on a best effort basis.
@@ -18801,23 +18802,26 @@ impl JNIEnv {
             #[cfg(feature = "asserts")]
             {
                 assert!(!string.is_null(), "GetStringCritical string must not be null");
-                Self::CRITICAL_POINTERS.with(|set| {
-                    if set.borrow().is_empty() {
-                        Self::CRITICAL_STRINGS.with(|strings| {
-                            if strings.borrow().is_empty() {
-                                //We can only do this check if we have not yet obtained a unreleased critical on the current thread.
-                                //For subsequent calls we cannot do this check.
-                                self.check_no_exception("GetStringCritical");
-                                self.check_if_arg_is_string("GetStringCritical", string);
-                            }
-                        });
-                    }
-                });
+                #[cfg(all(feature = "asserts", feature = "std"))]
+                {
+                    Self::CRITICAL_POINTERS.with(|set| {
+                        if set.borrow().is_empty() {
+                            Self::CRITICAL_STRINGS.with(|strings| {
+                                if strings.borrow().is_empty() {
+                                    //We can only do this check if we have not yet obtained a unreleased critical on the current thread.
+                                    //For subsequent calls we cannot do this check.
+                                    self.check_no_exception("GetStringCritical");
+                                    self.check_if_arg_is_string("GetStringCritical", string);
+                                }
+                            });
+                        }
+                    });
+                }
             }
 
             let crit = self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const jchar>(224)(self.vtable, string, isCopy);
 
-            #[cfg(feature = "asserts")]
+            #[cfg(all(feature = "asserts", feature = "std"))]
             {
                 if !crit.is_null() {
                     Self::CRITICAL_STRINGS.with(|set| {
@@ -18850,19 +18854,22 @@ impl JNIEnv {
             {
                 assert!(!string.is_null(), "ReleaseStringCritical string must not be null");
                 assert!(!cstring.is_null(), "ReleaseStringCritical cstring must not be null");
-                Self::CRITICAL_STRINGS.with(|set| {
-                    let mut rm = set.borrow_mut();
-                    let mut n = rm.remove(&cstring).expect("ReleaseStringCritical cstring is not valid");
-                    if n == 0 {
-                        unreachable!();
-                    }
+                #[cfg(feature = "std")]
+                {
+                    Self::CRITICAL_STRINGS.with(|set| {
+                        let mut rm = set.borrow_mut();
+                        let mut n = rm.remove(&cstring).expect("ReleaseStringCritical cstring is not valid");
+                        if n == 0 {
+                            unreachable!();
+                        }
 
-                    n -= 1;
+                        n -= 1;
 
-                    if n >= 1 {
-                        rm.insert(cstring, n);
-                    }
-                });
+                        if n >= 1 {
+                            rm.insert(cstring, n);
+                        }
+                    });
+                }
             }
 
             self.jni::<extern "system" fn(JNIEnvVTable, jstring, *const jchar)>(225)(self.vtable, string, cstring);
@@ -22355,7 +22362,7 @@ impl JNIEnv {
         }
     }
 
-    #[cfg(feature = "asserts")]
+    #[cfg(all(feature = "asserts", feature = "std"))]
     std::thread_local! {
         //The "Critical Section" created by GetPrimitiveArrayCritical has a lot of restrictions placed upon it.
         //This attempts to track "some" of them on a best effort basis.
@@ -22403,7 +22410,7 @@ impl JNIEnv {
     ///
     pub unsafe fn GetPrimitiveArrayCritical(&self, array: jarray, isCopy: *mut jboolean) -> *mut c_void {
         unsafe {
-            #[cfg(feature = "asserts")]
+            #[cfg(all(feature = "asserts", feature = "std"))]
             {
                 Self::CRITICAL_POINTERS.with(|set| {
                     if set.borrow().is_empty() {
@@ -22421,7 +22428,7 @@ impl JNIEnv {
 
             let crit = self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut jboolean) -> *mut c_void>(222)(self.vtable, array, isCopy);
 
-            #[cfg(feature = "asserts")]
+            #[cfg(all(feature = "asserts", feature = "std"))]
             {
                 if !crit.is_null() {
                     Self::CRITICAL_POINTERS.with(|set| {
@@ -22457,22 +22464,27 @@ impl JNIEnv {
                     mode == JNI_OK || mode == JNI_COMMIT || mode == JNI_ABORT,
                     "ReleasePrimitiveArrayCritical mode is invalid {mode}"
                 );
-                Self::CRITICAL_POINTERS.with(|set| {
-                    let mut rm = set.borrow_mut();
-                    let mut n = rm.remove(&carray).expect("ReleasePrimitiveArrayCritical carray is not valid");
-                    if n == 0 {
-                        unreachable!();
-                    }
 
-                    if mode != JNI_COMMIT {
-                        //JNI_COMMIT does not release the pointer. It's a noop for non-copied pointers.
-                        n -= 1;
-                    }
+                #[cfg(feature = "std")]
+                {
+                    Self::CRITICAL_POINTERS.with(|set| {
+                        let mut rm = set.borrow_mut();
+                        let mut n = rm.remove(&carray).expect("ReleasePrimitiveArrayCritical carray is not valid");
+                        if n == 0 {
+                            unreachable!();
+                        }
 
-                    if n >= 1 {
-                        rm.insert(carray, n);
-                    }
-                });
+                        if mode != JNI_COMMIT {
+                            //JNI_COMMIT does not release the pointer. It's a noop for non-copied pointers.
+                            n -= 1;
+                        }
+
+                        if n >= 1 {
+                            rm.insert(carray, n);
+                        }
+                    });
+                }
+
             }
 
             self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut c_void, jint)>(223)(self.vtable, array, carray, mode);
@@ -22544,7 +22556,7 @@ impl JNIEnv {
                 assert!(!clazz.is_null(), "RegisterNatives class must not be null");
                 assert!(size > 0, "RegisterNatives size must be greater than 0");
                 if let Ok(size) = usize::try_from(size) {
-                    for (idx, cur) in std::slice::from_raw_parts(methods, size).iter().enumerate() {
+                    for (idx, cur) in core::slice::from_raw_parts(methods, size).iter().enumerate() {
                         assert!(!cur.name.is_null(), "RegisterNatives JNINativeMethod[{idx}],name is null");
                         assert!(!cur.signature.is_null(), "RegisterNatives JNINativeMethod[{idx}].signature is null");
                         assert!(!cur.fnPtr.is_null(), "RegisterNatives JNINativeMethod[{idx}].fnPtr is null");
@@ -23113,21 +23125,25 @@ impl JNIEnv {
     /// Checks that we are not in a critical section currently.
     #[cfg(feature = "asserts")]
     unsafe fn check_not_critical(self, context: &str) {
-        Self::CRITICAL_POINTERS.with(|set| {
-            let sz = set.borrow_mut().len();
-            assert_eq!(
-                sz, 0,
-                "{context} cannot be called now, because there are {sz} critical pointers into primitive arrays that have not been released by the current thread."
-            );
-        });
-        Self::CRITICAL_STRINGS.with(|set| {
-            let sz = set.borrow_mut().len();
-            assert_eq!(
-                sz, 0,
-                "{context} cannot be called now, because there are {sz} critical pointers into strings that have not been released by the current thread."
-            );
-        });
+        #[cfg(feature = "std")]
+        {
+            Self::CRITICAL_POINTERS.with(|set| {
+                let sz = set.borrow_mut().len();
+                assert_eq!(
+                    sz, 0,
+                    "{context} cannot be called now, because there are {sz} critical pointers into primitive arrays that have not been released by the current thread."
+                );
+            });
+            Self::CRITICAL_STRINGS.with(|set| {
+                let sz = set.borrow_mut().len();
+                assert_eq!(
+                    sz, 0,
+                    "{context} cannot be called now, because there are {sz} critical pointers into strings that have not been released by the current thread."
+                );
+            });
+        }
 
+        _ = context;
         _ = self;
     }
 
@@ -23808,7 +23824,7 @@ impl JNIDynamicLink {
 
 /// State that contains the function pointers to the jvm.
 #[cfg(not(feature = "dynlink"))]
-static LINK: once_cell::sync::OnceCell<JNIDynamicLink> = once_cell::sync::OnceCell::new();
+static LINK: spin::RwLock<Option<JNIDynamicLink>> = spin::RwLock::new(None);
 
 ///
 /// Call this function to initialize the dynamic linking to the jvm to use the provided function pointers to
@@ -23819,7 +23835,12 @@ static LINK: once_cell::sync::OnceCell<JNIDynamicLink> = once_cell::sync::OnceCe
 ///
 #[cfg(not(feature = "dynlink"))]
 pub fn init_dynamic_link(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs: *const c_void) {
-    _ = LINK.set(JNIDynamicLink::new(JNI_CreateJavaVM, JNI_GetCreatedJavaVMs));
+    let value = Some(JNIDynamicLink::new(JNI_CreateJavaVM, JNI_GetCreatedJavaVMs));
+    let mut guard = LINK.write();
+    if guard.is_none() {
+        *guard = value;
+    }
+    drop(guard);
 }
 
 ///
@@ -23841,7 +23862,7 @@ pub fn init_dynamic_link(_: *const c_void, _: *const c_void) {
 #[cfg(not(feature = "dynlink"))]
 #[must_use]
 pub fn is_jvm_loaded() -> bool {
-    LINK.get().is_some()
+    LINK.read().is_some()
 }
 
 ///
@@ -23870,11 +23891,13 @@ pub fn is_jvm_loaded() -> bool {
 #[cfg(feature = "loadjvm")]
 #[cfg(not(feature = "dynlink"))]
 pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    let latch = AtomicBool::new(false);
+    let mut guard = LINK.write();
+    if guard.is_some() {
+        drop(guard);
+        return Err("JVM already loaded".to_string());
+    }
 
-    LINK.get_or_try_init(|| unsafe {
-        latch.store(true, Ordering::SeqCst);
+    unsafe {
         let lib = libloading::Library::new(path).map_err(|e| alloc::format!("Failed to load jvm from {path} reason: {e}"))?;
 
         let JNI_CreateJavaVM_ptr = lib
@@ -23899,11 +23922,8 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
 
         //We are good to go!
         core::mem::forget(lib);
-        Ok(JNIDynamicLink::new(JNI_CreateJavaVM_ptr, JNI_GetCreatedJavaVMs_ptr))
-    })?;
-
-    if !latch.load(Ordering::SeqCst) {
-        return Err("JVM already loaded".to_string());
+        *guard = Some(JNIDynamicLink::new(JNI_CreateJavaVM_ptr, JNI_GetCreatedJavaVMs_ptr));
+        drop(guard);
     }
 
     Ok(())
@@ -23998,8 +24018,8 @@ pub unsafe fn load_jvm_from_java_home_folder(java_home: &str) -> Result<(), Stri
 /// # Panics
 /// if the dynamic link was not initalized.
 #[cfg(not(feature = "dynlink"))]
-fn get_link() -> &'static JNIDynamicLink {
-    LINK.get().expect("jni_simple::init_dynamic_link not called")
+fn get_link() -> JNIDynamicLink {
+    LINK.read().expect("jni_simple::init_dynamic_link not called")
 }
 
 ///

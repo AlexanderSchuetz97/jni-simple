@@ -6,15 +6,9 @@ version = 4
 name = "jni-simple"
 version = "0.3.2"
 dependencies = [
- "once_cell",
+ "spin",
  "sync-ptr",
 ]
-
-[[package]]
-name = "once_cell"
-version = "1.21.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
 name = "rust-jni-example"
@@ -22,6 +16,12 @@ version = "0.1.0"
 dependencies = [
  "jni-simple",
 ]
+
+[[package]]
+name = "spin"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
 
 [[package]]
 name = "sync-ptr"

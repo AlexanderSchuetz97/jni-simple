@@ -28,6 +28,11 @@ jobs:
         run: cargo build --verbose --features loadjvm
       - name: Build asserts+loadjvm
         run: cargo build --verbose --features asserts,loadjvm
+      - name: Build no-std
+        run: cargo clean && cargo +nightly build -Zbuild-std=core,alloc --no-default-features
+      - name: Build no-std+dynlink
+        run: cargo clean && cargo +nightly build -Zbuild-std=core,alloc --no-default-features --features dynlink
+
 
   fmt:
     runs-on: ubuntu-latest
