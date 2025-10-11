@@ -18802,7 +18802,7 @@ impl JNIEnv {
             #[cfg(feature = "asserts")]
             {
                 assert!(!string.is_null(), "GetStringCritical string must not be null");
-                #[cfg(all(feature = "asserts", feature = "std"))]
+                #[cfg(feature = "std")]
                 {
                     Self::CRITICAL_POINTERS.with(|set| {
                         if set.borrow().is_empty() {

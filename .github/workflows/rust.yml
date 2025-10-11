@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Add nightly toolchain
+        run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
       - name: Build no-std
         run: cargo build --verbose --no-default-features
       - name: Build no-std+dynlink
@@ -28,9 +30,9 @@ jobs:
         run: cargo build --verbose --features loadjvm
       - name: Build asserts+loadjvm
         run: cargo build --verbose --features asserts,loadjvm
-      - name: Build no-std
+      - name: Build no-std with nightly
         run: cargo clean && cargo +nightly build -Zbuild-std=core,alloc --no-default-features
-      - name: Build no-std+dynlink
+      - name: Build no-std+dynlink with nightly
         run: cargo clean && cargo +nightly build -Zbuild-std=core,alloc --no-default-features --features dynlink
 
 
