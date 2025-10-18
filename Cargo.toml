@@ -24,7 +24,7 @@ all-features = true
 
 [dependencies]
 libloading = { version = "^0.8.9", optional = true }
-sync-ptr = "^0.1.4"
+sync-ptr = { version = "^0.2.1", features = ["fnptr"] }
 spin = { version = "0.10.0", default-features = false, features = ["rwlock"] }
 
 [dev-dependencies]

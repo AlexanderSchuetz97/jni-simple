@@ -54,9 +54,9 @@ use core::ptr::null;
 use core::ptr::null_mut;
 #[cfg(feature = "loadjvm")]
 use std::path::PathBuf;
-#[cfg(not(feature = "dynlink"))]
-use sync_ptr::{FromConstPtr, SyncConstPtr};
 use sync_ptr::{FromMutPtr, SyncMutPtr};
+#[cfg(not(feature = "dynlink"))]
+use sync_ptr::{SyncFnPtr, sync_fn_ptr_from_addr};
 
 pub const JNI_TRUE: jboolean = true;
 pub const JNI_FALSE: jboolean = false;
@@ -2398,10 +2398,8 @@ impl SealedEnvVTable for JVMTIEnv {
 impl From<*mut c_void> for JVMTIEnv {
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn from(value: *mut c_void) -> Self {
-        unsafe {
-            Self {
-                vtable: value.as_sync_mut().cast(),
-            }
+        Self {
+            vtable: value.as_sync_mut().cast(),
         }
     }
 }
@@ -4898,7 +4896,7 @@ impl jniNativeInterface {
     /// then the using the resulting `jniNativeInterface` in any way is UB.
     #[must_use]
     pub const unsafe fn from_raw_ptr(ptr: *mut c_void) -> Self {
-        unsafe { Self(SyncMutPtr::new(ptr.cast())) }
+        Self(SyncMutPtr::new(ptr.cast()))
     }
 
     ///
@@ -22484,7 +22482,6 @@ impl JNIEnv {
                         }
                     });
                 }
-
             }
 
             self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut c_void, jint)>(223)(self.vtable, array, carray, mode);
@@ -23790,9 +23787,9 @@ type JNI_GetCreatedJavaVMs = unsafe extern "C" fn(*mut JNIInvPtr, jsize, *mut js
 #[derive(Debug, Copy, Clone)]
 struct JNIDynamicLink {
     /// raw function ptr to `JNI_CreateJavaVM`
-    JNI_CreateJavaVM: SyncConstPtr<c_void>,
+    JNI_CreateJavaVM: SyncFnPtr<JNI_CreateJavaVM>,
     /// raw function ptr to `JNI_GetCreatedJavaVMs`
-    JNI_GetCreatedJavaVMs: SyncConstPtr<c_void>,
+    JNI_GetCreatedJavaVMs: SyncFnPtr<JNI_GetCreatedJavaVMs>,
 }
 
 #[cfg(not(feature = "dynlink"))]
@@ -23800,25 +23797,24 @@ impl JNIDynamicLink {
     /// Constructor with the two pointers
     pub fn new(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs: *const c_void) -> Self {
         assert!(!JNI_GetCreatedJavaVMs.is_null(), "JNI_GetCreatedJavaVMs is null");
-
         assert!(!JNI_CreateJavaVM.is_null(), "JNI_CreateJavaVM is null");
 
         unsafe {
             Self {
-                JNI_CreateJavaVM: JNI_CreateJavaVM.as_sync_const(),
-                JNI_GetCreatedJavaVMs: JNI_GetCreatedJavaVMs.as_sync_const(),
+                JNI_CreateJavaVM: sync_fn_ptr_from_addr!(crate::JNI_CreateJavaVM, JNI_CreateJavaVM),
+                JNI_GetCreatedJavaVMs: sync_fn_ptr_from_addr!(crate::JNI_GetCreatedJavaVMs, JNI_GetCreatedJavaVMs),
             }
         }
     }
 
     /// Get the `JNI_GetCreatedJavaVMs` function pointer
     pub fn JNI_CreateJavaVM(&self) -> JNI_CreateJavaVM {
-        unsafe { core::mem::transmute(self.JNI_CreateJavaVM.inner()) }
+        self.JNI_CreateJavaVM.unwrap()
     }
 
     /// Get the `JNI_GetCreatedJavaVMs` function pointer
     pub fn JNI_GetCreatedJavaVMs(&self) -> JNI_GetCreatedJavaVMs {
-        unsafe { core::mem::transmute(self.JNI_GetCreatedJavaVMs.inner()) }
+        self.JNI_GetCreatedJavaVMs.unwrap()
     }
 }
 
