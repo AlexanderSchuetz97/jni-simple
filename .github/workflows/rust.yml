@@ -339,7 +339,7 @@ jobs:
             uname -a
             ls -lah
             echo "INSTALLING JAVA"
-            pkg install openjdk21
+            sudo pkg install openjdk21
             echo "SETUP RUST"
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             . "$HOME/.cargo/env"
