@@ -337,4 +337,5 @@ jobs:
           version: '14.2'
           run: |
             uname -a
-            echo "IT IS WORKING"
+            echo "SETUP RUST"
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
