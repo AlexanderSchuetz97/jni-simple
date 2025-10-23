@@ -339,7 +339,8 @@ jobs:
             uname -a
             ls -lah
             echo "INSTALLING JAVA"
-            sudo pkg install openjdk21
+            sudo env IGNORE_OSVERSION=yes pkg install openjdk21
+            java -version
             echo "SETUP RUST"
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             . "$HOME/.cargo/env"
