@@ -324,3 +324,16 @@ jobs:
         run: cargo test --verbose --release --features loadjvm,asserts
       - name: Run tests without asserts
         run: cargo test --verbose --release --features loadjvm
+
+  freebsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: test freebsd 13.4
+        uses: cross-platform-actions/action@v0.27.0
+        with:
+          memory: 1024M
+          operating_system: freebsd
+          version: '14.3'
+          run: |
+            uname -a
