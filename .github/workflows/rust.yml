@@ -346,6 +346,9 @@ jobs:
             echo "SETUP RUST"
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             . "$HOME/.cargo/env"
+            cd jvmti_shim
+            cargo build --release
+            cd ..
             cargo test --verbose --release --features loadjvm
             cargo test --verbose --release --features loadjvm,asserts
             
