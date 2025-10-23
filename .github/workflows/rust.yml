@@ -341,8 +341,9 @@ jobs:
             echo "INSTALLING JAVA"
             sudo env IGNORE_OSVERSION=yes pkg install -y openjdk21
             java -version
+            echo $JAVA_HOME
             echo "SETUP RUST"
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             . "$HOME/.cargo/env"
-            cargo build
+            cargo test --features loadjvm
             
