@@ -114,7 +114,6 @@ pub mod test {
             #[cfg(target_os = "freebsd")]
             assert_eq!(uw, "freebsd");
 
-
             let set_prop = env.GetStaticMethodID(sys, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
             let str = env.NewStringUTF("some_prop");
             let obj = env.CallStaticObjectMethodA(sys, get_prop, [str.into()].as_ptr());
