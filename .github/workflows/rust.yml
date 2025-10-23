@@ -334,6 +334,6 @@ jobs:
         with:
           memory: 1024M
           operating_system: freebsd
-          version: '14.3'
+          version: '14.2'
           run: |
             uname -a
