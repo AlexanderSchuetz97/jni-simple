@@ -368,7 +368,7 @@ jobs:
             echo "INSTALLING JAVA"
             sudo pkgin -y install openjdk21 curl
             /usr/pkg/java/openjdk21/bin/java -version
-            export JAVA_HOME=/usr/local/openjdk21
+            export JAVA_HOME=/usr/pkg/java/openjdk21
             echo "SETUP RUST"
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             . "$HOME/.cargo/env"
