@@ -351,4 +351,20 @@ jobs:
             cd ..
             cargo test --verbose --release --features loadjvm
             cargo test --verbose --release --features loadjvm,asserts
-            
+
+  netbsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: test netbsd
+        uses: cross-platform-actions/action@v0.29.0
+        with:
+          memory: 1024M
+          operating_system: netbsd
+          version: '10.1'
+          run: |
+            uname -a
+            ls -lah
+            echo "INSTALLING JAVA"
+            sudo pkgin install -y openjdk21
+            java -version
