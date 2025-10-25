@@ -375,8 +375,8 @@ jobs:
             cd jvmti_shim
             cargo build --release
             cd ..
-            sysctl -w security.pax.mprotect.enabled=0
-            sysctl -w security.pax.mprotect.global=0
-            sysctl -w security.pax.mprotect.ptrace=0
+            sudo sysctl -w security.pax.mprotect.enabled=0
+            sudo sysctl -w security.pax.mprotect.global=0
+            sudo sysctl -w security.pax.mprotect.ptrace=0
             cargo test --verbose --release --features loadjvm
             cargo test --verbose --release --features loadjvm,asserts
