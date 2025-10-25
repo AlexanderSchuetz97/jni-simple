@@ -366,5 +366,5 @@ jobs:
             uname -a
             ls -lah
             echo "INSTALLING JAVA"
-            sudo pkgin install -y openjdk21
+            sudo pkgin -y install openjdk21
             java -version
