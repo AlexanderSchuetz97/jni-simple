@@ -252,6 +252,20 @@ is instead loaded by `System.load` or `System.loadLibrary` then this is irreleva
 ### Targets where I recommend careful testing
 Any Big Endian target, especially if you intend to use JVMTI.
 
+## Supported Java Versions
+In general, JNI and JVMTI are designed in a version agnostic manner;
+this means that they should work with nearly any version of Java.
+If a newer version of Java adds new functionality to JNI or JVMTI,
+then jni-simple will require an update to support that new functionality; 
+however, existing functions should just work like they did in the previous versions.
+
+### Java Versions that are tested with GitHub CI
+- java 8
+- java 11
+- java 17
+- java 21
+- java 25
+
 ## Test coverage and maturity
 ### JNI
 Test coverage is near 100%.

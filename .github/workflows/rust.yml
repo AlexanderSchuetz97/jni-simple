@@ -145,7 +145,7 @@ jobs:
       - name: Run tests without asserts
         run: cargo test --verbose --release --features loadjvm
 
-  linux-jdk-24:
+  linux-jdk-25:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -160,7 +160,7 @@ jobs:
       - name: Run tests without asserts
         run: cargo test --verbose --release --features loadjvm
 
-  macos-jdk-24:
+  macos-jdk-25:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -235,7 +235,7 @@ jobs:
       - name: Run tests without asserts
         run: cargo test --verbose --release --features loadjvm
 
-  windows-jdk-24:
+  windows-jdk-25:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
