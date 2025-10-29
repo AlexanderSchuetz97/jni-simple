@@ -152,7 +152,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '24'
+          java-version: '25'
       - name: Build JVMTI Shim
         run: cd jvmti_shim && cargo build --release
       - name: Run tests with asserts
@@ -167,7 +167,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '24'
+          java-version: '25'
       - name: Build JVMTI Shim
         run: cd jvmti_shim && cargo build --release
       - name: Run tests with asserts
@@ -242,7 +242,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '24'
+          java-version: '25'
       - name: Build JVMTI Shim
         run: cd jvmti_shim && cargo build --release
       - name: Run tests with asserts
