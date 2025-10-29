@@ -72,6 +72,8 @@ pub mod test {
             assert!(uw.contains("mac"), "{}", &uw);
             #[cfg(target_os = "freebsd")]
             assert_eq!(uw, "freebsd");
+            #[cfg(target_os = "netbsd")]
+            assert_eq!(uw, "netbsd");
 
             let set_prop = env.GetStaticMethodID(sys, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
             let str = env.NewStringUTF("some_prop2");
@@ -113,6 +115,8 @@ pub mod test {
             assert!(uw.contains("mac"), "{}", &uw);
             #[cfg(target_os = "freebsd")]
             assert_eq!(uw, "freebsd");
+            #[cfg(target_os = "netbsd")]
+            assert_eq!(uw, "netbsd");
 
             let set_prop = env.GetStaticMethodID(sys, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
             let str = env.NewStringUTF("some_prop");

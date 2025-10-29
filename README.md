@@ -34,6 +34,10 @@ fn test() {
         // On FreeBSD
         jni_simple::load_jvm_from_library("/usr/local/openjdk21/lib/server/libjvm.so")
                 .expect("failed to load jvm");
+      
+        // On NetBSD, remember to disable PAX for your rust binary or disable it globally. (paxctl or security.pax.mprotect.global)
+        jni_simple::load_jvm_from_library("/usr/pkg/java/openjdk21/lib/server/libjvm.so")
+                .expect("failed to load jvm");
 
         // Works on all OS but requires the JAVA_HOME environment variable to be set.
         // This is usually done by the java installer.
@@ -228,16 +232,21 @@ is instead loaded by `System.load` or `System.loadLibrary` then this is irreleva
 
 ## Supported Targets
 ### Targets that are tested with GitHub CI
-- linux: aarch64, i686 and x86_64 gnu-abi
-- Windows: aarch64, i686 and x86_64, both gnu and msvc.
+- linux: aarch64 and x86_64 gnu-abi
+- windows: aarch64 and x86_64 msvc.
 - macOS: aarch64 and x86_64
 - freebsd: x86_64
+- netbsd: x86_64
+
+### Targets that are known to work
+- windows: x86_64 gnu target
 
 ### Targets that are likely to work
 - linux: any other architecture that java supports
 - linux: musl-abi, but you MUST compile your application as a dynamically linked application. This will likely require setting specific rust compiler flags.
-- freebsd: any other architecture that java supports
-- netbsd: any architecture that supports java
+- windows: i686 gnu or msvc
+- freebsd: any other architecture that supports java
+- netbsd: any other architecture that supports java
 - openbsd: any architecture that supports java
 
 ### Targets where I recommend careful testing
