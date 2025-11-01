@@ -23944,7 +23944,6 @@ pub unsafe fn load_jvm_from_library(_: &str) -> Result<(), String> {
     Err("JVM already loaded".to_string())
 }
 
-///
 /// Convenience method to load the jvm from the `JAVA_HOME` environment variable
 /// that is commonly set on Windows by End-User Java Setups,
 /// or on linux by distribution package installers.
@@ -23962,7 +23961,7 @@ pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
     unsafe { load_jvm_from_java_home_folder(&java_home) }
 }
 
-/// Convinience method to load the jvm from a given path to a java installation.
+/// Convenience method to load the jvm from a given path to a java installation.
 /// Info: The `java_home` parameter should refer to a path of a folder, which directly contains the "bin" or "jre" folder.
 ///
 /// # Errors
@@ -24012,7 +24011,7 @@ pub unsafe fn load_jvm_from_java_home_folder(java_home: &str) -> Result<(), Stri
 
 /// Returns the static dynamic link or panic
 /// # Panics
-/// if the dynamic link was not initalized.
+/// if the dynamic link was not initialized.
 #[cfg(not(feature = "dynlink"))]
 fn get_link() -> JNIDynamicLink {
     LINK.read().expect("jni_simple::init_dynamic_link not called")

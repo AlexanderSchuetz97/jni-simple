@@ -17,20 +17,32 @@ use std::ptr::null;
 #[test]
 fn test() {
     unsafe {
-
-        // On linux/unix:
+        // Naturally, all those paths are just examples and are likely different on your system depending on the java version.
+      
+        // On linux:
         jni_simple::load_jvm_from_library("/usr/lib/jvm/java-11-openjdk-amd64/lib/server/libjvm.so")
-            .expect("failed to load jvm");
+                .expect("failed to load jvm");
        
         // On windows:
-        //    jni_simple::load_jvm_from_library("C:\\Program Files\\Java\\jdk-17.0.1\\jre\\bin\\server\\jvm.dll")
-        //        .expect("failed to load jvm");
+        jni_simple::load_jvm_from_library("C:\\Program Files\\Java\\jdk-17.0.1\\jre\\bin\\server\\jvm.dll")
+                .expect("failed to load jvm");
+      
+        // On macOS:
+        jni_simple::load_jvm_from_library("/<only-god-knows>/jdk-21.0.5+11/Contents/Home/lib/server/libjvm.dylib")
+                .expect("failed to load jvm");
+      
+        // On FreeBSD
+        jni_simple::load_jvm_from_library("/usr/local/openjdk21/lib/server/libjvm.so")
+                .expect("failed to load jvm");
+      
+        // On NetBSD, remember to disable PAX for your rust binary or disable it globally. (paxctl or security.pax.mprotect.global)
+        jni_simple::load_jvm_from_library("/usr/pkg/java/openjdk21/lib/server/libjvm.so")
+                .expect("failed to load jvm");
 
-        // Works on Both but requires the JAVA_HOME environment variable to be set.
+        // Works on all OS but requires the JAVA_HOME environment variable to be set.
         // This is usually done by the java installer.
         // Fails if JAVA_HOME is not set.
-        //jni_simple::load_jvm_from_java_home().expect("failed to load jvm");
-        
+        jni_simple::load_jvm_from_java_home().expect("failed to load jvm");
 
         //Adjust JVM version and arguments here; args are just like the args you pass on the command line.
         //You could provide your classpath here, for example, or configure the jvm heap size.
@@ -217,6 +229,42 @@ This allows for maximum flexibility when writing a launcher app which, for examp
 may first download and extract a JVM from the internet.
 As should be obvious, when writing a native library (cdylib) that does not launch the JVM itself and 
 is instead loaded by `System.load` or `System.loadLibrary` then this is irrelevant.
+
+## Supported Targets
+### Targets that are tested with GitHub CI
+- linux: aarch64 and x86_64 gnu-abi
+- windows: aarch64 and x86_64 msvc.
+- macOS: aarch64 and x86_64
+- freebsd: x86_64
+- netbsd: x86_64
+
+### Targets that are known to work
+- windows: x86_64 gnu target
+
+### Targets that are likely to work
+- linux: any other architecture that java supports
+- linux: musl-abi, but you MUST compile your application as a dynamically linked application. This will likely require setting specific rust compiler flags.
+- windows: i686 gnu or msvc
+- freebsd: any other architecture that supports java
+- netbsd: any other architecture that supports java
+- openbsd: any architecture that supports java
+
+### Targets where I recommend careful testing
+Any Big Endian target, especially if you intend to use JVMTI.
+
+## Supported Java Versions
+In general, JNI and JVMTI are designed in a version agnostic manner;
+this means that they should work with nearly any version of Java.
+If a newer version of Java adds new functionality to JNI or JVMTI,
+then jni-simple will require an update to support that new functionality; 
+however, existing functions should just work like they did in the previous versions.
+
+### Java Versions that are tested with GitHub CI
+- java 8
+- java 11
+- java 17
+- java 21
+- java 25
 
 ## Test coverage and maturity
 ### JNI

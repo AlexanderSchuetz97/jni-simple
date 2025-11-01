@@ -145,14 +145,14 @@ jobs:
       - name: Run tests without asserts
         run: cargo test --verbose --release --features loadjvm
 
-  linux-jdk-24:
+  linux-jdk-25:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '24'
+          java-version: '25'
       - name: Build JVMTI Shim
         run: cd jvmti_shim && cargo build --release
       - name: Run tests with asserts
@@ -160,14 +160,14 @@ jobs:
       - name: Run tests without asserts
         run: cargo test --verbose --release --features loadjvm
 
-  macos-jdk-24:
+  macos-jdk-25:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '24'
+          java-version: '25'
       - name: Build JVMTI Shim
         run: cd jvmti_shim && cargo build --release
       - name: Run tests with asserts
@@ -235,14 +235,14 @@ jobs:
       - name: Run tests without asserts
         run: cargo test --verbose --release --features loadjvm
 
-  windows-jdk-24:
+  windows-jdk-25:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '24'
+          java-version: '25'
       - name: Build JVMTI Shim
         run: cd jvmti_shim && cargo build --release
       - name: Run tests with asserts
@@ -324,3 +324,59 @@ jobs:
         run: cargo test --verbose --release --features loadjvm,asserts
       - name: Run tests without asserts
         run: cargo test --verbose --release --features loadjvm
+
+  freebsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: test freebsd
+        uses: cross-platform-actions/action@v0.29.0
+        with:
+          memory: 1024M
+          operating_system: freebsd
+          version: '14.3'
+          run: |
+            uname -a
+            ls -lah
+            echo "INSTALLING JAVA"
+            sudo env IGNORE_OSVERSION=yes pkg install -y openjdk21
+            java -version
+            ls -lah /usr/local
+            export JAVA_HOME=/usr/local/openjdk21
+            echo "SETUP RUST"
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            . "$HOME/.cargo/env"
+            cd jvmti_shim
+            cargo build --release
+            cd ..
+            cargo test --verbose --release --features loadjvm
+            cargo test --verbose --release --features loadjvm,asserts
+
+  netbsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: test netbsd
+        uses: cross-platform-actions/action@v0.29.0
+        with:
+          memory: 1024M
+          operating_system: netbsd
+          version: '10.1'
+          run: |
+            uname -a
+            ls -lah
+            echo "INSTALLING JAVA"
+            sudo pkgin -y install openjdk21 curl
+            /usr/pkg/java/openjdk21/bin/java -version
+            export JAVA_HOME=/usr/pkg/java/openjdk21
+            echo "SETUP RUST"
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            . "$HOME/.cargo/env"
+            cd jvmti_shim
+            cargo build --release
+            cd ..
+            sudo sysctl -w security.pax.mprotect.enabled=0
+            sudo sysctl -w security.pax.mprotect.global=0
+            sudo sysctl -w security.pax.mprotect.ptrace=0
+            cargo test --verbose --release --features loadjvm
+            cargo test --verbose --release --features loadjvm,asserts

@@ -41,14 +41,14 @@ pub mod test {
     }
 
     #[test]
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "freebsd", target_os = "netbsd"))]
     pub fn test() {
         unsafe {
             load_jvm_from_java_home().expect("failed to load jvm");
 
             let ptr = shim_agent as usize;
 
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "netbsd"))]
             let args: Vec<String> = vec![format!("-agentpath:jvmti_shim/target/release/libjvmti_shim.so={ptr}")];
             #[cfg(target_os = "windows")]
             let args: Vec<String> = vec![format!("-agentpath:jvmti_shim\\target\\release\\jvmti_shim.dll={ptr}")];
