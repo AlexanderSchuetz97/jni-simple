@@ -1,5 +1,6 @@
 #[cfg(not(miri))]
 #[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
 pub mod test {
     use jni_simple::{
         JNI_CreateJavaVM_with_string_args, JNI_VERSION_1_8, JVMTI_ERROR_INVALID_ENVIRONMENT, JVMTI_PHASE_LIVE, JVMTI_VERSION_1_2, JVMTIEnv, jvmtiPhase, load_jvm_from_java_home,

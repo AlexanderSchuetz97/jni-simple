@@ -1,5 +1,6 @@
 #[cfg(not(miri))]
 #[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
 pub mod test {
     use jni_simple::*;
     use std::collections::HashMap;

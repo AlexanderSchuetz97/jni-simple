@@ -1,4 +1,5 @@
 #[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
 #[cfg(feature = "asserts")]
 #[cfg(not(miri))]
 pub mod test {

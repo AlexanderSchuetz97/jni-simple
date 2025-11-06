@@ -1,4 +1,5 @@
 #[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
 #[cfg(not(miri))]
 pub mod test {
     use jni_simple::*;

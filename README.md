@@ -296,12 +296,12 @@ Naturally, if you wish to submit tests, then that would also be appreciated.
 ### std
 This feature is enabled by default!
 Adds support for some types in the rust standard library.
+It also adds a few optional convenience functions.
 
 If you wish to compile your library/launcher app without the rust standard library, then disable default features.
 
 ### loadjvm
 This feature is not enabled by default!
-Requires the std feature.
 
 This feature provides functions to dynamically link the jvm using the `libloading` crate 
 from a string containing the absolute path to `libjvm.so` or `jvm.dll`.
@@ -330,7 +330,6 @@ Note: Enabling both `dynlink` and `loadjvm` makes no sense, it just adds the `li
 
 ### asserts
 This feature is not enabled by default!
-Requires the std feature.
 
 This feature enables assertions in the code. This is useful for debugging and testing purposes.
 These checks will cause a big performance hit and should not be used in production builds.
@@ -368,6 +367,10 @@ in the java vm itself, forgoing the need to do any checks ourselves. Most of the
 to check anyway, because the API heavily relies on callbacks which are passed to JVMTI as raw function pointers.
 Checking those for validity is not really possible without changing the API at a higher level, which is not a goal of this crate.
 In addition to that, jvmti is not needed for most use cases, so I suspect that it will see little use.
+
+Info: The asserts perform some best effort checks that verify that misuse of critical arrays or strings occurs.
+These checks require the use of thread local which is only available with the std feature.
+Should the std feature be disabled, then those checks are not done.
 
 ## Further Info
 
