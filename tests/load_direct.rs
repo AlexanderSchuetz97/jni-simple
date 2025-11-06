@@ -1,7 +1,7 @@
 #[cfg(feature = "loadjvm")]
 mod test {
+    use jni_simple::{JNI_CreateJavaVM_with_string_args, JNI_VERSION_1_8, load_jvm_from_library};
     use std::ptr::null;
-    use jni_simple::{load_jvm_from_library, JNI_CreateJavaVM_with_string_args, JNI_VERSION_1_8};
 
     pub unsafe fn load_it() {
         let java_home = std::env::var("JAVA_HOME").expect("JAVA_HOME not set");
@@ -55,7 +55,5 @@ mod test {
             let nanos = env.CallStaticLongMethodA(sys, nano_time, null());
             assert_ne!(nanos, 0);
         }
-
-
     }
 }

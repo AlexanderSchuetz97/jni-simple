@@ -38,7 +38,6 @@
 mod linking;
 pub use linking::*;
 
-
 extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
@@ -23761,8 +23760,6 @@ impl JNIEnv {
         }
     }
 }
-
-
 
 impl JavaVM {
     /// Helper fn to assist with casting of the internal vtable

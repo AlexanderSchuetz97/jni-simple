@@ -1,11 +1,11 @@
+use crate::{JNI_OK, JNIEnv, JNIInvPtr, JavaVM, JavaVMInitArgs, JavaVMOption, jint};
+use alloc::ffi::CString;
+#[cfg(feature = "loadjvm")]
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use core::ffi::{c_char, c_void};
 use core::ptr::null_mut;
 use sync_ptr::SyncMutPtr;
-use alloc::vec::Vec;
-#[cfg(feature = "loadjvm")]
-use alloc::string::{String, ToString};
-use alloc::ffi::CString;
-use crate::{jint, JNIEnv, JNIInvPtr, JavaVM, JavaVMInitArgs, JavaVMOption, JNI_OK};
 
 #[cfg(not(feature = "dynlink"))]
 use crate::jsize;
@@ -79,7 +79,6 @@ mod std_link {
     /// Static state
     static LINK: std::sync::RwLock<Option<JNIDynamicLink>> = std::sync::RwLock::new(None);
 
-
     /// Writeable exclusive access to the static state
     pub fn link_write() -> std::sync::RwLockWriteGuard<'static, Option<JNIDynamicLink>> {
         LINK.write().unwrap_or_else(|e| {
@@ -99,7 +98,7 @@ mod std_link {
 
 #[cfg(feature = "std")]
 #[cfg(not(feature = "dynlink"))]
-use std_link::{link_write, link_read};
+use std_link::{link_read, link_write};
 
 #[cfg(not(feature = "std"))]
 #[cfg(not(feature = "dynlink"))]
@@ -110,11 +109,11 @@ mod spin_link {
     // If I make spin optional, then selecting default-features=false won't compile unless
     // the user selects the "spin" feature manually.
 
+    use crate::linking::JNIDynamicLink;
     use core::cell::UnsafeCell;
     use core::ops::{Deref, DerefMut};
     use core::sync::atomic::AtomicUsize;
     use core::sync::atomic::Ordering::SeqCst;
-    use crate::linking::JNIDynamicLink;
 
     /// Wrapper for `UnsafeCell` that can be put into static.
     struct UCellWrapper(UnsafeCell<Option<JNIDynamicLink>>);
@@ -138,45 +137,40 @@ mod spin_link {
         type Target = Option<JNIDynamicLink>;
 
         fn deref(&self) -> &Self::Target {
-            unsafe {
-                &*LINK.0.get()
-            }
+            unsafe { &*LINK.0.get() }
         }
     }
 
     impl Drop for SpinLockGuard {
         fn drop(&mut self) {
-            debug_assert!(LOCK.fetch_sub(1, SeqCst) != 0);
+            let r = LOCK.fetch_sub(1, SeqCst);
+            debug_assert!(r != 0);
         }
     }
-
 
     /// Mutable guard to the global state
     pub(super) struct SpinLockGuardMut;
 
     impl Deref for SpinLockGuardMut {
-
         type Target = Option<JNIDynamicLink>;
 
         fn deref(&self) -> &Self::Target {
-            unsafe {
-                &*LINK.0.get()
-            }
+            unsafe { &*LINK.0.get() }
         }
     }
 
     impl DerefMut for SpinLockGuardMut {
         fn deref_mut(&mut self) -> &mut Self::Target {
-            unsafe {&mut *LINK.0.get()}
+            unsafe { &mut *LINK.0.get() }
         }
     }
 
     impl Drop for SpinLockGuardMut {
         fn drop(&mut self) {
-            debug_assert!(LOCK.fetch_sub(USIZE_HALF, SeqCst) >= USIZE_HALF);
+            let r = LOCK.fetch_sub(USIZE_HALF, SeqCst);
+            debug_assert!(r >= USIZE_HALF);
         }
     }
-
 
     /// Writeable exclusive access to the static state
     pub fn link_write() -> SpinLockGuardMut {
@@ -207,10 +201,7 @@ mod spin_link {
 
 #[cfg(not(feature = "std"))]
 #[cfg(not(feature = "dynlink"))]
-use spin_link::{link_write, link_read};
-
-
-
+use spin_link::{link_read, link_write};
 
 ///
 /// Call this function to initialize the dynamic linking to the jvm to use the provided function pointers to
@@ -412,8 +403,6 @@ pub unsafe fn load_jvm_from_java_home_folder(java_home: &str) -> Result<(), Stri
 
     Err(alloc::format!("JAVA_HOME {java_home} is invalid"))
 }
-
-
 
 ///
 /// Returns the created `JavaVMs` in the given `vms` slice.
