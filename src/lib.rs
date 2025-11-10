@@ -36,7 +36,14 @@
 
 /// This module contains all functions that are relevant for dynamic linking of the jvm.
 mod linking;
-pub use linking::*;
+
+pub use linking::{JNI_CreateJavaVM, JNI_CreateJavaVM_with_string_args, JNI_GetCreatedJavaVMs, JNI_GetCreatedJavaVMs_first, init_dynamic_link, is_jvm_loaded};
+
+#[cfg(feature = "loadjvm")]
+pub use linking::load_jvm_from_library;
+
+#[cfg(all(feature = "loadjvm", feature = "std"))]
+pub use linking::{load_jvm_from_java_home, load_jvm_from_java_home_folder};
 
 extern crate alloc;
 #[cfg(feature = "std")]
@@ -892,6 +899,8 @@ impl jtype {
     ///
     /// Helper function to "create" a jtype with a null jobject.
     ///
+    /// This function is guaranteed to fully initialize all unused bits of the union to 0.
+    ///
     #[inline(always)]
     #[must_use]
     pub const fn null() -> Self {
@@ -1007,6 +1016,9 @@ impl jtype {
     }
 
     /// Sets the jtype to a value, this is always safe.
+    ///
+    /// This function is guaranteed to set all bits
+    /// of the union that are not used by the type T to 0.
     #[inline(always)]
     pub fn set<T: Into<Self>>(&mut self, value: T) {
         *self = value.into();
@@ -5372,18 +5384,21 @@ impl JavaVMAttachArgs {
 /// Helper trait that converts rusts various strings into a zero terminated c string for use with a JNI method.
 ///
 /// This trait is implemented for:
-/// &str, String, &String,
-/// `CString`, `CStr`, *const `c_char`,
-/// &`OsStr`, `OsString`, &`OsString`,
-/// &[u8], Vec<u8>,
+/// `&str`, `String`, `&String`,
+/// `CString`, `CStr`, `*const c_char`,
+/// `&OsStr`, `OsString`, `&OsString`,
+/// `&[u8]`, `Vec<u8>`,
 ///
 /// If the String contains the equivalent of a 0 byte then the string stops at the 0 byte ignoring the rest of the string.
 /// Any non Unicode characters in `OsString` and its derivatives will be replaced with the Unicode replacement character by using to `to_str_lossy` fn.
 /// Using non utf-8 binary data in the u8 slices/Vec will not be checked for validity before being converted into a *const `c_char`!
-/// - Doing this on with any call to JNI will result in undefined behavior.
+///
+/// Using invalid inputs on any call to JNI will result in undefined behavior.
 ///
 pub trait UseCString: private::SealedUseCString {}
 
+/// The buffer is copied unless it contains a 0 byte.<br>
+/// Fast case: last element is 0.
 impl UseCString for &str {}
 
 impl private::SealedUseCString for &str {
@@ -5392,6 +5407,9 @@ impl private::SealedUseCString for &str {
     }
 }
 
+/// String is extended using `reserve_exact` if it doesnt contain a 0 element. <br>
+/// Fastest case: last element is 0. <br>
+/// Fast case: buffer has room for one more element.
 impl UseCString for String {}
 
 impl private::SealedUseCString for String {
@@ -5400,6 +5418,8 @@ impl private::SealedUseCString for String {
     }
 }
 
+/// The buffer is copied unless it contains a 0 byte.<br>
+/// Fast case: last element is 0.
 impl UseCString for &String {}
 
 impl private::SealedUseCString for &String {
@@ -5408,6 +5428,7 @@ impl private::SealedUseCString for &String {
     }
 }
 
+/// Passed to JNI as is.
 impl UseCString for CString {}
 
 impl private::SealedUseCString for CString {
@@ -5416,6 +5437,7 @@ impl private::SealedUseCString for CString {
     }
 }
 
+/// Passed to JNI as is.
 impl UseCString for &CString {}
 
 impl private::SealedUseCString for &CString {
@@ -5424,6 +5446,7 @@ impl private::SealedUseCString for &CString {
     }
 }
 
+/// Passed to JNI as is.
 impl UseCString for &CStr {}
 
 impl private::SealedUseCString for &CStr {
@@ -5432,6 +5455,9 @@ impl private::SealedUseCString for &CStr {
     }
 }
 
+/// Passed as is to the JVM
+/// # Safety
+/// Must either be null or point to a 0 terminated string.<br><br>
 impl UseCString for *const i8 {}
 
 impl private::SealedUseCString for *const i8 {
@@ -5466,6 +5492,9 @@ impl private::SealedUseCString for *const i8 {
     }
 }
 
+/// Passed as is to the JVM
+/// # Safety
+/// Must either be null or point to a 0 terminated string.<br><br>
 impl UseCString for *const u8 {}
 
 impl private::SealedUseCString for *const u8 {
@@ -5500,6 +5529,9 @@ impl private::SealedUseCString for *const u8 {
     }
 }
 
+/// Passed as is to the JVM
+/// # Safety
+/// Must either be null or point to a 0 terminated string.<br><br>
 impl UseCString for *mut i8 {}
 
 impl private::SealedUseCString for *mut i8 {
@@ -5508,6 +5540,9 @@ impl private::SealedUseCString for *mut i8 {
     }
 }
 
+/// Passed as is to the JVM
+/// # Safety
+/// Must either be null or point to a 0 terminated string.<br><br>
 impl UseCString for *mut u8 {}
 
 impl private::SealedUseCString for *mut u8 {
@@ -5516,6 +5551,8 @@ impl private::SealedUseCString for *mut u8 {
     }
 }
 
+/// The buffer is copied unless it contains a 0 byte.<br>
+/// Fast case: last element is 0.
 impl UseCString for Cow<'_, str> {}
 
 impl private::SealedUseCString for Cow<'_, str> {
@@ -5524,6 +5561,8 @@ impl private::SealedUseCString for Cow<'_, str> {
     }
 }
 
+/// The buffer is copied unless it contains a 0 byte.<br>
+/// Fast case: last element is 0.
 impl UseCString for &Cow<'_, str> {}
 
 impl private::SealedUseCString for &Cow<'_, str> {
@@ -5532,6 +5571,8 @@ impl private::SealedUseCString for &Cow<'_, str> {
     }
 }
 
+/// The `OsString` is transformed to a String by calling `to_string_lossy`
+/// and then used just like a `Cow<'_, str>` would be used.
 #[cfg(feature = "std")]
 impl UseCString for std::ffi::OsString {}
 
@@ -5542,6 +5583,8 @@ impl private::SealedUseCString for std::ffi::OsString {
     }
 }
 
+/// The `OsString` is transformed to a String by calling `to_string_lossy`
+/// and then used just like a `Cow<'_, str>` would be used.
 #[cfg(feature = "std")]
 impl UseCString for &std::ffi::OsString {}
 
@@ -5552,6 +5595,8 @@ impl private::SealedUseCString for &std::ffi::OsString {
     }
 }
 
+/// The `OsString` is transformed to a String by calling `to_string_lossy`
+/// and then used just like a `Cow<'_, str>` would be used.
 #[cfg(feature = "std")]
 impl UseCString for &std::ffi::OsStr {}
 
@@ -5562,6 +5607,9 @@ impl private::SealedUseCString for &std::ffi::OsStr {
     }
 }
 
+/// Vec is extended using `reserve_exact` if it doesnt contain a 0 element. <br>
+/// Fastest case: last element is 0. <br>
+/// Fast case: buffer has room for one more element.
 impl UseCString for Vec<u8> {}
 
 impl private::SealedUseCString for Vec<u8> {
@@ -5603,6 +5651,8 @@ impl private::SealedUseCString for Vec<u8> {
     }
 }
 
+/// The buffer is copied unless it contains a 0 byte.<br>
+/// Fast case: last element is 0.
 impl UseCString for &Vec<u8> {}
 
 impl private::SealedUseCString for &Vec<u8> {
@@ -5611,6 +5661,8 @@ impl private::SealedUseCString for &Vec<u8> {
     }
 }
 
+/// The buffer is copied unless it contains a 0 byte.<br>
+/// Fast case: last element is 0.
 impl UseCString for &[u8] {}
 
 impl private::SealedUseCString for &[u8] {
@@ -5654,6 +5706,7 @@ impl private::SealedUseCString for &[u8] {
     }
 }
 
+/// Convenience implementation that transforms to a null pointer when used with JNI.
 impl UseCString for () {}
 
 impl private::SealedUseCString for () {
@@ -6138,7 +6191,7 @@ impl JNIEnv {
     /// * `ReleaseStringChars`
     /// * `ReleaseStringUTFChars`
     /// * `ReleaseStringCritical`
-    /// * Release<Type>`ArrayElements`
+    /// * `Release<Type>ArrayElements`
     /// * `ReleasePrimitiveArrayCritical`
     /// * `DeleteLocalRef`
     /// * `DeleteGlobalRef`
@@ -6229,7 +6282,7 @@ impl JNIEnv {
     /// * `ReleaseStringChars`
     /// * `ReleaseStringUTFChars`
     /// * `ReleaseStringCritical`
-    /// * Release<Type>`ArrayElements`
+    /// * `Release<Type>ArrayElements`
     /// * `ReleasePrimitiveArrayCritical`
     /// * `DeleteLocalRef`
     /// * `DeleteGlobalRef`
@@ -7036,7 +7089,7 @@ impl JNIEnv {
     ///     * must not be already garbage collected
     ///
     /// * `constructor` - jmethodID of a constructor
-    ///     * must be a constructor ('<init>' method name)
+    ///     * must be a constructor (`<init>` method name)
     ///     * must be a constructor of `clazz`
     ///
     /// * args - java method parameters
@@ -7290,7 +7343,7 @@ impl JNIEnv {
     ///     * must not be already garbage collected
     ///
     /// * `constructor` - jmethodID of a constructor
-    ///     * must be a constructor ('<init>' method name)
+    ///     * must be a constructor (`<init>` method name)
     ///     * must be a constructor of `clazz`
     ///     * must have 3 args
     ///
@@ -20328,6 +20381,7 @@ impl JNIEnv {
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
+    /// if the `buf.len()` is larger than `jsize::MAX`
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -20476,28 +20530,26 @@ impl JNIEnv {
     }
 
     ///
-    /// Copies data from a Java jbyteArray `array` into a new Vec<i8>
+    /// Copies data from a Java jbyteArray `array` into a new `Vec<jbyte>`
     ///
     /// # Arguments
     /// * `array` - handle to a Java jbyteArray.
     /// * `start` - the index of the first element to copy in the Java jbyteArray
     /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
     ///
-    /// If `len` is `Some` and negative or 0 then an empty Vec<i8> is returned.
-    ///
     /// # Returns:
-    /// a new Vec<i8> that contains the copied data.
+    /// a new `Vec<jbyte>` that contains the copied data.
     ///
+    /// # Returns empty Vec:
+    /// * When the array in fact was empty or len was zero.
+    /// * When this function throws a Java Exception.
     ///
     /// # Throws Java Exception:
-    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
-    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
-    ///
-    /// It is JVM implementation specific what is stored inside the returned Vec<i8> if this function throws an exception
-    /// * Data partially written
-    /// * No data written
-    ///
-    /// It is only guaranteed that this function never returns uninitialized memory.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is larget than `env.GetArrayLength(array)`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` equals env.GetArrayLength(array) and `len` is larger than 0.
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
@@ -20526,12 +20578,19 @@ impl JNIEnv {
     ///
     pub unsafe fn GetByteArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<jbyte> {
         unsafe {
-            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array).saturating_sub(start.max(0)).max(0));
             if let Ok(len) = usize::try_from(len) {
-                let mut data = vec![0i8; len];
+                let mut data = vec![0i8; len]; //We could un-init this, but better play it safe...
                 self.GetByteArrayRegion_into_slice(array, start, data.as_mut_slice());
+                if self.ExceptionCheck() {
+                    return Vec::new();
+                }
                 return data;
             }
+
+            //Negative len
+            let mut sentinel_buffer = [0];
+            self.GetByteArrayRegion(array, start, len.min(-1), sentinel_buffer.as_mut_ptr());
             Vec::new()
         }
     }
@@ -20622,6 +20681,7 @@ impl JNIEnv {
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
+    /// if the `buf.len()` is larger than `jsize::MAX`
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -20715,28 +20775,26 @@ impl JNIEnv {
     }
 
     ///
-    /// Copies data from a Java jcharArray `array` into a new Vec<u16>
+    /// Copies data from a Java jcharArray `array` into a new `Vec<jchar>`
     ///
     /// # Arguments
     /// * `array` - handle to a Java jcharArray.
     /// * `start` - the index of the first element to copy in the Java jcharArray
     /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
     ///
-    /// If `len` is `Some` and negative or 0 then an empty Vec<u16> is returned.
-    ///
     /// # Returns:
-    /// a new Vec<u16> that contains the copied data.
+    /// a new `Vec<jchar>` that contains the copied data.
     ///
+    /// # Returns empty Vec:
+    /// * When the array in fact was empty or len was zero.
+    /// * When this function throws a Java Exception.
     ///
     /// # Throws Java Exception:
-    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
-    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
-    ///
-    /// It is JVM implementation specific what is stored inside the returned Vec<u16> if this function throws an exception
-    /// * Data partially written
-    /// * No data written
-    ///
-    /// It is only guaranteed that this function never returns uninitialized memory.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is larget than `env.GetArrayLength(array)`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` equals env.GetArrayLength(array) and `len` is larger than 0.
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
@@ -20749,7 +20807,7 @@ impl JNIEnv {
     /// Current thread does not hold a critical reference.
     /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
     ///
-    /// `array` must be a valid non-null reference to a jbyteArray.
+    /// `array` must be a valid non-null reference to a jcharArray.
     ///
     /// # Example
     /// ```rust
@@ -20765,12 +20823,19 @@ impl JNIEnv {
     ///
     pub unsafe fn GetCharArrayRegion_as_vec(&self, array: jcharArray, start: jsize, len: Option<jsize>) -> Vec<jchar> {
         unsafe {
-            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array).saturating_sub(start.max(0)).max(0));
             if let Ok(len) = usize::try_from(len) {
-                let mut data = vec![0u16; len];
+                let mut data = vec![0u16; len]; //We could un-init this, but better play it safe...
                 self.GetCharArrayRegion_into_slice(array, start, data.as_mut_slice());
+                if self.ExceptionCheck() {
+                    return Vec::new();
+                }
                 return data;
             }
+
+            //Negative len
+            let mut sentinel_buffer = [0];
+            self.GetCharArrayRegion(array, start, len.min(-1), sentinel_buffer.as_mut_ptr());
             Vec::new()
         }
     }
@@ -20861,6 +20926,7 @@ impl JNIEnv {
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
+    /// if the `buf.len()` is larger than `jsize::MAX`
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -20954,28 +21020,26 @@ impl JNIEnv {
     }
 
     ///
-    /// Copies data from a Java jshortArray `array` into a new Vec<i16>
+    /// Copies data from a Java jshortArray `array` into a new `Vec<jshort>`
     ///
     /// # Arguments
     /// * `array` - handle to a Java jshortArray.
     /// * `start` - the index of the first element to copy in the Java jshortArray
     /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
     ///
-    /// If `len` is `Some` and negative or 0 then an empty Vec<i16> is returned.
-    ///
     /// # Returns:
-    /// a new Vec<i16> that contains the copied data.
+    /// a new `Vec<jshort>` that contains the copied data.
     ///
+    /// # Returns empty Vec:
+    /// * When the array in fact was empty or len was zero.
+    /// * When this function throws a Java Exception.
     ///
     /// # Throws Java Exception:
-    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
-    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
-    ///
-    /// It is JVM implementation specific what is stored inside the returned Vec<i16> if this function throws an exception
-    /// * Data partially written
-    /// * No data written
-    ///
-    /// It is only guaranteed that this function never returns uninitialized memory.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is larget than `env.GetArrayLength(array)`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` equals env.GetArrayLength(array) and `len` is larger than 0.
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
@@ -21004,12 +21068,19 @@ impl JNIEnv {
     ///
     pub unsafe fn GetShortArrayRegion_as_vec(&self, array: jshortArray, start: jsize, len: Option<jsize>) -> Vec<jshort> {
         unsafe {
-            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array).saturating_sub(start.max(0)).max(0));
             if let Ok(len) = usize::try_from(len) {
-                let mut data = vec![0i16; len];
+                let mut data = vec![0i16; len]; //We could un-init this, but better play it safe...
                 self.GetShortArrayRegion_into_slice(array, start, data.as_mut_slice());
+                if self.ExceptionCheck() {
+                    return Vec::new();
+                }
                 return data;
             }
+
+            //Negative len
+            let mut sentinel_buffer = [0];
+            self.GetShortArrayRegion(array, start, len.min(-1), sentinel_buffer.as_mut_ptr());
             Vec::new()
         }
     }
@@ -21100,6 +21171,7 @@ impl JNIEnv {
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
+    /// if the `buf.len()` is larger than `jsize::MAX`
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -21193,28 +21265,26 @@ impl JNIEnv {
     }
 
     ///
-    /// Copies data from a Java jintArray `array` into a new Vec<i32>
+    /// Copies data from a Java jintArray `array` into a new `Vec<jint>`
     ///
     /// # Arguments
     /// * `array` - handle to a Java jintArray.
     /// * `start` - the index of the first element to copy in the Java jintArray
     /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
     ///
-    /// If `len` is `Some` and negative or 0 then an empty Vec<i16> is returned.
-    ///
     /// # Returns:
-    /// a new Vec<i32> that contains the copied data.
+    /// a new `Vec<jint>` that contains the copied data.
     ///
+    /// # Returns empty Vec:
+    /// * When the array in fact was empty or len was zero.
+    /// * When this function throws a Java Exception.
     ///
     /// # Throws Java Exception:
-    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
-    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
-    ///
-    /// It is JVM implementation specific what is stored inside the returned Vec<i32> if this function throws an exception
-    /// * Data partially written
-    /// * No data written
-    ///
-    /// It is only guaranteed that this function never returns uninitialized memory.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is larget than `env.GetArrayLength(array)`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` equals env.GetArrayLength(array) and `len` is larger than 0.
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
@@ -21243,12 +21313,19 @@ impl JNIEnv {
     ///
     pub unsafe fn GetIntArrayRegion_as_vec(&self, array: jintArray, start: jsize, len: Option<jsize>) -> Vec<jint> {
         unsafe {
-            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array).saturating_sub(start.max(0)).max(0));
             if let Ok(len) = usize::try_from(len) {
-                let mut data = vec![0i32; len];
+                let mut data = vec![0i32; len]; //We could un-init this, but better play it safe...
                 self.GetIntArrayRegion_into_slice(array, start, data.as_mut_slice());
+                if self.ExceptionCheck() {
+                    return Vec::new();
+                }
                 return data;
             }
+
+            //Negative len
+            let mut sentinel_buffer = [0];
+            self.GetIntArrayRegion(array, start, len.min(-1), sentinel_buffer.as_mut_ptr());
             Vec::new()
         }
     }
@@ -21339,6 +21416,7 @@ impl JNIEnv {
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
+    /// if the `buf.len()` is larger than `jsize::MAX`
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -21432,28 +21510,26 @@ impl JNIEnv {
     }
 
     ///
-    /// Copies data from a Java jlongArray `array` into a new Vec<jlong>
+    /// Copies data from a Java jlongArray `array` into a new `Vec<jlong>`
     ///
     /// # Arguments
     /// * `array` - handle to a Java jlongArray.
     /// * `start` - the index of the first element to copy in the Java jlongArray
     /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
     ///
-    /// If `len` is `Some` and negative or 0 then an empty Vec<i64> is returned.
-    ///
     /// # Returns:
-    /// a new Vec<i64> that contains the copied data.
+    /// a new `Vec<jlong>` that contains the copied data.
     ///
+    /// # Returns empty Vec:
+    /// * When the array in fact was empty or len was zero.
+    /// * When this function throws a Java Exception.
     ///
     /// # Throws Java Exception:
-    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
-    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
-    ///
-    /// It is JVM implementation specific what is stored inside the returned Vec<i64> if this function throws an exception
-    /// * Data partially written
-    /// * No data written
-    ///
-    /// It is only guaranteed that this function never returns uninitialized memory.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is larget than `env.GetArrayLength(array)`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` equals env.GetArrayLength(array) and `len` is larger than 0.
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
@@ -21482,12 +21558,19 @@ impl JNIEnv {
     ///
     pub unsafe fn GetLongArrayRegion_as_vec(&self, array: jlongArray, start: jsize, len: Option<jsize>) -> Vec<jlong> {
         unsafe {
-            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array).saturating_sub(start.max(0)).max(0));
             if let Ok(len) = usize::try_from(len) {
-                let mut data = vec![0i64; len];
+                let mut data = vec![0i64; len]; //We could un-init this, but better play it safe...
                 self.GetLongArrayRegion_into_slice(array, start, data.as_mut_slice());
+                if self.ExceptionCheck() {
+                    return Vec::new();
+                }
                 return data;
             }
+
+            //Negative len
+            let mut sentinel_buffer = [0];
+            self.GetLongArrayRegion(array, start, len.min(-1), sentinel_buffer.as_mut_ptr());
             Vec::new()
         }
     }
@@ -21578,6 +21661,7 @@ impl JNIEnv {
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
+    /// if the `buf.len()` is larger than `jsize::MAX`
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -21671,28 +21755,26 @@ impl JNIEnv {
     }
 
     ///
-    /// Copies data from a Java jfloatArray `array` into a new Vec<f32>
+    /// Copies data from a Java jfloatArray `array` into a new `Vec<jfloat>`
     ///
     /// # Arguments
     /// * `array` - handle to a Java jfloatArray.
     /// * `start` - the index of the first element to copy in the Java jfloatArray
     /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
     ///
-    /// If `len` is `Some` and negative or 0 then an empty Vec<f32> is returned.
-    ///
     /// # Returns:
-    /// a new Vec<f32> that contains the copied data.
+    /// a new `Vec<jfloat>` that contains the copied data.
     ///
+    /// # Returns empty Vec:
+    /// * When the array in fact was empty or len was zero.
+    /// * When this function throws a Java Exception.
     ///
     /// # Throws Java Exception:
-    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
-    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
-    ///
-    /// It is JVM implementation specific what is stored inside the returned Vec<f32> if this function throws an exception
-    /// * Data partially written
-    /// * No data written
-    ///
-    /// It is only guaranteed that this function never returns uninitialized memory.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is larget than `env.GetArrayLength(array)`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` equals env.GetArrayLength(array) and `len` is larger than 0.
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
@@ -21711,7 +21793,7 @@ impl JNIEnv {
     /// ```rust
     /// use jni_simple::{*};
     ///
-    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jfloatArray) -> Vec<f32> {
+    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jfloatArray) -> Vec<jfloat> {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -21721,12 +21803,19 @@ impl JNIEnv {
     ///
     pub unsafe fn GetFloatArrayRegion_as_vec(&self, array: jfloatArray, start: jsize, len: Option<jsize>) -> Vec<jfloat> {
         unsafe {
-            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array).saturating_sub(start.max(0)).max(0));
             if let Ok(len) = usize::try_from(len) {
-                let mut data = vec![0f32; len];
+                let mut data = vec![jfloat::default(); len]; //We could un-init this, but better play it safe...
                 self.GetFloatArrayRegion_into_slice(array, start, data.as_mut_slice());
+                if self.ExceptionCheck() {
+                    return Vec::new();
+                }
                 return data;
             }
+
+            //Negative len
+            let mut sentinel_buffer = [jfloat::default()];
+            self.GetFloatArrayRegion(array, start, len.min(-1), sentinel_buffer.as_mut_ptr());
             Vec::new()
         }
     }
@@ -21817,6 +21906,7 @@ impl JNIEnv {
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
+    /// if the `buf.len()` is larger than `jsize::MAX`
     ///
     /// # Safety
     /// Current thread must not be detached from JNI.
@@ -21910,28 +22000,26 @@ impl JNIEnv {
     }
 
     ///
-    /// Copies data from a Java jdoubleArray `array` into a new Vec<f64>
+    /// Copies data from a Java jdoubleArray `array` into a new `Vec<jdouble>`
     ///
     /// # Arguments
     /// * `array` - handle to a Java jdoubleArray.
     /// * `start` - the index of the first element to copy in the Java jdoubleArray
     /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
     ///
-    /// If `len` is `Some` and negative or 0 then an empty Vec<f64> is returned.
-    ///
     /// # Returns:
-    /// a new Vec<f64> that contains the copied data.
+    /// a new `Vec<jdouble>` that contains the copied data.
     ///
+    /// # Returns empty Vec:
+    /// * When the array in fact was empty or len was zero.
+    /// * When this function throws a Java Exception.
     ///
     /// # Throws Java Exception:
-    /// * `ArrayIndexOutOfBoundsException` - if `len` was Some and is larger than the amount of remaining elements in the array.
-    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or `start` is >= env.GetArrayLength(array)
-    ///
-    /// It is JVM implementation specific what is stored inside the returned Vec<f64> if this function throws an exception
-    /// * Data partially written
-    /// * No data written
-    ///
-    /// It is only guaranteed that this function never returns uninitialized memory.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is larget than `env.GetArrayLength(array)`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` equals env.GetArrayLength(array) and `len` is larger than 0.
     ///
     /// # Panics
     /// if asserts feature is enabled and UB was detected
@@ -21960,12 +22048,19 @@ impl JNIEnv {
     ///
     pub unsafe fn GetDoubleArrayRegion_as_vec(&self, array: jdoubleArray, start: jsize, len: Option<jsize>) -> Vec<jdouble> {
         unsafe {
-            let len = len.unwrap_or_else(|| self.GetArrayLength(array) - start);
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array).saturating_sub(start.max(0)).max(0));
             if let Ok(len) = usize::try_from(len) {
-                let mut data = vec![0f64; len];
+                let mut data = vec![jdouble::default(); len]; //We could un-init this, but better play it safe...
                 self.GetDoubleArrayRegion_into_slice(array, start, data.as_mut_slice());
+                if self.ExceptionCheck() {
+                    return Vec::new();
+                }
                 return data;
             }
+
+            //Negative len
+            let mut sentinel_buffer = [jdouble::default()];
+            self.GetDoubleArrayRegion(array, start, len.min(-1), sentinel_buffer.as_mut_ptr());
             Vec::new()
         }
     }

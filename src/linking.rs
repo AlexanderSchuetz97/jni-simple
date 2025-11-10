@@ -1,11 +1,20 @@
 use crate::{JNI_OK, JNIEnv, JNIInvPtr, JavaVM, JavaVMInitArgs, JavaVMOption, jint};
+
 use alloc::ffi::CString;
-#[cfg(feature = "loadjvm")]
-use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::ffi::{c_char, c_void};
 use core::ptr::null_mut;
 use sync_ptr::SyncMutPtr;
+
+#[cfg(feature = "loadjvm")]
+use alloc::string::{String, ToString};
+#[cfg(feature = "loadjvm")]
+use core::error::Error;
+#[cfg(feature = "loadjvm")]
+use alloc::boxed::Box;
+#[cfg(feature = "loadjvm")]
+use core::fmt::{Display, Formatter};
+
 
 #[cfg(not(feature = "dynlink"))]
 use crate::jsize;
@@ -37,7 +46,7 @@ type JNI_GetCreatedJavaVMs = unsafe extern "C" fn(*mut JNIInvPtr, jsize, *mut js
 /// Data holder for the raw JVM function pointers.
 #[cfg(not(feature = "dynlink"))]
 #[derive(Debug, Copy, Clone)]
-struct JNIDynamicLink {
+pub struct JNIDynamicLink {
     /// raw function ptr to `JNI_CreateJavaVM`
     JNI_CreateJavaVM: SyncFnPtr<JNI_CreateJavaVM>,
     /// raw function ptr to `JNI_GetCreatedJavaVMs`
@@ -47,6 +56,9 @@ struct JNIDynamicLink {
 #[cfg(not(feature = "dynlink"))]
 impl JNIDynamicLink {
     /// Constructor with the two pointers
+    /// # Panics
+    /// If any of the pointers are null.
+    #[must_use]
     pub fn new(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs: *const c_void) -> Self {
         assert!(!JNI_GetCreatedJavaVMs.is_null(), "JNI_GetCreatedJavaVMs is null");
         assert!(!JNI_CreateJavaVM.is_null(), "JNI_CreateJavaVM is null");
@@ -60,11 +72,13 @@ impl JNIDynamicLink {
     }
 
     /// Get the `JNI_GetCreatedJavaVMs` function pointer
+    #[must_use]
     pub fn JNI_CreateJavaVM(&self) -> JNI_CreateJavaVM {
         self.JNI_CreateJavaVM.unwrap()
     }
 
     /// Get the `JNI_GetCreatedJavaVMs` function pointer
+    #[must_use]
     pub fn JNI_GetCreatedJavaVMs(&self) -> JNI_GetCreatedJavaVMs {
         self.JNI_GetCreatedJavaVMs.unwrap()
     }
@@ -98,7 +112,7 @@ mod std_link {
 
 #[cfg(feature = "std")]
 #[cfg(not(feature = "dynlink"))]
-use std_link::{link_read, link_write};
+pub use std_link::{link_read, link_write};
 
 #[cfg(not(feature = "std"))]
 #[cfg(not(feature = "dynlink"))]
@@ -132,7 +146,7 @@ mod spin_link {
     const USIZE_HALF: usize = usize::MAX / 2;
 
     /// Immutable guard to the global state
-    pub(super) struct SpinLockGuard;
+    pub struct SpinLockGuard;
     impl Deref for SpinLockGuard {
         type Target = Option<JNIDynamicLink>;
 
@@ -149,7 +163,7 @@ mod spin_link {
     }
 
     /// Mutable guard to the global state
-    pub(super) struct SpinLockGuardMut;
+    pub struct SpinLockGuardMut;
 
     impl Deref for SpinLockGuardMut {
         type Target = Option<JNIDynamicLink>;
@@ -201,14 +215,17 @@ mod spin_link {
 
 #[cfg(not(feature = "std"))]
 #[cfg(not(feature = "dynlink"))]
-use spin_link::{link_read, link_write};
+pub use spin_link::{link_read, link_write};
 
 ///
 /// Call this function to initialize the dynamic linking to the jvm to use the provided function pointers to
 /// create the jvm.
 ///
-/// If this function is called more than once then it is a noop, since it is not possible to create
+/// If this function is called more than once, then it is a noop, since it is not possible to create
 /// more than one jvm per process.
+///
+/// # Returns
+/// true if the call initialized the dynamic link, false if it was already initialized.
 ///
 #[cfg(not(feature = "dynlink"))]
 #[must_use]
@@ -226,8 +243,11 @@ pub fn init_dynamic_link(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs:
 /// Call this function to initialize the dynamic linking to the jvm to use the provided function pointers to
 /// create the jvm.
 ///
-/// If this function is called more than once then it is a noop, since it is not possible to create
+/// If this function is called more than once, then it is a noop, since it is not possible to create
 /// more than one jvm per process.
+///
+/// # Returns
+/// true if the call initialized the dynamic link, false if it was already initialized.
 ///
 #[cfg(feature = "dynlink")]
 #[allow(clippy::missing_const_for_fn)]
@@ -264,6 +284,67 @@ pub fn is_jvm_loaded() -> bool {
     true
 }
 
+#[cfg(feature = "loadjvm")]
+#[non_exhaustive]
+#[derive(Debug)]
+pub enum LoadFromLibraryError {
+    /// The dynamic linker has already loaded the jvm.
+    AlreadyLoaded,
+    /// The dynamic linker failed to load the jvm shared object.
+    LoadingSharedObjectFailed {
+        /// relative path to the shared object.
+        path: String,
+        /// platform-specific error
+        error: Box<dyn Error>
+    },
+    /// The dynamic linker could not find the `JNI_CreateJavaVM` symbol in the shared object.
+    JNICreateJavaVmNotFound {
+        /// relative path to the shared object.
+        path: String,
+        /// platform-specific error
+        error: Box<dyn Error>
+    },
+    /// The dynamic linker could not find the `JNI_GetCreatedJavaVMs` symbol in the shared object.
+    JNIGetCreatedJavaVMsNotFound {
+        /// relative path to the shared object.
+        path: String,
+        /// platform-specific error
+        error: Box<dyn Error>
+    },
+}
+
+#[cfg(feature = "loadjvm")]
+impl Display for LoadFromLibraryError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::AlreadyLoaded => f.write_str("The dynamic linker has already loaded the jvm."),
+            Self::LoadingSharedObjectFailed { .. } => f.write_str("The dynamic linker failed to load the jvm shared object."),
+            Self::JNICreateJavaVmNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_CreateJavaVM symbol in the shared object."),
+            Self::JNIGetCreatedJavaVMsNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_GetCreatedJavaVMs symbol in the shared object."),
+        }
+    }
+}
+
+#[cfg(feature = "loadjvm")]
+impl Error for LoadFromLibraryError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::AlreadyLoaded => None,
+            Self::LoadingSharedObjectFailed { error, .. } | Self::JNICreateJavaVmNotFound { error, .. } | Self::JNIGetCreatedJavaVMsNotFound { error, .. } => Some(&**error),
+        }
+    }
+}
+
+/// Provided for backwards compile-compat with ? operator,
+/// all errors used to be just Strings,
+/// which was perhaps not the wisest choice.
+#[cfg(feature = "loadjvm")]
+impl From<LoadFromLibraryError> for String {
+    fn from(value: LoadFromLibraryError) -> Self {
+        alloc::format!("{value}")
+    }
+}
+
 ///
 /// Convenience method to load the jvm from a path to libjvm.so or jvm.dll.
 ///
@@ -279,34 +360,55 @@ pub fn is_jvm_loaded() -> bool {
 ///
 #[cfg(feature = "loadjvm")]
 #[cfg(not(feature = "dynlink"))]
-pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
+pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), LoadFromLibraryError> {
     let mut guard = link_write();
     if guard.is_some() {
         drop(guard);
-        return Err("JVM already loaded".to_string());
+        return Err(LoadFromLibraryError::AlreadyLoaded);
     }
 
     unsafe {
-        let lib = libloading::Library::new(path).map_err(|e| alloc::format!("Failed to load jvm from {path} reason: {e}"))?;
+        let lib = libloading::Library::new(path).map_err(|e| LoadFromLibraryError::LoadingSharedObjectFailed {
+            path: path.to_string(),
+            error: Box::new(e),
+        })?;
 
         let JNI_CreateJavaVM_ptr = lib
             .get::<JNI_CreateJavaVM>(b"JNI_CreateJavaVM\0")
-            .map_err(|e| alloc::format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> {e}"))?
+            .map_err(|e| LoadFromLibraryError::JNICreateJavaVmNotFound {
+                path: path.to_string(),
+                error: Box::new(e),
+            })?
             .try_as_raw_ptr()
-            .ok_or_else(|| alloc::format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> failed to get raw ptr"))?;
+            .ok_or_else(|| LoadFromLibraryError::JNICreateJavaVmNotFound {
+                path: path.to_string(),
+                error: Box::new(libloading::Error::DlSymUnknown),
+            })?;
 
         if JNI_CreateJavaVM_ptr.is_null() {
-            return Err(alloc::format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM not found"));
+            return Err(LoadFromLibraryError::JNICreateJavaVmNotFound {
+                path: path.to_string(),
+                error: Box::new(libloading::Error::DlSymUnknown),
+            });
         }
 
         let JNI_GetCreatedJavaVMs_ptr = lib
             .get::<JNI_GetCreatedJavaVMs>(b"JNI_GetCreatedJavaVMs\0")
-            .map_err(|e| alloc::format!("Failed to load jvm from {path} reason: JNI_GetCreatedJavaVMs -> {e}"))?
+            .map_err(|e| LoadFromLibraryError::JNICreateJavaVmNotFound {
+                path: path.to_string(),
+                error: Box::new(e),
+            })?
             .try_as_raw_ptr()
-            .ok_or_else(|| alloc::format!("Failed to load jvm from {path} reason: JNI_CreateJavaVM -> failed to get raw ptr"))?;
+            .ok_or_else(|| LoadFromLibraryError::JNIGetCreatedJavaVMsNotFound {
+                path: path.to_string(),
+                error: Box::new(libloading::Error::DlSymUnknown),
+            })?;
 
         if JNI_GetCreatedJavaVMs_ptr.is_null() {
-            return Err(alloc::format!("Failed to load jvm from {path} reason: JNI_GetCreatedJavaVMs not found"));
+            return Err(LoadFromLibraryError::JNIGetCreatedJavaVMsNotFound {
+                path: path.to_string(),
+                error: Box::new(libloading::Error::DlSymUnknown),
+            });
         }
 
         //We are good to go!
@@ -333,8 +435,112 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), String> {
 ///
 #[cfg(feature = "loadjvm")]
 #[cfg(feature = "dynlink")]
-pub unsafe fn load_jvm_from_library(_: &str) -> Result<(), String> {
-    Err("JVM already loaded".to_string())
+pub unsafe fn load_jvm_from_library(_: &str) -> Result<(), LoadFromLibraryError> {
+    Err(LoadFromLibraryError::AlreadyLoaded)
+}
+
+#[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
+#[non_exhaustive]
+#[derive(Debug)]
+pub enum LoadFromJavaHomeError {
+    /// The dynamic linker has already loaded the jvm.
+    AlreadyLoaded,
+    /// The dynamic linker failed to load the jvm shared object.
+    LoadingSharedObjectFailed {
+        /// relative path to the shared object.
+        path: String,
+        /// platform-specific error
+        error: Box<dyn Error>
+    },
+    /// The dynamic linker could not find the `JNI_CreateJavaVM` symbol in the shared object.
+    JNICreateJavaVmNotFound {
+        /// relative path to the shared object.
+        path: String,
+        /// platform-specific error
+        error: Box<dyn Error>
+    },
+    /// The dynamic linker could not find the `JNI_GetCreatedJavaVMs` symbol in the shared object.
+    JNIGetCreatedJavaVMsNotFound {
+        /// relative path to the shared object.
+        path: String,
+        /// platform-specific error
+        error: Box<dyn Error>
+    },
+    /// The layout of the java installation was not recognized.
+    UnknownJavaHomeLayout,
+    /// I/O Error while determining the layout of the java installation.
+    IOError(std::io::Error),
+    /// The environment variable `JAVA_HOME` is invalid
+    EnvironmentVariableError(std::env::VarError),
+}
+
+#[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
+impl From<LoadFromJavaHomeFolderError> for LoadFromJavaHomeError {
+    fn from(value: LoadFromJavaHomeFolderError) -> Self {
+        match value {
+            LoadFromJavaHomeFolderError::AlreadyLoaded => Self::AlreadyLoaded,
+            LoadFromJavaHomeFolderError::LoadingSharedObjectFailed { path, error } => Self::LoadingSharedObjectFailed { path, error },
+            LoadFromJavaHomeFolderError::JNICreateJavaVmNotFound { path, error } => Self::JNICreateJavaVmNotFound { path, error },
+            LoadFromJavaHomeFolderError::JNIGetCreatedJavaVMsNotFound { path, error } => Self::JNIGetCreatedJavaVMsNotFound { path, error },
+            LoadFromJavaHomeFolderError::UnknownJavaHomeLayout => Self::UnknownJavaHomeLayout,
+            LoadFromJavaHomeFolderError::IOError(e) => Self::IOError(e),
+        }
+    }
+}
+
+#[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
+impl From<LoadFromLibraryError> for LoadFromJavaHomeError {
+    fn from(value: LoadFromLibraryError) -> Self {
+        match value {
+            LoadFromLibraryError::AlreadyLoaded => Self::AlreadyLoaded,
+            LoadFromLibraryError::LoadingSharedObjectFailed { path, error } => Self::LoadingSharedObjectFailed { path, error },
+            LoadFromLibraryError::JNICreateJavaVmNotFound { path, error } => Self::JNICreateJavaVmNotFound { path, error },
+            LoadFromLibraryError::JNIGetCreatedJavaVMsNotFound { path, error } => Self::JNIGetCreatedJavaVMsNotFound { path, error },
+        }
+    }
+}
+
+#[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
+impl Display for LoadFromJavaHomeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::AlreadyLoaded => f.write_str("The dynamic linker has already loaded the jvm."),
+            Self::LoadingSharedObjectFailed { .. } => f.write_str("The dynamic linker failed to load the jvm shared object."),
+            Self::JNICreateJavaVmNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_CreateJavaVM symbol in the in the shared object."),
+            Self::JNIGetCreatedJavaVMsNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_GetCreatedJavaVMs symbol in the shared object."),
+            Self::UnknownJavaHomeLayout => f.write_str("The layout of the java installation was not recognized."),
+            Self::IOError(_) => f.write_str("I/O Error while determining the layout of the java installation."),
+            Self::EnvironmentVariableError(_) => f.write_str("The environment variable JAVA_HOME is invalid"),
+        }
+    }
+}
+
+#[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
+impl Error for LoadFromJavaHomeError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::AlreadyLoaded | Self::UnknownJavaHomeLayout => None,
+            Self::LoadingSharedObjectFailed { error, .. } | Self::JNICreateJavaVmNotFound { error, .. } | Self::JNIGetCreatedJavaVMsNotFound { error, .. } => Some(&**error),
+            Self::IOError(e) => Some(e),
+            Self::EnvironmentVariableError(e) => Some(e),
+        }
+    }
+}
+
+/// Provided for backwards compile-compat with ? operator,
+/// all errors used to be just Strings,
+/// which was perhaps not the wisest choice.
+#[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
+impl From<LoadFromJavaHomeError> for String {
+    fn from(value: LoadFromJavaHomeError) -> Self {
+        alloc::format!("{value}")
+    }
 }
 
 /// Convenience method to load the jvm from the `JAVA_HOME` environment variable
@@ -350,9 +556,87 @@ pub unsafe fn load_jvm_from_library(_: &str) -> Result<(), String> {
 ///
 #[cfg(feature = "loadjvm")]
 #[cfg(feature = "std")]
-pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
-    let java_home = std::env::var("JAVA_HOME").map_err(|_| "JAVA_HOME is not set or invalid".to_string())?;
-    unsafe { load_jvm_from_java_home_folder(&java_home) }
+pub unsafe fn load_jvm_from_java_home() -> Result<(), LoadFromJavaHomeError> {
+    let java_home = std::env::var("JAVA_HOME").map_err(LoadFromJavaHomeError::EnvironmentVariableError)?;
+
+    unsafe {
+        load_jvm_from_java_home_folder(&java_home)?;
+    }
+    Ok(())
+}
+
+///TODO DOCU
+#[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
+#[non_exhaustive]
+#[derive(Debug)]
+pub enum LoadFromJavaHomeFolderError {
+    /// The dynamic linker has already loaded the jvm.
+    AlreadyLoaded,
+    /// The dynamic linker failed to load the jvm shared object.
+    LoadingSharedObjectFailed {
+        /// relative path to the shared object.
+        path: String,
+        /// platform-specific error
+        error: Box<dyn Error>
+    },
+    /// The dynamic linker could not find the `JNI_CreateJavaVM` symbol in the shared object.
+    JNICreateJavaVmNotFound {
+        /// relative path to the shared object.
+        path: String,
+        /// platform-specific error
+        error: Box<dyn Error>
+    },
+    /// The dynamic linker could not find the `JNI_GetCreatedJavaVMs` symbol in the shared object.
+    JNIGetCreatedJavaVMsNotFound {
+        /// relative path to the shared object.
+        path: String,
+        /// platform-specific error
+        error: Box<dyn Error>
+    },
+    /// The layout of the java installation was not recognized.
+    UnknownJavaHomeLayout,
+    /// I/O Error while determining the layout of the java installation.
+    IOError(std::io::Error),
+}
+
+#[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
+impl Display for LoadFromJavaHomeFolderError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::AlreadyLoaded => f.write_str("The dynamic linker has already loaded the jvm."),
+            Self::LoadingSharedObjectFailed { .. } => f.write_str("The dynamic linker failed to load the jvm shared object."),
+            Self::JNICreateJavaVmNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_CreateJavaVM symbol in the in the shared object."),
+            Self::JNIGetCreatedJavaVMsNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_GetCreatedJavaVMs symbol in the shared object."),
+            Self::UnknownJavaHomeLayout => f.write_str("The layout of the java installation was not recognized."),
+            Self::IOError(_) => f.write_str("I/O Error while determining the layout of the java installation."),
+        }
+    }
+}
+
+#[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
+impl From<LoadFromLibraryError> for LoadFromJavaHomeFolderError {
+    fn from(value: LoadFromLibraryError) -> Self {
+        match value {
+            LoadFromLibraryError::AlreadyLoaded => Self::AlreadyLoaded,
+            LoadFromLibraryError::LoadingSharedObjectFailed { path, error } => Self::LoadingSharedObjectFailed { path, error },
+            LoadFromLibraryError::JNICreateJavaVmNotFound { path, error } => Self::JNICreateJavaVmNotFound { path, error },
+            LoadFromLibraryError::JNIGetCreatedJavaVMsNotFound { path, error } => Self::JNIGetCreatedJavaVMsNotFound { path, error },
+        }
+    }
+}
+
+/// Provided for backwards compile-compat with ? operator,
+/// all errors used to be just Strings,
+/// which was perhaps not the wisest choice.
+#[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
+impl From<LoadFromJavaHomeFolderError> for String {
+    fn from(value: LoadFromJavaHomeFolderError) -> Self {
+        alloc::format!("{value}")
+    }
 }
 
 /// Convenience method to load the jvm from a given path to a java installation.
@@ -366,24 +650,37 @@ pub unsafe fn load_jvm_from_java_home() -> Result<(), String> {
 /// The Safety of this fn depends on the shared object that will be loaded as a result of this call.
 #[cfg(feature = "loadjvm")]
 #[cfg(feature = "std")]
-pub unsafe fn load_jvm_from_java_home_folder(java_home: &str) -> Result<(), String> {
+pub unsafe fn load_jvm_from_java_home_folder(java_home: &str) -> Result<(), LoadFromJavaHomeFolderError> {
     ///All (most) jvm layouts that I am aware of on windows+linux+macos.
-    const COMMON_LIBJVM_PATHS: &[&[&str]] = &[
-        &["lib", "server", "libjvm.so"],                   //LINUX JAVA 11+
-        &["jre", "lib", "amd64", "server", "libjvm.so"],   //LINUX JDK JAVA <= 8 amd64
-        &["lib", "amd64", "server", "libjvm.so"],          //LINUX JRE JAVA <= 8 amd64
-        &["jre", "lib", "aarch32", "server", "libjvm.so"], //LINUX JDK JAVA <= 8 arm 32
-        &["lib", "aarch32", "server", "libjvm.so"],        //LINUX JRE JAVA <= 8 arm 32
-        &["jre", "lib", "aarch64", "server", "libjvm.so"], //LINUX JDK JAVA <= 8 arm 64
-        &["lib", "aarch64", "server", "libjvm.so"],        //LINUX JRE JAVA <= 8 arm 64
+    static COMMON_LIBJVM_PATHS: &[&[&str]] = &[
+        #[cfg(all(unix, not(target_vendor = "apple")))]
+        &["lib", "server", "libjvm.so"], //UNIX JAVA 11+
+        #[cfg(all(unix, not(target_vendor = "apple")))]
+        &["jre", "lib", "amd64", "server", "libjvm.so"], //UNIX JDK JAVA <= 8 amd64
+        #[cfg(all(unix, not(target_vendor = "apple")))]
+        &["lib", "amd64", "server", "libjvm.so"], //UNIX JRE JAVA <= 8 amd64
+        #[cfg(all(unix, not(target_vendor = "apple")))]
+        &["jre", "lib", "aarch32", "server", "libjvm.so"], //UNIX JDK JAVA <= 8 arm 32
+        #[cfg(all(unix, not(target_vendor = "apple")))]
+        &["lib", "aarch32", "server", "libjvm.so"], //UNIX JRE JAVA <= 8 arm 32
+        #[cfg(all(unix, not(target_vendor = "apple")))]
+        &["jre", "lib", "aarch64", "server", "libjvm.so"], //UNIX JDK JAVA <= 8 arm 64
+        #[cfg(all(unix, not(target_vendor = "apple")))]
+        &["lib", "aarch64", "server", "libjvm.so"], //UNIX JRE JAVA <= 8 arm 64
         //
+        #[cfg(windows)]
         &["jre", "bin", "server", "jvm.dll"], //WINDOWS JDK <= 8
-        &["bin", "server", "jvm.dll"],        //WINDOWS JRE <= 8 AND WINDOWS JDK/JRE 11+
+        #[cfg(windows)]
+        &["bin", "server", "jvm.dll"], //WINDOWS JRE <= 8 AND WINDOWS JDK/JRE 11+
         //
-        &["jre", "lib", "server", "libjvm.dylib"],                     //MACOS Java <= 8
+        #[cfg(target_vendor = "apple")]
+        &["jre", "lib", "server", "libjvm.dylib"], //MACOS Java <= 8
+        #[cfg(target_vendor = "apple")]
         &["Contents", "Home", "jre", "lib", "server", "libjvm.dylib"], //MACOS Java <= 8
-        &["lib", "server", "libjvm.dylib"],                            //MACOS Java 11+
-        &["Contents", "Home", "lib", "server", "libjvm.dylib"],        //MACOS Java 11+
+        #[cfg(target_vendor = "apple")]
+        &["lib", "server", "libjvm.dylib"], //MACOS Java 11+
+        #[cfg(target_vendor = "apple")]
+        &["Contents", "Home", "lib", "server", "libjvm.dylib"], //MACOS Java 11+
     ];
 
     for parts in COMMON_LIBJVM_PATHS {
@@ -392,16 +689,20 @@ pub unsafe fn load_jvm_from_java_home_folder(java_home: &str) -> Result<(), Stri
             buf.push(part);
         }
 
-        if buf.try_exists().unwrap_or(false) {
-            let full_path = buf.to_str().ok_or_else(|| alloc::format!("JAVA_HOME {java_home} is invalid"))?;
+        if buf.try_exists().map_err(LoadFromJavaHomeFolderError::IOError)? {
+            let full_path = buf
+                .to_str()
+                .ok_or_else(|| LoadFromJavaHomeFolderError::IOError(std::io::Error::other("Failed to concatenate JAVA_HOME library path")))?;
 
             unsafe {
-                return load_jvm_from_library(full_path);
+                load_jvm_from_library(full_path)?;
             }
+
+            return Ok(());
         }
     }
 
-    Err(alloc::format!("JAVA_HOME {java_home} is invalid"))
+    Err(LoadFromJavaHomeFolderError::UnknownJavaHomeLayout)
 }
 
 ///
