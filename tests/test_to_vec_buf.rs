@@ -1,4 +1,5 @@
 #[cfg(feature = "loadjvm")]
+#[cfg(feature = "std")]
 mod test {
     use jni_simple::{JNI_CreateJavaVM_with_string_args, JNI_VERSION_1_8, JNIEnv, jbyte, jchar, jdouble, jfloat, jint, jlong, jobject, jshort, jsize, load_jvm_from_java_home};
     use std::fmt::Debug;
