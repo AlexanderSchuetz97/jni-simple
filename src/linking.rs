@@ -7,14 +7,13 @@ use core::ptr::null_mut;
 use sync_ptr::SyncMutPtr;
 
 #[cfg(feature = "loadjvm")]
+use alloc::boxed::Box;
+#[cfg(feature = "loadjvm")]
 use alloc::string::{String, ToString};
 #[cfg(feature = "loadjvm")]
 use core::error::Error;
 #[cfg(feature = "loadjvm")]
-use alloc::boxed::Box;
-#[cfg(feature = "loadjvm")]
 use core::fmt::{Display, Formatter};
-
 
 #[cfg(not(feature = "dynlink"))]
 use crate::jsize;
@@ -295,21 +294,21 @@ pub enum LoadFromLibraryError {
         /// relative path to the shared object.
         path: String,
         /// platform-specific error
-        error: Box<dyn Error>
+        error: Box<dyn Error>,
     },
     /// The dynamic linker could not find the `JNI_CreateJavaVM` symbol in the shared object.
     JNICreateJavaVmNotFound {
         /// relative path to the shared object.
         path: String,
         /// platform-specific error
-        error: Box<dyn Error>
+        error: Box<dyn Error>,
     },
     /// The dynamic linker could not find the `JNI_GetCreatedJavaVMs` symbol in the shared object.
     JNIGetCreatedJavaVMsNotFound {
         /// relative path to the shared object.
         path: String,
         /// platform-specific error
-        error: Box<dyn Error>
+        error: Box<dyn Error>,
     },
 }
 
@@ -451,21 +450,21 @@ pub enum LoadFromJavaHomeError {
         /// relative path to the shared object.
         path: String,
         /// platform-specific error
-        error: Box<dyn Error>
+        error: Box<dyn Error>,
     },
     /// The dynamic linker could not find the `JNI_CreateJavaVM` symbol in the shared object.
     JNICreateJavaVmNotFound {
         /// relative path to the shared object.
         path: String,
         /// platform-specific error
-        error: Box<dyn Error>
+        error: Box<dyn Error>,
     },
     /// The dynamic linker could not find the `JNI_GetCreatedJavaVMs` symbol in the shared object.
     JNIGetCreatedJavaVMsNotFound {
         /// relative path to the shared object.
         path: String,
         /// platform-specific error
-        error: Box<dyn Error>
+        error: Box<dyn Error>,
     },
     /// The layout of the java installation was not recognized.
     UnknownJavaHomeLayout,
@@ -578,21 +577,21 @@ pub enum LoadFromJavaHomeFolderError {
         /// relative path to the shared object.
         path: String,
         /// platform-specific error
-        error: Box<dyn Error>
+        error: Box<dyn Error>,
     },
     /// The dynamic linker could not find the `JNI_CreateJavaVM` symbol in the shared object.
     JNICreateJavaVmNotFound {
         /// relative path to the shared object.
         path: String,
         /// platform-specific error
-        error: Box<dyn Error>
+        error: Box<dyn Error>,
     },
     /// The dynamic linker could not find the `JNI_GetCreatedJavaVMs` symbol in the shared object.
     JNIGetCreatedJavaVMsNotFound {
         /// relative path to the shared object.
         path: String,
         /// platform-specific error
-        error: Box<dyn Error>
+        error: Box<dyn Error>,
     },
     /// The layout of the java installation was not recognized.
     UnknownJavaHomeLayout,
