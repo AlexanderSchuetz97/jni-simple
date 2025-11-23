@@ -9,7 +9,9 @@ use sync_ptr::SyncMutPtr;
 #[cfg(feature = "loadjvm")]
 use alloc::boxed::Box;
 #[cfg(feature = "loadjvm")]
-use alloc::string::{String, ToString};
+use alloc::string::String;
+#[cfg(all(feature = "loadjvm", not(feature = "dynlink")))]
+use alloc::string::ToString;
 #[cfg(feature = "loadjvm")]
 use core::error::Error;
 #[cfg(feature = "loadjvm")]

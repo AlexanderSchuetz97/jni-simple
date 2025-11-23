@@ -63,6 +63,7 @@ use core::fmt::{Debug, Display, Formatter};
 use core::hash::{Hash, Hasher};
 use core::ptr::null;
 use core::ptr::null_mut;
+use std::sync::atomic::Ordering::SeqCst;
 use sync_ptr::{FromMutPtr, SyncMutPtr};
 
 pub const JNI_TRUE: jboolean = true;
@@ -212,7 +213,7 @@ pub enum JvmtiError {
     INTERNAL,
     UNATTACHED_THREAD,
     INVALID_ENVIRONMENT,
-    OTHER(c_int),
+    OTHER(c_int), //TODO seal this c_int
 }
 
 impl Display for JvmtiError {
@@ -653,7 +654,26 @@ pub const JVMTI_THREAD_STATE_VENDOR_3: jint = 0x4000_0000;
 
 /// Mod for private trait seals that should be hidden.
 mod private {
+    use crate::jrawMonitorID;
     use core::ffi::{c_char, c_void};
+
+    /// Trait seal for `AsJrawMonitorID`
+    pub trait SealedAsJrawMonitorID {
+        /// Gets the underlying `jrawMonitorID`
+        fn jraw_monitor_id(self) -> jrawMonitorID;
+    }
+
+    /// Trait seal for `JrawMonitorIDReceiver`
+    pub trait SealedReceiveJrawMonitorID {
+        /// Can the arg produce a pointer that can be directly passed to jvmti?
+        fn is_direct() -> bool;
+
+        /// Get the raw pointer to pass directly to jvmti.
+        fn direct_arg(self) -> *mut jrawMonitorID;
+
+        /// Store the newly created `jrawMonitorID`
+        fn receive(self, monitor: jrawMonitorID);
+    }
 
     ///Trait seal for `AsJNILinkage`
     pub trait SealedAsJNILinkage {
@@ -839,7 +859,74 @@ pub union jtype {
 
 pub type jvalue = jtype;
 
-pub type jrawMonitorID = *mut c_void;
+pub type jrawMonitorID = *mut jrawMonitorIDType;
+
+pub type jrawMonitorIDType = c_void;
+
+pub trait AsJrawMonitorID: private::SealedAsJrawMonitorID {}
+
+pub trait ReceiveJrawMonitorID: private::SealedReceiveJrawMonitorID {}
+
+impl private::SealedAsJrawMonitorID for jrawMonitorID {
+    fn jraw_monitor_id(self) -> jrawMonitorID {
+        self
+    }
+}
+impl AsJrawMonitorID for jrawMonitorID {}
+
+impl private::SealedAsJrawMonitorID for &core::sync::atomic::AtomicPtr<jrawMonitorIDType> {
+    fn jraw_monitor_id(self) -> jrawMonitorID {
+        self.load(SeqCst)
+    }
+}
+impl AsJrawMonitorID for &core::sync::atomic::AtomicPtr<jrawMonitorIDType> {}
+
+impl private::SealedReceiveJrawMonitorID for &mut jrawMonitorID {
+    fn is_direct() -> bool {
+        false
+    }
+
+    fn direct_arg(self) -> *mut jrawMonitorID {
+        unreachable!()
+    }
+    fn receive(self, monitor: jrawMonitorID) {
+        *self = monitor;
+    }
+}
+
+impl ReceiveJrawMonitorID for &mut jrawMonitorID {}
+
+impl private::SealedReceiveJrawMonitorID for &core::sync::atomic::AtomicPtr<jrawMonitorIDType> {
+    fn is_direct() -> bool {
+        false
+    }
+
+    fn direct_arg(self) -> *mut jrawMonitorID {
+        unreachable!()
+    }
+
+    fn receive(self, monitor: jrawMonitorID) {
+        self.store(monitor, SeqCst);
+    }
+}
+
+impl ReceiveJrawMonitorID for &core::sync::atomic::AtomicPtr<jrawMonitorIDType> {}
+
+impl private::SealedReceiveJrawMonitorID for *mut jrawMonitorID {
+    fn is_direct() -> bool {
+        true
+    }
+
+    fn direct_arg(self) -> *mut jrawMonitorID {
+        self
+    }
+
+    fn receive(self, _monitor: jrawMonitorID) {
+        unreachable!()
+    }
+}
+
+impl ReceiveJrawMonitorID for *mut jrawMonitorID {}
 
 ///
 /// This macro is usefull for constructing jtype arrays.
@@ -878,20 +965,9 @@ macro_rules! jtypes {
 }
 
 impl Debug for jtype {
-    #[inline(never)]
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        unsafe {
-            let long = core::ptr::read_unaligned(core::ptr::from_ref::<jlong>(&self.long));
-            let int = core::ptr::read_unaligned(core::ptr::from_ref::<jint>(&self.int));
-            let short = core::ptr::read_unaligned(core::ptr::from_ref::<jshort>(&self.short));
-            let byte = core::ptr::read_unaligned(core::ptr::from_ref::<jbyte>(&self.byte));
-            let float = core::ptr::read_unaligned(core::ptr::from_ref::<jfloat>(&self.float));
-            let double = core::ptr::read_unaligned(core::ptr::from_ref::<jdouble>(&self.double));
-
-            f.write_fmt(format_args!(
-                "jtype union[long=0x{long:x} int=0x{int:x} short=0x{short:x} byte=0x{byte:x} float={float:e} double={double:e}]"
-            ))
-        }
+        //Call jtype::debug if more information is desired.
+        f.write_str("jtype")
     }
 }
 
@@ -1023,6 +1099,45 @@ impl jtype {
     pub fn set<T: Into<Self>>(&mut self, value: T) {
         *self = value.into();
     }
+
+    /// Returns a helper struct which implements debug and reads the actual values from the jtype.
+    ///
+    /// This function should be avoided in productive code.
+    ///
+    /// # Safety
+    /// This is always safe for all jtype values constructed in rust regardless of the union variant.
+    ///
+    /// This is only safe for jtype values constructed by the jvm if they were 'jdouble, jlong or on 64-bit jvm's jobject/jthrowable/jclass'.
+    /// All the other jtype variants may cause reading of uninitialized memory
+    /// when the `Debug::fmt` is invoked. It depends entirely on the jvm implementation
+    /// if this is the case or not.
+    ///
+    /// It is impossible to get a pointer to a jtype value constructed by the jvm without using JVMTI.
+    /// If you only use JNI then this function should always be safe since no JNI function as of java 25
+    /// returns a jtype. Its only used as a input parameter.
+    ///
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::*;
+    ///
+    /// fn some_func() {
+    ///     let x : jlong = 4;
+    ///     let jt = jtype::from(x);
+    ///
+    ///     //Safe but opaque
+    ///     assert_eq!("jtype", format!("{jt:?}").as_str());
+    ///
+    ///     // Safe in this case because `jt` was initialized in rust and is jlong.
+    ///     assert!(format!("{:?}", unsafe { jt.debug() }).as_str().contains("long=0x4"));
+    /// }
+    /// ```
+    ///
+    #[inline(always)]
+    #[must_use]
+    pub const unsafe fn debug(&self) -> JTypeDebug<'_> {
+        JTypeDebug(self)
+    }
 }
 
 impl From<jlong> for jtype {
@@ -1094,6 +1209,34 @@ impl From<jboolean> for jtype {
         let mut jt = jtype { long: 0 };
         jt.boolean = value;
         jt
+    }
+}
+
+/// Debug helper struct that ensures that the caller understands the safety of printing/debugging the jtype.
+/// Its impossible to construct this type without unsafe code.
+#[repr(transparent)]
+pub struct JTypeDebug<'a>(&'a jtype);
+
+impl Debug for JTypeDebug<'_> {
+    #[inline(never)]
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        // Safety:
+        // This is safe for any jtype's we created in rust as we always fully initalize the jtype.
+        // This is not safe for jtype pointers passed to us from jvmti as the jvm does not need to guarantee that it points
+        // to an initialized allocation of 8 bytes. Its perfectly valid for the jvm to give us a pointer to a jbyte and cast it to jtype.
+        // We would then read 8 bytes here, reading beyond the bytes. We mitigate this to some degree by using read_unaligned but we still might segfault here.
+        unsafe {
+            let long = core::ptr::read_unaligned(core::ptr::from_ref::<jlong>(&self.0.long));
+            let int = core::ptr::read_unaligned(core::ptr::from_ref::<jint>(&self.0.int));
+            let short = core::ptr::read_unaligned(core::ptr::from_ref::<jshort>(&self.0.short));
+            let byte = core::ptr::read_unaligned(core::ptr::from_ref::<jbyte>(&self.0.byte));
+            let float = core::ptr::read_unaligned(core::ptr::from_ref::<jfloat>(&self.0.float));
+            let double = core::ptr::read_unaligned(core::ptr::from_ref::<jdouble>(&self.0.double));
+
+            f.write_fmt(format_args!(
+                "jtype union[long=0x{long:x} int=0x{int:x} short=0x{short:x} byte=0x{byte:x} float={float:e} double={double:e}]"
+            ))
+        }
     }
 }
 
@@ -4260,12 +4403,69 @@ impl JVMTIEnv {
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#CreateRawMonitor>
     ///
+    /// For the `monitor_ptr` argument the following rust datatypes are supported:
+    /// - `*mut jrawMonitorID`
+    /// - `&mut jrawMonitorID`
+    /// - `&AtomicPtr<jrawMonitorIDType>`
+    ///
+    /// # Usage Recommendation
+    /// If you have access to a pure-rust based re-entrant mutex in your environment then
+    /// there is not really a need to use jvmti raw monitors at all.
+    /// jvmti raw monitors are probably only useful to you if your java agent does
+    /// not use the rust standard library. (no-std)
+    ///
+    ///
     /// # Safety
     /// `name` must be a rust string type or a valid zero terminated utf-8 string or null.
-    /// all pointer parameters must not be dangling.
-    pub unsafe fn CreateRawMonitor(&self, name: impl UseCString, monitor_ptr: *mut jrawMonitorID) -> jvmtiError {
+    /// `monitor_ptr` must not be a dangling raw pointer
+    ///
+    /// # Example
+    /// ```rust
+    /// use std::ptr::null_mut;
+    /// use std::sync::atomic::AtomicPtr;
+    /// use std::time::Duration;
+    /// use jni_simple::*;
+    ///
+    /// static JVMTI_MONITOR: AtomicPtr<jrawMonitorIDType> = AtomicPtr::new(null_mut());
+    ///
+    /// // called once when your jvmti agent loads.
+    /// fn init_mutex(env: JVMTIEnv) {
+    ///     assert!(env.CreateRawMonitor("monitor of my custom java debugger 123", &JVMTI_MONITOR).is_ok());
+    /// }
+    ///
+    /// fn do_some_exclusive_work(env: JVMTIEnv) {
+    ///     // The jvmti raw monitors are always re-entrant.
+    ///     // Just call RawMonitorExit the same number of times you call RawMonitorEnter
+    ///     assert!(env.RawMonitorEnter(&JVMTI_MONITOR).is_ok());
+    ///
+    ///     // Some jni/jvmti functions require some level of mutual exclusion
+    ///     // Depending on the state of the jvm.
+    ///     thread::sleep(Duration::from_millis(1000));
+    ///
+    ///     // I recommend doing this in a `defer!` block from either the `defer-lite` or `defer-heavy` crate.
+    ///     // Its a bad idea to not do this due to either unwinding or the ? operator returning early.
+    ///     assert!(env.RawMonitorExit(&JVMTI_MONITOR).is_ok());
+    /// }
+    ///
+    /// ```
+    ///
+    pub unsafe fn CreateRawMonitor<T: ReceiveJrawMonitorID>(&self, name: impl UseCString, monitor_ptr: T) -> jvmtiError {
         unsafe {
-            name.use_as_const_c_char(|name| self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *mut jrawMonitorID) -> jvmtiError>(30)(self.vtable, name, monitor_ptr))
+            if T::is_direct() {
+                //Raw pointer
+                return name.use_as_const_c_char(|name| {
+                    self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *mut jrawMonitorID) -> jvmtiError>(30)(self.vtable, name, monitor_ptr.direct_arg())
+                });
+            }
+
+            let mut monitor: jrawMonitorID = null_mut();
+            let ret = name.use_as_const_c_char(|name| {
+                self.jvmti::<extern "system" fn(JVMTIEnvVTable, *const c_char, *mut jrawMonitorID) -> jvmtiError>(30)(self.vtable, name, &raw mut monitor)
+            });
+            if ret == JVMTI_ERROR_NONE {
+                monitor_ptr.receive(monitor);
+            }
+            ret
         }
     }
 
@@ -4278,8 +4478,8 @@ impl JVMTIEnv {
     ///
     /// # Safety
     /// `monitor` must be a valid raw monitor
-    pub unsafe fn DestroyRawMonitor(&self, monitor: jrawMonitorID) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(31)(self.vtable, monitor) }
+    pub unsafe fn DestroyRawMonitor(&self, monitor: impl AsJrawMonitorID) -> jvmtiError {
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(31)(self.vtable, monitor.jraw_monitor_id()) }
     }
 
     /// Gain exclusive ownership of a raw monitor.
@@ -4293,8 +4493,8 @@ impl JVMTIEnv {
     ///
     /// # Safety
     /// `monitor` must be a valid raw monitor
-    pub unsafe fn RawMonitorEnter(&self, monitor: jrawMonitorID) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(32)(self.vtable, monitor) }
+    pub unsafe fn RawMonitorEnter(&self, monitor: impl AsJrawMonitorID) -> jvmtiError {
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(32)(self.vtable, monitor.jraw_monitor_id()) }
     }
 
     /// Release exclusive ownership of a raw monitor.
@@ -4303,8 +4503,8 @@ impl JVMTIEnv {
     ///
     /// # Safety
     /// `monitor` must be a valid raw monitor
-    pub unsafe fn RawMonitorExit(&self, monitor: jrawMonitorID) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(33)(self.vtable, monitor) }
+    pub unsafe fn RawMonitorExit(&self, monitor: impl AsJrawMonitorID) -> jvmtiError {
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(33)(self.vtable, monitor.jraw_monitor_id()) }
     }
 
     /// Wait for notification of the raw monitor.
@@ -4315,8 +4515,8 @@ impl JVMTIEnv {
     ///
     /// # Safety
     /// `monitor` must be a valid raw monitor
-    pub unsafe fn RawMonitorWait(&self, monitor: jrawMonitorID) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(34)(self.vtable, monitor) }
+    pub unsafe fn RawMonitorWait(&self, monitor: impl AsJrawMonitorID) -> jvmtiError {
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(34)(self.vtable, monitor.jraw_monitor_id()) }
     }
 
     /// Notify a single thread waiting on the raw monitor.
@@ -4325,8 +4525,8 @@ impl JVMTIEnv {
     ///
     /// # Safety
     /// `monitor` must be a valid raw monitor
-    pub unsafe fn RawMonitorNotify(&self, monitor: jrawMonitorID) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(35)(self.vtable, monitor) }
+    pub unsafe fn RawMonitorNotify(&self, monitor: impl AsJrawMonitorID) -> jvmtiError {
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(35)(self.vtable, monitor.jraw_monitor_id()) }
     }
 
     /// Notify all threads waiting on the raw monitor.
@@ -4335,8 +4535,8 @@ impl JVMTIEnv {
     ///
     /// # Safety
     /// `monitor` must be a valid raw monitor
-    pub unsafe fn RawMonitorNotifyAll(&self, monitor: jrawMonitorID) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(36)(self.vtable, monitor) }
+    pub unsafe fn RawMonitorNotifyAll(&self, monitor: impl AsJrawMonitorID) -> jvmtiError {
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jrawMonitorID) -> jvmtiError>(36)(self.vtable, monitor.jraw_monitor_id()) }
     }
 
     /// Set the JNI function table in all current and future JNI environments.
@@ -4362,7 +4562,7 @@ impl JVMTIEnv {
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#SetJNIFunctionTable>
     ///
     /// # Safety
-    /// `function_table` must be a valid initalized jni function table
+    /// `function_table` must be a valid initialized jni function table
     pub unsafe fn SetJNIFunctionTable(&self, function_table: jniNativeInterface) -> jvmtiError {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jniNativeInterface) -> jvmtiError>(119)(self.vtable, function_table) }
     }
@@ -18657,6 +18857,7 @@ impl JNIEnv {
     ///     * must not be already garbage collected
     /// * `start` - the index of the first jchar to copy
     /// * `len` - the amount of jchar's to copy
+    ///     * if len is 0 then the function will not fail unless `start` is larger than the length of the string.
     /// * `buffer` - the target buffer where the jchar's should be copied to
     ///     * must not be null
     ///
@@ -20232,6 +20433,183 @@ impl JNIEnv {
     }
 
     ///
+    /// Copies data from the jbooleanArray `array` starting from the given `start` index into the slice `buf`.
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jbooleanArray.
+    /// * `start` - the index of the first element to copy in the Java jbooleanArray
+    /// * `buf` - the slice to copy data into
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if the slice `buf` is larger than the amount of remaining elements in the `array`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or >= env.GetArrayLength(array)
+    ///
+    /// It is JVM implementation specific what is stored inside buf if this function throws an exception.
+    /// * Data partially written
+    /// * No data written
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    /// if the `buf.len()` is larger than `jsize::MAX`
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
+    ///
+    /// `array` must be a valid non-null reference to a jbooleanArray.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
+    ///         array: jbooleanArray, chunk_buffer: &mut [jboolean], chunk_offset: usize) -> bool {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///
+    ///     env.GetBooleanArrayRegion_into_slice(array, chunk_offset as jsize, chunk_buffer);
+    ///     if env.ExceptionCheck() {
+    ///         //ArrayIndexOutOfBoundsException
+    ///         env.ExceptionClear();
+    ///         return false;
+    ///     }
+    ///     true
+    /// }
+    /// ```
+    ///
+    pub unsafe fn GetBooleanArrayRegion_into_slice(&self, array: jbooleanArray, start: jsize, buf: &mut [jboolean]) {
+        unsafe {
+            self.GetBooleanArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_mut_ptr());
+        }
+    }
+
+    ///
+    /// Copies data from the slice `buf` into the jbooleanArray `array` starting at the given `start` index.
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jbooleanArray.
+    /// * `start` - the index where the first element should be coped into in the Java jybteArray
+    /// * `buf` - the slice where data is copied from
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if the slice `buf` is larger than the amount of remaining elements in the `array`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or >= env.GetArrayLength(array)
+    ///
+    /// It is JVM implementation specific what is stored inside `array` if this function throws an exception.
+    /// * Data partially written
+    /// * No data written
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
+    ///
+    /// `array` must be a valid non-null reference to a jbooleanArray.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_chunk_from_rust_to_java(env: JNIEnv,
+    ///         array: jbooleanArray, chunk_buffer: &[i8], chunk_offset: usize) -> bool {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///
+    ///     env.SetByteArrayRegion_from_slice(array, chunk_offset as jsize, chunk_buffer);
+    ///     if env.ExceptionCheck() {
+    ///         //ArrayIndexOutOfBoundsException
+    ///         env.ExceptionClear();
+    ///         return false;
+    ///     }
+    ///     true
+    /// }
+    /// ```
+    ///
+    pub unsafe fn SetBooleanArrayRegion_from_slice(&self, array: jbooleanArray, start: jsize, buf: &[jboolean]) {
+        unsafe {
+            self.SetBooleanArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+        }
+    }
+
+    ///
+    /// Copies data from a Java jbooleanArray `array` into a new `Vec<jboolean>`
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jbooleanArray.
+    /// * `start` - the index of the first element to copy in the Java jbooleanArray
+    /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
+    ///
+    /// # Returns:
+    /// a new `Vec<jbyte>` that contains the copied data.
+    ///
+    /// # Returns empty Vec:
+    /// * When the array in fact was empty or len was zero.
+    /// * When this function throws a Java Exception.
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is larget than `env.GetArrayLength(array)`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` equals env.GetArrayLength(array) and `len` is larger than 0.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
+    ///
+    /// `array` must be a valid non-null reference to a jbooleanArray.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jbooleanArray) -> Vec<jboolean> {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///     env.GetBooleanArrayRegion_as_vec(array, 0, None)
+    /// }
+    /// ```
+    ///
+    pub unsafe fn GetBooleanArrayRegion_as_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<jboolean> {
+        unsafe {
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array).saturating_sub(start.max(0)).max(0));
+            if let Ok(len) = usize::try_from(len) {
+                let mut data = vec![false; len]; //We could un-init this, but better play it safe...
+                self.GetBooleanArrayRegion_into_slice(array, start, data.as_mut_slice());
+                if self.ExceptionCheck() {
+                    return Vec::new();
+                }
+                return data;
+            }
+
+            //Negative len
+            let mut sentinel_buffer = [false];
+            self.GetBooleanArrayRegion(array, start, len.min(-1), sentinel_buffer.as_mut_ptr());
+            Vec::new()
+        }
+    }
+
+    ///
     /// Copies data from the jbooleanArray `array` starting from the given `start` index into the memory pointed to by `buf`.
     ///
     /// <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#Get_PrimitiveType_ArrayRegion_routines>
@@ -20471,61 +20849,6 @@ impl JNIEnv {
     pub unsafe fn SetByteArrayRegion_from_slice(&self, array: jbyteArray, start: jsize, buf: &[jbyte]) {
         unsafe {
             self.SetByteArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
-        }
-    }
-
-    ///
-    /// Copies data from the slice `buf` into the jbyteArray `array` starting at the given `start` index.
-    ///
-    /// # Arguments
-    /// * `array` - handle to a Java jbyteArray.
-    /// * `start` - the index where the first element should be coped into in the Java jybteArray
-    /// * `buf` - the slice where data is copied from
-    ///
-    /// # Throws Java Exception:
-    /// * `ArrayIndexOutOfBoundsException` - if the slice `buf` is larger than the amount of remaining elements in the `array`.
-    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative or >= env.GetArrayLength(array)
-    ///
-    /// It is JVM implementation specific what is stored inside `array` if this function throws an exception.
-    /// * Data partially written
-    /// * No data written
-    ///
-    /// # Panics
-    /// if asserts feature is enabled and UB was detected
-    ///
-    /// # Safety
-    /// Current thread must not be detached from JNI.
-    ///
-    /// Current thread must not be currently throwing an exception.
-    ///
-    /// Current thread does not hold a critical reference.
-    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
-    ///
-    /// `array` must be a valid non-null reference to a jbyteArray.
-    ///
-    /// # Example
-    /// ```rust
-    /// use jni_simple::{*};
-    ///
-    /// unsafe fn copy_chunk_from_rust_to_java(env: JNIEnv,
-    ///         array: jbyteArray, chunk_buffer: &[i8], chunk_offset: usize) -> bool {
-    ///     if array.is_null() {
-    ///         panic!("Java Array is null")
-    ///     }
-    ///
-    ///     env.SetByteArrayRegion_from_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
-    ///         //ArrayIndexOutOfBoundsException
-    ///         env.ExceptionClear();
-    ///         return false;
-    ///     }
-    ///     true
-    /// }
-    /// ```
-    ///
-    pub unsafe fn SetBooleanArrayRegion_from_slice(&self, array: jbyteArray, start: jsize, buf: &[jboolean]) {
-        unsafe {
-            self.SetBooleanArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
         }
     }
 

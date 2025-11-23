@@ -286,4 +286,71 @@ pub mod test {
             assert_eq!("aÏa\u{9f}", and_back_again.as_str());
         }
     }
+
+    #[test]
+    fn test_into_slice_jchar() {
+        let _lock = MUTEX.lock().unwrap();
+        unsafe {
+            let env = get_env();
+            let exc_cl = env.FindClass("java/lang/StringIndexOutOfBoundsException");
+            assert!(!exc_cl.is_null());
+
+            let java_string: jstring = env.NewStringUTF("ÄÖÜ");
+            assert!(!java_string.is_null());
+            let mut utf_16_slice = [0u16; 3];
+            env.GetStringRegion_into_slice(java_string, 0, &mut utf_16_slice);
+            assert!(!env.ExceptionCheck());
+
+            let rust_string_from_slice = String::from_utf16_lossy(&utf_16_slice);
+            assert_eq!("ÄÖÜ", rust_string_from_slice.as_str());
+
+            let mut utf_16_slice = [0u16; 2];
+            env.GetStringRegion_into_slice(java_string, 1, &mut utf_16_slice);
+            assert!(!env.ExceptionCheck());
+
+            let rust_string_from_slice = String::from_utf16_lossy(&utf_16_slice);
+            assert_eq!("ÖÜ", rust_string_from_slice.as_str());
+
+            let mut utf_16_slice = [0u16; 2];
+            env.GetStringRegion_into_slice(java_string, 0, &mut utf_16_slice);
+            assert!(!env.ExceptionCheck());
+
+            let rust_string_from_slice = String::from_utf16_lossy(&utf_16_slice);
+            assert_eq!("ÄÖ", rust_string_from_slice.as_str());
+
+            let mut utf_16_slice = [0u16; 2];
+            env.GetStringRegion_into_slice(java_string, 2, &mut utf_16_slice);
+            assert!(env.ExceptionCheck());
+            let thr = env.ExceptionOccurred();
+            assert!(!thr.is_null());
+            env.ExceptionClear();
+            assert!(env.IsInstanceOf(thr, exc_cl));
+            env.DeleteLocalRef(thr);
+
+            let mut utf_16_slice = [0u16; 2];
+            env.GetStringRegion_into_slice(java_string, 3, &mut utf_16_slice);
+            assert!(env.ExceptionCheck());
+            let thr = env.ExceptionOccurred();
+            assert!(!thr.is_null());
+            env.ExceptionClear();
+            assert!(env.IsInstanceOf(thr, exc_cl));
+            env.DeleteLocalRef(thr);
+
+            let mut utf_16_slice = [0u16; 0];
+            env.GetStringRegion_into_slice(java_string, 4, &mut utf_16_slice);
+            assert!(env.ExceptionCheck());
+            let thr = env.ExceptionOccurred();
+            assert!(!thr.is_null());
+            env.ExceptionClear();
+            assert!(env.IsInstanceOf(thr, exc_cl));
+            env.DeleteLocalRef(thr);
+
+            let mut utf_16_slice = [0u16; 0];
+            env.GetStringRegion_into_slice(java_string, 3, &mut utf_16_slice);
+            assert!(!env.ExceptionCheck());
+
+            //MUST REMAIN HERE, CLEANUP
+            env.DeleteLocalRef(exc_cl);
+        }
+    }
 }

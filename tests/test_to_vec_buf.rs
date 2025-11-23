@@ -1,7 +1,9 @@
 #[cfg(feature = "loadjvm")]
 #[cfg(feature = "std")]
 mod test {
-    use jni_simple::{JNI_CreateJavaVM_with_string_args, JNI_VERSION_1_8, JNIEnv, jbyte, jchar, jdouble, jfloat, jint, jlong, jobject, jshort, jsize, load_jvm_from_java_home};
+    use jni_simple::{
+        JNI_CreateJavaVM_with_string_args, JNI_VERSION_1_8, JNIEnv, jboolean, jbyte, jchar, jdouble, jfloat, jint, jlong, jobject, jshort, jsize, load_jvm_from_java_home,
+    };
     use std::fmt::Debug;
 
     fn assert_aiob(env: JNIEnv) {
@@ -64,6 +66,12 @@ mod test {
     impl FromNum for jdouble {
         fn from(by: jbyte) -> Self {
             by as _
+        }
+    }
+
+    impl FromNum for jboolean {
+        fn from(by: jbyte) -> Self {
+            by & 1 == 0
         }
     }
 
@@ -159,6 +167,16 @@ mod test {
         unsafe {
             load_jvm_from_java_home().expect("FAILED TO LOAD JVM");
             let (_, env) = JNI_CreateJavaVM_with_string_args::<&str>(JNI_VERSION_1_8, &[], true).expect("Failed to start JVM");
+            run_test::<jboolean>(
+                env,
+                |env, data| {
+                    let array = env.NewBooleanArray(data.len() as jsize);
+                    assert!(!array.is_null());
+                    env.SetBooleanArrayRegion_from_slice(array, 0, data);
+                    array
+                },
+                |env, array, start, len| env.GetBooleanArrayRegion_as_vec(array, start, len),
+            );
             run_test::<jshort>(
                 env,
                 |env, data| {
