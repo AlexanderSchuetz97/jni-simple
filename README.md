@@ -247,7 +247,7 @@ is instead loaded by `System.load` or `System.loadLibrary` then this is irreleva
 - windows: i686 gnu or msvc
 - freebsd: any other architecture that supports java
 - netbsd: any other architecture that supports java
-- openbsd: any architecture that supports java
+- openbsd: any architecture that supports java (launching the JVM probably won't work due to openbsd's W^X)
 
 ### Targets where I recommend careful testing
 Any Big Endian target, especially if you intend to use JVMTI.

@@ -319,6 +319,12 @@ impl From<c_int> for JvmtiError {
     }
 }
 
+impl From<&JvmtiError> for c_int {
+    fn from(value: &JvmtiError) -> Self {
+        (*value).into()
+    }
+}
+
 impl From<JvmtiError> for c_int {
     fn from(value: JvmtiError) -> Self {
         match value {
@@ -403,7 +409,8 @@ pub struct jvmtiError(pub c_int);
 
 impl Display for jvmtiError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        Debug::fmt(self, f)
+        let display_var = JvmtiError::from(self.0);
+        Display::fmt(&display_var, f)
     }
 }
 
@@ -415,6 +422,12 @@ impl From<c_int> for jvmtiError {
 
 impl From<jvmtiError> for c_int {
     fn from(value: jvmtiError) -> Self {
+        value.0
+    }
+}
+
+impl From<&jvmtiError> for c_int {
+    fn from(value: &jvmtiError) -> Self {
         value.0
     }
 }
@@ -1773,7 +1786,7 @@ pub const JVMTI_JLOCATION_MACHINEPC: jvmtiJlocationFormat = 2;
 pub const JVMTI_JLOCATION_OTHER: jvmtiJlocationFormat = 0;
 
 #[repr(transparent)]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 pub struct jvmtiCapabilities(u128);
 
 /// Dumped from c program `bitfield_gen` in this repo.
@@ -1917,7 +1930,7 @@ impl jvmtiCapabilities {
     ///Returns the amount of bytes needed to access the raw data in this struct.
     #[inline(always)]
     #[must_use]
-    pub const fn size(&self) -> usize {
+    pub const fn size() -> usize {
         16
     }
 
@@ -4430,21 +4443,25 @@ impl JVMTIEnv {
     ///
     /// // called once when your jvmti agent loads.
     /// fn init_mutex(env: JVMTIEnv) {
-    ///     assert!(env.CreateRawMonitor("monitor of my custom java debugger 123", &JVMTI_MONITOR).is_ok());
+    ///     unsafe {
+    ///         assert!(env.CreateRawMonitor("monitor of my custom java debugger 123", &JVMTI_MONITOR).is_ok());
+    ///     }
     /// }
     ///
     /// fn do_some_exclusive_work(env: JVMTIEnv) {
-    ///     // The jvmti raw monitors are always re-entrant.
-    ///     // Just call RawMonitorExit the same number of times you call RawMonitorEnter
-    ///     assert!(env.RawMonitorEnter(&JVMTI_MONITOR).is_ok());
+    ///     unsafe {
+    ///          // The jvmti raw monitors are always re-entrant.
+    ///          // Just call RawMonitorExit the same number of times you call RawMonitorEnter
+    ///          assert!(env.RawMonitorEnter(&JVMTI_MONITOR).is_ok());
     ///
-    ///     // Some jni/jvmti functions require some level of mutual exclusion
-    ///     // Depending on the state of the jvm.
-    ///     thread::sleep(Duration::from_millis(1000));
+    ///          // Some jni/jvmti functions require some level of mutual exclusion
+    ///          // Depending on the state of the jvm.
+    ///          std::thread::sleep(Duration::from_millis(1000));
     ///
-    ///     // I recommend doing this in a `defer!` block from either the `defer-lite` or `defer-heavy` crate.
-    ///     // Its a bad idea to not do this due to either unwinding or the ? operator returning early.
-    ///     assert!(env.RawMonitorExit(&JVMTI_MONITOR).is_ok());
+    ///          // I recommend doing this in a `defer!` block from either the `defer-lite` or `defer-heavy` crate.
+    ///          // Its a bad idea to not do this due to either unwinding or the ? operator returning early.
+    ///          assert!(env.RawMonitorExit(&JVMTI_MONITOR).is_ok());
+    ///     }
     /// }
     ///
     /// ```
