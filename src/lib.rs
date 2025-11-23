@@ -63,7 +63,7 @@ use core::fmt::{Debug, Display, Formatter};
 use core::hash::{Hash, Hasher};
 use core::ptr::null;
 use core::ptr::null_mut;
-use std::sync::atomic::Ordering::SeqCst;
+use core::sync::atomic::Ordering::SeqCst;
 use sync_ptr::{FromMutPtr, SyncMutPtr};
 
 pub const JNI_TRUE: jboolean = true;

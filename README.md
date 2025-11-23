@@ -254,7 +254,7 @@ Any Big Endian target, especially if you intend to use JVMTI.
 
 ## Supported Java Versions
 In general, JNI and JVMTI are designed in a version agnostic manner;
-this means that they should work with nearly any version of Java.
+this means that jni-simple should work with nearly any version of Java.
 If a newer version of Java adds new functionality to JNI or JVMTI,
 then jni-simple will require an update to support that new functionality; 
 however, existing functions should just work like they did in the previous versions.

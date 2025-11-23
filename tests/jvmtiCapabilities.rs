@@ -35,7 +35,6 @@ pub mod test {
             assert_ne!(cap, cap2);
             assert_ne!(cap.to_string(), cap2.to_string());
 
-
             cap2.set_can_generate_early_vmstart(false);
 
             assert_eq!(cap, cap2);
