@@ -3793,12 +3793,64 @@ impl JVMTIEnv {
     /// An array class is created directly by the Java virtual machine. The creation can be triggered by using class loaders or by invoking methods in certain Java SE Platform APIs such as reflection.
     /// The returned list includes all classes and interfaces, including hidden classes or interfaces, and also array classes of all types (including arrays of primitive types). Primitive classes (for example, java.lang.Integer.TYPE) are not included in the returned list.
     ///
+    /// The returned array should be freed with Deallocate. The objects returned by `classes_ptr` are JNI local references and must be managed.
+    ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetLoadedClasses>
     ///
     /// # Safety
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetLoadedClasses(&self, count_ptr: *mut jint, classes_ptr: *mut *mut jclass) -> jvmtiError {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jclass) -> jvmtiError>(77)(self.vtable, count_ptr, classes_ptr) }
+    }
+
+    ///
+    /// Return a Vec of all classes loaded in the virtual machine.
+    /// This convenience function will internally call `GetLoadedClasses` and `Deallocate`
+    /// to manage the JVMTI buffer for you.
+    ///
+    /// This function ignores errors returned by the `Deallocate` and just, presumably, leaks the jvmti buffer.
+    ///
+    /// A class or interface creation can be triggered by one of the following:
+    /// * By loading and deriving a class from a class file representation using a class loader (see The Java™ Virtual Machine Specification, Chapter 5.3).
+    /// * By invoking `Lookup::defineHiddenClass` that creates a hidden class or interface from a class file representation.
+    /// * By invoking methods in certain Java SE Platform APIs such as reflection.
+    ///
+    /// An array class is created directly by the Java virtual machine. The creation can be triggered by using class loaders or by invoking methods in certain Java SE Platform APIs such as reflection.
+    /// The returned list includes all classes and interfaces, including hidden classes or interfaces, and also array classes of all types (including arrays of primitive types). Primitive classes (for example, java.lang.Integer.TYPE) are not included in the returned list.
+    ///
+    /// The objects returned in the `Vec` are JNI local references and must be managed.
+    ///
+    /// # Safety
+    /// Current thread must not be detached from the JVM.
+    ///
+    /// # Errors
+    /// If the call to `GetLoadedClasses` fails.
+    ///
+    /// # Panics
+    /// If JVMTI provides a negative number of loaded classes without returning an error.
+    /// If JVMTI provides a null array of loaded with a count of more than 0 without return return an error.
+    pub unsafe fn GetLoadedClasses_as_vec(&self) -> Result<Vec<jclass>, jvmtiError> {
+        unsafe {
+            let mut count: jsize = 0;
+            let mut classes_ptr = null_mut();
+            self.GetLoadedClasses(&raw mut count, &raw mut classes_ptr).into_result()?;
+
+            //We dont risk deallocating the array in the panic case.
+            let count = usize::try_from(count).expect("JVMTI provided an array with a negative number of loaded classes.");
+            if count == 0 {
+                if !classes_ptr.is_null() {
+                    _ = self.Deallocate(classes_ptr);
+                }
+                return Ok(Vec::new());
+            }
+
+            assert!(!classes_ptr.is_null(), "JVMTI returned a null pointer array without returning an error");
+
+            let result = core::slice::from_raw_parts(classes_ptr, count).to_vec();
+            self.Deallocate(classes_ptr).into_result()?;
+
+            Ok(result)
+        }
     }
 
     /// Returns an array of all classes which this class loader can find by name via `ClassLoader::loadClass`, `Class::forName` and bytecode linkage.

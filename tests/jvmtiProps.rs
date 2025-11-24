@@ -11,7 +11,7 @@ pub mod test {
     unsafe extern "C" fn shim_agent(vm: JavaVM, _options: *const char, _reserved: *mut c_void) -> i32 {
         unsafe {
             let jvmti = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2).expect("failed to get JVMTI environment");
-            let v = jvmti.SetSystemProperty("java.vm.info", "okay");
+            let v = jvmti.SetSystemProperty("java.class.path", ".");
             if !v.is_ok() {
                 //If this is JVMTI_ERROR_NOT_AVAILABLE then I have to find a different writable property here.
                 eprintln!("failed to set JVMTI system property {}", v);
@@ -53,8 +53,7 @@ pub mod test {
             println!("{:?}", map);
 
             assert!(map.contains_key("java.vm.version"));
-            assert_eq!(map.get("java.class.path").unwrap().as_str(), "");
-            assert_eq!(map.get("java.vm.info").unwrap().as_str(), "okay");
+            assert_eq!(map.get("java.class.path").unwrap().as_str(), ".");
         }
     }
 }
