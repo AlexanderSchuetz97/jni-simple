@@ -40,10 +40,10 @@ mod linking;
 pub use linking::{JNI_CreateJavaVM, JNI_CreateJavaVM_with_string_args, JNI_GetCreatedJavaVMs, JNI_GetCreatedJavaVMs_first, init_dynamic_link, is_jvm_loaded};
 
 #[cfg(feature = "loadjvm")]
-pub use linking::load_jvm_from_library;
+pub use linking::{LoadFromLibraryError, load_jvm_from_library};
 
 #[cfg(all(feature = "loadjvm", feature = "std"))]
-pub use linking::{load_jvm_from_java_home, load_jvm_from_java_home_folder};
+pub use linking::{LoadFromJavaHomeError, LoadFromJavaHomeFolderError, load_jvm_from_java_home, load_jvm_from_java_home_folder};
 
 extern crate alloc;
 #[cfg(feature = "std")]
@@ -102,6 +102,41 @@ pub const JNI_VERSION_20: jint = 0x0014_0000;
 pub const JNI_VERSION_21: jint = 0x0015_0000;
 
 pub const JNI_VERSION_24: jint = 0x0018_0000;
+
+//https://docs.oracle.com/en/java/javase/17/docs/api/constant-values.html#java.lang.reflect.Modifier.FINAL
+
+/// JVM modifier constant that represents the "final" keyword.
+pub const REFLECT_MODIFIER_FINAL: jint = 16;
+
+/// JVM modifier constant that represents the "interface" keyword.
+pub const REFLECT_MODIFIER_INTERFACE: jint = 512;
+
+/// JVM modifier constant that represents the "native" keyword.
+pub const REFLECT_MODIFIER_NATIVE: jint = 256;
+
+/// JVM modifier constant that represents the "private" keyword.
+pub const REFLECT_MODIFIER_PRIVATE: jint = 2;
+
+/// JVM modifier constant that represents the "protected" keyword.
+pub const REFLECT_MODIFIER_PROTECTED: jint = 4;
+
+/// JVM modifier constant that represents the "public" keyword.
+pub const REFLECT_MODIFIER_PUBLIC: jint = 1;
+
+/// JVM modifier constant that represents the "static" keyword.
+pub const REFLECT_MODIFIER_STATIC: jint = 8;
+
+/// JVM modifier constant that represents the "strictfp" keyword.
+pub const REFLECT_MODIFIER_STRICT: jint = 2048;
+
+/// JVM modifier constant that represents the "synchronized" keyword.
+pub const REFLECT_MODIFIER_SYNCHRONIZED: jint = 32;
+
+/// JVM modifier constant that represents the "transient" keyword.
+pub const REFLECT_MODIFIER_TRANSIENT: jint = 128;
+
+/// JVM modifier constant that represents the "volatile" keyword.
+pub const REFLECT_MODIFIER_VOLATILE: jint = 64;
 
 pub type jlong = i64;
 
@@ -3844,7 +3879,7 @@ impl JVMTIEnv {
                 return Ok(Vec::new());
             }
 
-            assert!(!classes_ptr.is_null(), "JVMTI returned a null pointer array without returning an error");
+            assert!(!classes_ptr.is_null(), "JVMTI returned a null pointer classes array without returning an error");
 
             let result = core::slice::from_raw_parts(classes_ptr, count).to_vec();
             self.Deallocate(classes_ptr).into_result()?;
@@ -3871,30 +3906,76 @@ impl JVMTIEnv {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint, *mut *mut jclass) -> jvmtiError>(78)(self.vtable, initiating_loader, count_ptr, classes_ptr) }
     }
 
-    /// Returns an array of all classes which this class loader can find by name via `ClassLoader::loadClass`, `Class::forName` and bytecode linkage.
+    /// Return the name and the generic signature of the class indicated by klass.
     ///
-    /// That is, all classes for which `initiating_loader` has been recorded as an initiating loader.
-    /// Each class in the returned array was created by this class loader, either by defining it directly or by delegation to another class loader. See The Java™ Virtual Machine Specification, Chapter 5.3.
-    /// The returned list does not include hidden classes or interfaces or array classes whose element type is a hidden class or interface as they cannot be discovered by any class loader.
-    /// The number of classes in the array is returned via `class_count_ptr`, and the array itself via `classes_ptr`.
-    /// See `Lookup::defineHiddenClass`.
+    /// If the class is a class or interface, then:
+    /// - If the class or interface is not hidden, then the returned name is the JNI type signature.
+    ///   For example, java.util.List is "Ljava/util/List;"
+    /// - If the class or interface is hidden, then the returned name is a string of the form: "L" + N + "." + S + ";"
+    ///   where N is the binary name encoded in internal form (JVMS 4.2.1) indicated by the class file passed to `Lookup::defineHiddenClass`,
+    ///   and S is an unqualified name. The returned name is not a type descriptor and does not conform to JVMS 4.3.2.
+    ///   For example, com.foo.Foo/AnySuffix is "Lcom/foo/Foo.AnySuffix;"
+    ///
+    /// If the class indicated by klass represents an array class, then the returned name is a string consisting of one or more "[" characters representing the depth of the array nesting, followed by the class signature of the element type. For example the class signature of java.lang.String[] is "[Ljava/lang/String;" and that of int[] is "[I".
+    /// If the class indicated by klass represents primitive type or void, then the returned name is the type signature character of the corresponding primitive type. For example, java.lang.Integer.TYPE is "I".
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassSignature>
     ///
     /// # Safety
     /// `klass` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::*;
+    /// use std::ptr::null_mut;
+    /// use std::ffi::CStr;
+    ///
+    /// // would return "Ljava/lang/String;" for the string class for ex.
+    /// fn get_class_name(jvmti: JVMTIEnv, class_or_iface: jclass) -> String {
+    ///     unsafe {
+    ///         let mut class_name = null_mut();
+    ///         assert!(jvmti.GetClassSignature(class_or_iface, &raw mut class_name, null_mut()).is_ok());
+    ///         //Beware, the string is in CESU encoding which may not work for some class names.
+    ///         let name : String = CStr::from_ptr(class_name).to_string_lossy().to_string();
+    ///         assert!(jvmti.Deallocate(class_name).is_ok());
+    ///         return name;
+    ///     }
+    /// }
+    /// ```
+    ///
     pub unsafe fn GetClassSignature(&self, klass: jclass, signature_ptr: *mut *mut c_char, generic_ptr: *mut *mut c_char) -> jvmtiError {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char, *mut *mut c_char) -> jvmtiError>(47)(self.vtable, klass, signature_ptr, generic_ptr) }
     }
 
     /// Get the status of the class. Zero or more of the following bits can be set.
     ///
+    /// - `JVMTI_CLASS_STATUS_VERIFIED` - Class bytecodes have been verified
+    /// - `JVMTI_CLASS_STATUS_PREPARED` - Class preparation is complete
+    /// - `JVMTI_CLASS_STATUS_INITIALIZED` - Class initialization is complete. Static initializer has been run.
+    /// - `JVMTI_CLASS_STATUS_ERROR` - Error during initialization makes class unusable
+    /// - `JVMTI_CLASS_STATUS_ARRAY` - Class is an array. If set, all other bits are zero.
+    /// - `JVMTI_CLASS_STATUS_PRIMITIVE` - Class is a primitive class (for example, java.lang.Integer.TYPE). If set, all other bits are zero.
+    ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassStatus>
     ///
     /// # Safety
     /// `klass` must be a valid strong reference or null.
     /// `status_ptr` must not be dangling.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::*;
+    ///
+    /// fn is_primitive_class(jvmti: JVMTIEnv, klass: jclass) -> bool {
+    ///     let mut status: jint = 0;
+    ///     unsafe {
+    ///         assert!(jvmti.GetClassStatus(klass, &raw mut status).is_ok());
+    ///     }
+    ///     status == JVMTI_CLASS_STATUS_PRIMITIVE
+    /// }
+    ///
+    /// ```
     pub unsafe fn GetClassStatus(&self, klass: jclass, status_ptr: *mut jint) -> jvmtiError {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint) -> jvmtiError>(48)(self.vtable, klass, status_ptr) }
     }
@@ -3924,7 +4005,7 @@ impl JVMTIEnv {
     /// If the class is an array class or a primitive class then its final modifier is always true and its interface modifier is always false.
     /// The values of its other modifiers are not determined by this specification.
     ///
-    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetSourceFileName>
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassModifiers>
     ///
     /// # Safety
     /// `klass` must be a valid strong reference or null.
@@ -3948,6 +4029,54 @@ impl JVMTIEnv {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jmethodID) -> jvmtiError>(51)(self.vtable, klass, method_count_ptr, methods_ptr) }
     }
 
+    /// Returns a Vec containing all methods of the class.
+    /// This functions serves as a convenience function which calls `GetClassMethods`
+    /// as well as free's the returned memory using the jvmti deallocator after copying the result
+    /// to a Vec.
+    ///
+    /// The method list contains constructors and static initializers as well as true methods.
+    /// Only directly declared methods are returned (not inherited methods).
+    /// An empty method list is returned for array classes and primitive classes (for example, java.lang.Integer.TYPE).
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassMethods>
+    ///
+    /// # Errors
+    /// If `GetClassMethods` returns anything that is not `JVMTI_ERROR_NONE`
+    /// Errors from the jvmti decallocator are silently ignored and the memory is leaked.
+    ///
+    /// # Panics
+    /// if jvmti returns an array with a negative length or a null pointer array without
+    /// returning an error code.
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    pub unsafe fn GetClassMethods_as_vec(&self, klass: jclass) -> Result<Vec<jmethodID>, jvmtiError> {
+        unsafe {
+            let mut count: jsize = 0;
+            let mut classes_ptr = null_mut();
+            self.GetClassMethods(klass, &raw mut count, &raw mut classes_ptr).into_result()?;
+
+            //We dont risk deallocating the array in the panic case.
+            let count = usize::try_from(count).expect("JVMTI GetClassMethods provided an array with a negative number of methods.");
+            if count == 0 {
+                if !classes_ptr.is_null() {
+                    _ = self.Deallocate(classes_ptr);
+                }
+                return Ok(Vec::new());
+            }
+
+            assert!(
+                !classes_ptr.is_null(),
+                "JVMTI GetClassMethods returned a null pointer method array without returning an error"
+            );
+
+            let result = core::slice::from_raw_parts(classes_ptr, count).to_vec();
+            _ = self.Deallocate(classes_ptr);
+
+            Ok(result)
+        }
+    }
+
     /// For the class indicated by klass, return a count of fields via `field_count_ptr` and a list of field IDs via `fields_ptr`.
     ///
     /// Only directly declared fields are returned (not inherited fields).
@@ -3964,6 +4093,55 @@ impl JVMTIEnv {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jfieldID) -> jvmtiError>(52)(self.vtable, klass, field_count_ptr, fields_ptr) }
     }
 
+    /// Returns a Vec containing all fields of the class.
+    /// This functions serves as a convenience function which calls `GetClassFields`
+    /// as well as free's the returned memory using the jvmti deallocator after copying the result
+    /// to a Vec.
+    ///
+    /// Only directly declared fields are returned (not inherited fields).
+    /// Fields are returned in the order they occur in the class file.
+    /// An empty field list is returned for array classes and primitive classes (for example, java.lang.Integer.TYPE).
+    /// Use JNI to determine the length of an array.
+    ///
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassFields>
+    ///
+    /// # Errors
+    /// If `GetClassFields` returns anything that is not `JVMTI_ERROR_NONE`
+    /// Errors from the jvmti decallocator are silently ignored and the memory is leaked.
+    ///
+    /// # Panics
+    /// If jvmti returns an array with a negative length or a null pointer array without
+    /// returning an error code.
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    pub unsafe fn GetClassFields_as_vec(&self, klass: jclass) -> Result<Vec<jfieldID>, jvmtiError> {
+        unsafe {
+            let mut count: jsize = 0;
+            let mut classes_ptr = null_mut();
+            self.GetClassFields(klass, &raw mut count, &raw mut classes_ptr).into_result()?;
+
+            //We dont risk deallocating the array in the panic case.
+            let count = usize::try_from(count).expect("JVMTI GetClassFields provided an array with a negative number of methods.");
+            if count == 0 {
+                if !classes_ptr.is_null() {
+                    _ = self.Deallocate(classes_ptr);
+                }
+                return Ok(Vec::new());
+            }
+
+            assert!(
+                !classes_ptr.is_null(),
+                "JVMTI GetClassFields returned a null pointer method array without returning an error"
+            );
+
+            let result = core::slice::from_raw_parts(classes_ptr, count).to_vec();
+            _ = self.Deallocate(classes_ptr);
+
+            Ok(result)
+        }
+    }
+
     /// Return the direct super-interfaces of this class. For a class, this function returns the interfaces declared in its implements clause.
     ///
     /// For an interface, this function returns the interfaces declared in its extends clause.
@@ -3978,6 +4156,48 @@ impl JVMTIEnv {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut *mut jclass) -> jvmtiError>(53)(self.vtable, klass, interface_count_ptr, interfaces_ptr) }
     }
 
+    /// Return the direct super-interfaces of this class. For a class, this function returns the interfaces declared in its implements clause.
+    ///
+    /// For an interface, this function returns the interfaces declared in its extends clause.
+    /// An empty interface list is returned for array classes and primitive classes (for example, java.lang.Integer.TYPE).
+    ///
+    /// # Errors
+    /// If `GetImplementedInterfaces` returns anything that is not `JVMTI_ERROR_NONE`
+    /// Errors from the jvmti decallocator are silently ignored and the memory is leaked.
+    ///
+    /// # Panics
+    /// If jvmti returns an array with a negative length or a null pointer array without
+    /// returning an error code.
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    pub unsafe fn GetImplementedInterfaces_as_vec(&self, klass: jclass) -> Result<Vec<jclass>, jvmtiError> {
+        unsafe {
+            let mut count: jsize = 0;
+            let mut classes_ptr = null_mut();
+            self.GetImplementedInterfaces(klass, &raw mut count, &raw mut classes_ptr).into_result()?;
+
+            //We dont risk deallocating the array in the panic case.
+            let count = usize::try_from(count).expect("JVMTI GetImplementedInterfaces provided an array with a negative number of classes.");
+            if count == 0 {
+                if !classes_ptr.is_null() {
+                    _ = self.Deallocate(classes_ptr);
+                }
+                return Ok(Vec::new());
+            }
+
+            assert!(
+                !classes_ptr.is_null(),
+                "JVMTI GetImplementedInterfaces returned a null pointer class array without returning an error"
+            );
+
+            let result = core::slice::from_raw_parts(classes_ptr, count).to_vec();
+            _ = self.Deallocate(classes_ptr);
+
+            Ok(result)
+        }
+    }
+
     /// For the class indicated by klass, return the minor and major version numbers, as defined in The Java™ Virtual Machine Specification, Chapter 4.
     ///
     /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetClassVersionNumbers>
@@ -3986,7 +4206,7 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// `minor_version_ptr` and `major_version_ptr` must not be dangling.
     pub unsafe fn GetClassVersionNumbers(&self, klass: jclass, minor_version_ptr: *mut jint, major_version_ptr: *mut jint) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint) -> jvmtiError>(54)(self.vtable, klass, minor_version_ptr, major_version_ptr) }
+        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint) -> jvmtiError>(144)(self.vtable, klass, minor_version_ptr, major_version_ptr) }
     }
 
     /// For the class indicated by klass, return the raw bytes of the constant pool in the format of the `constant_pool` item of The Java™ Virtual Machine Specification, Chapter 4.
@@ -4015,7 +4235,7 @@ impl JVMTIEnv {
         constant_pool_bytes_ptr: *mut *mut c_uchar,
     ) -> jvmtiError {
         unsafe {
-            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint, *mut *mut c_uchar) -> jvmtiError>(54)(
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jint, *mut jint, *mut *mut c_uchar) -> jvmtiError>(145)(
                 self.vtable,
                 klass,
                 constant_pool_count_ptr,

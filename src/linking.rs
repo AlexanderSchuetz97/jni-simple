@@ -225,6 +225,9 @@ pub use spin_link::{link_read, link_write};
 /// If this function is called more than once, then it is a noop, since it is not possible to create
 /// more than one jvm per process.
 ///
+/// # Panics
+/// If any of the argument pointers are null.
+///
 /// # Returns
 /// true if the call initialized the dynamic link, false if it was already initialized.
 ///
@@ -232,7 +235,7 @@ pub use spin_link::{link_read, link_write};
 #[must_use]
 pub fn init_dynamic_link(JNI_CreateJavaVM: *const c_void, JNI_GetCreatedJavaVMs: *const c_void) -> bool {
     let mut guard = link_write();
-    if guard.is_none() {
+    if guard.is_some() {
         return false;
     }
 
@@ -374,6 +377,14 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), LoadFromLibraryErr
             error: Box::new(e),
         })?;
 
+        //NetBSD: https://mail-index.netbsd.org/netbsd-bugs/2025/11/23/msg090714.html
+        //Apple: https://github.com/nagisa/rust_libloading/issues/5
+        //We cannot "unload" libraries on error cases on these platforms as the unloading
+        //Is likely to seg fault and crash the process.
+        //In the success case, this doesn't matter because we never unload the jvm shared object once loaded anyway.
+        #[cfg(any(target_os = "netbsd", target_vendor = "apple"))]
+        let lib = core::mem::ManuallyDrop::new(lib);
+
         let JNI_CreateJavaVM_ptr = lib
             .get::<JNI_CreateJavaVM>(b"JNI_CreateJavaVM\0")
             .map_err(|e| LoadFromLibraryError::JNICreateJavaVmNotFound {
@@ -395,7 +406,7 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), LoadFromLibraryErr
 
         let JNI_GetCreatedJavaVMs_ptr = lib
             .get::<JNI_GetCreatedJavaVMs>(b"JNI_GetCreatedJavaVMs\0")
-            .map_err(|e| LoadFromLibraryError::JNICreateJavaVmNotFound {
+            .map_err(|e| LoadFromLibraryError::JNIGetCreatedJavaVMsNotFound {
                 path: path.to_string(),
                 error: Box::new(e),
             })?
@@ -413,6 +424,7 @@ pub unsafe fn load_jvm_from_library(path: &str) -> Result<(), LoadFromLibraryErr
         }
 
         //We are good to go!
+        #[cfg(not(any(target_os = "netbsd", target_vendor = "apple")))] //see above for why.
         core::mem::forget(lib);
         *guard = Some(JNIDynamicLink::new(JNI_CreateJavaVM_ptr, JNI_GetCreatedJavaVMs_ptr));
         drop(guard);
@@ -511,7 +523,7 @@ impl Display for LoadFromJavaHomeError {
         match self {
             Self::AlreadyLoaded => f.write_str("The dynamic linker has already loaded the jvm."),
             Self::LoadingSharedObjectFailed { .. } => f.write_str("The dynamic linker failed to load the jvm shared object."),
-            Self::JNICreateJavaVmNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_CreateJavaVM symbol in the in the shared object."),
+            Self::JNICreateJavaVmNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_CreateJavaVM symbol in the shared object."),
             Self::JNIGetCreatedJavaVMsNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_GetCreatedJavaVMs symbol in the shared object."),
             Self::UnknownJavaHomeLayout => f.write_str("The layout of the java installation was not recognized."),
             Self::IOError(_) => f.write_str("I/O Error while determining the layout of the java installation."),
@@ -608,7 +620,7 @@ impl Display for LoadFromJavaHomeFolderError {
         match self {
             Self::AlreadyLoaded => f.write_str("The dynamic linker has already loaded the jvm."),
             Self::LoadingSharedObjectFailed { .. } => f.write_str("The dynamic linker failed to load the jvm shared object."),
-            Self::JNICreateJavaVmNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_CreateJavaVM symbol in the in the shared object."),
+            Self::JNICreateJavaVmNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_CreateJavaVM symbol in the shared object."),
             Self::JNIGetCreatedJavaVMsNotFound { .. } => f.write_str("The dynamic linker could not find the JNI_GetCreatedJavaVMs symbol in the shared object."),
             Self::UnknownJavaHomeLayout => f.write_str("The layout of the java installation was not recognized."),
             Self::IOError(_) => f.write_str("I/O Error while determining the layout of the java installation."),
