@@ -3701,6 +3701,49 @@ impl JVMTIEnv {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jobject) -> jvmtiError>(2)(self.vtable, module_count_ptr, modules_ptr) }
     }
 
+    ///
+    /// Return an array of all modules loaded in the virtual machine as a Vec.
+    /// The array includes the unnamed module for each class loader.
+    ///
+    /// This convenience function automatically handles deallocating the memory using the jvmti allocator.
+    ///
+    /// # Safety
+    /// JVM implementation specific
+    ///
+    /// # Errors
+    /// If the call to `GetAllModules` fails.
+    /// Errors of the JVMTI Deallocator are silently ignored and the memory is leaked.
+    ///
+    /// # Panics
+    /// If JVMTI provides a negative number of modules without returning an error.
+    /// If JVMTI provides a null array of modules with a count of more than 0 without return return an error.
+    pub unsafe fn GetAllModules_as_vec(&self) -> Result<Vec<jobject>, jvmtiError> {
+        unsafe {
+            let mut count: jsize = 0;
+            let mut classes_ptr = null_mut();
+            self.GetAllModules(&raw mut count, &raw mut classes_ptr).into_result()?;
+
+            //We dont risk deallocating the array in the panic case.
+            let count = usize::try_from(count).expect("JVMTI GetAllModules provided an array with a negative number of modules.");
+            if count == 0 {
+                if !classes_ptr.is_null() {
+                    _ = self.Deallocate(classes_ptr);
+                }
+                return Ok(Vec::new());
+            }
+
+            assert!(
+                !classes_ptr.is_null(),
+                "JVMTI GetAllModules returned a null pointer module array without returning an error"
+            );
+
+            let result = core::slice::from_raw_parts(classes_ptr, count).to_vec();
+            self.Deallocate(classes_ptr).into_result()?;
+
+            Ok(result)
+        }
+    }
+
     /// Return the java.lang.Module object for a named module defined to a class loader that contains a given package.
     ///
     /// The module is returned via `module_ptr`.
@@ -3856,14 +3899,14 @@ impl JVMTIEnv {
     /// The objects returned in the `Vec` are JNI local references and must be managed.
     ///
     /// # Safety
-    /// Current thread must not be detached from the JVM.
+    /// JVM implementation specific
     ///
     /// # Errors
     /// If the call to `GetLoadedClasses` fails.
     ///
     /// # Panics
     /// If JVMTI provides a negative number of loaded classes without returning an error.
-    /// If JVMTI provides a null array of loaded with a count of more than 0 without return return an error.
+    /// If JVMTI provides a null array of loaded classes with a count of more than 0 without return return an error.
     pub unsafe fn GetLoadedClasses_as_vec(&self) -> Result<Vec<jclass>, jvmtiError> {
         unsafe {
             let mut count: jsize = 0;
