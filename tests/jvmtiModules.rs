@@ -3,7 +3,6 @@
 #[cfg(feature = "std")]
 pub mod test {
     use jni_simple::*;
-    use std::ffi::CStr;
     use std::ptr::null_mut;
 
     #[test]

@@ -295,7 +295,27 @@ impl Hash for JvmtiError {
 
 impl From<c_int> for JvmtiError {
     fn from(value: c_int) -> Self {
-        match value {
+        Self::from_raw(value)
+    }
+}
+
+impl From<&JvmtiError> for c_int {
+    fn from(value: &JvmtiError) -> Self {
+        (*value).into()
+    }
+}
+
+impl From<JvmtiError> for c_int {
+    fn from(value: JvmtiError) -> Self {
+        JvmtiError::into_raw(value)
+    }
+}
+
+impl JvmtiError {
+    /// Const implementation of `From<c_int>`
+    #[must_use]
+    pub const fn from_raw(raw: c_int) -> Self {
+        match raw {
             0 => Self::NONE,
             10 => Self::INVALID_THREAD,
             11 => Self::INVALID_THREAD_GROUP,
@@ -352,76 +372,68 @@ impl From<c_int> for JvmtiError {
             other => Self::OTHER(other),
         }
     }
-}
 
-impl From<&JvmtiError> for c_int {
-    fn from(value: &JvmtiError) -> Self {
-        (*value).into()
-    }
-}
-
-impl From<JvmtiError> for c_int {
-    fn from(value: JvmtiError) -> Self {
-        match value {
-            JvmtiError::NONE => 0,
-            JvmtiError::INVALID_THREAD => 10,
-            JvmtiError::INVALID_THREAD_GROUP => 11,
-            JvmtiError::INVALID_PRIORITY => 12,
-            JvmtiError::THREAD_NOT_SUSPENDED => 13,
-            JvmtiError::THREAD_SUSPENDED => 14,
-            JvmtiError::THREAD_NOT_ALIVE => 15,
-            JvmtiError::INVALID_OBJECT => 20,
-            JvmtiError::INVALID_CLASS => 21,
-            JvmtiError::CLASS_NOT_PREPARED => 22,
-            JvmtiError::INVALID_METHODID => 23,
-            JvmtiError::INVALID_LOCATION => 24,
-            JvmtiError::INVALID_FIELDID => 25,
-            JvmtiError::INVALID_MODULE => 26,
-            JvmtiError::NO_MORE_FRAMES => 31,
-            JvmtiError::OPAQUE_FRAME => 32,
-            JvmtiError::TYPE_MISMATCH => 34,
-            JvmtiError::INVALID_SLOT => 35,
-            JvmtiError::DUPLICATE => 40,
-            JvmtiError::NOT_FOUND => 41,
-            JvmtiError::INVALID_MONITOR => 50,
-            JvmtiError::NOT_MONITOR_OWNER => 51,
-            JvmtiError::INTERRUPT => 52,
-            JvmtiError::INVALID_CLASS_FORMAT => 60,
-            JvmtiError::CIRCULAR_CLASS_DEFINITION => 61,
-            JvmtiError::FAILS_VERIFICATION => 62,
-            JvmtiError::UNSUPPORTED_REDEFINITION_METHOD_ADDED => 63,
-            JvmtiError::UNSUPPORTED_REDEFINITION_SCHEMA_CHANGED => 64,
-            JvmtiError::INVALID_TYPESTATE => 65,
-            JvmtiError::UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED => 66,
-            JvmtiError::UNSUPPORTED_REDEFINITION_METHOD_DELETED => 67,
-            JvmtiError::UNSUPPORTED_VERSION => 68,
-            JvmtiError::NAMES_DONT_MATCH => 69,
-            JvmtiError::UNSUPPORTED_REDEFINITION_CLASS_MODIFIERS_CHANGED => 70,
-            JvmtiError::UNSUPPORTED_REDEFINITION_METHOD_MODIFIERS_CHANGED => 71,
-            JvmtiError::UNSUPPORTED_REDEFINITION_CLASS_ATTRIBUTE_CHANGED => 72,
-            JvmtiError::UNSUPPORTED_OPERATION => 73,
-            JvmtiError::UNMODIFIABLE_CLASS => 79,
-            JvmtiError::UNMODIFIABLE_MODULE => 80,
-            JvmtiError::NOT_AVAILABLE => 98,
-            JvmtiError::MUST_POSSESS_CAPABILITY => 99,
-            JvmtiError::NULL_POINTER => 100,
-            JvmtiError::ABSENT_INFORMATION => 101,
-            JvmtiError::INVALID_EVENT_TYPE => 102,
-            JvmtiError::ILLEGAL_ARGUMENT => 103,
-            JvmtiError::NATIVE_METHOD => 104,
-            JvmtiError::CLASS_LOADER_UNSUPPORTED => 106,
-            JvmtiError::OUT_OF_MEMORY => 110,
-            JvmtiError::ACCESS_DENIED => 111,
-            JvmtiError::WRONG_PHASE => 112,
-            JvmtiError::INTERNAL => 113,
-            JvmtiError::UNATTACHED_THREAD => 115,
-            JvmtiError::INVALID_ENVIRONMENT => 116,
-            JvmtiError::OTHER(value) => value,
+    /// Const implementation of `Into<c_int>`
+    #[must_use]
+    pub const fn into_raw(self) -> c_int {
+        match self {
+            Self::NONE => 0,
+            Self::INVALID_THREAD => 10,
+            Self::INVALID_THREAD_GROUP => 11,
+            Self::INVALID_PRIORITY => 12,
+            Self::THREAD_NOT_SUSPENDED => 13,
+            Self::THREAD_SUSPENDED => 14,
+            Self::THREAD_NOT_ALIVE => 15,
+            Self::INVALID_OBJECT => 20,
+            Self::INVALID_CLASS => 21,
+            Self::CLASS_NOT_PREPARED => 22,
+            Self::INVALID_METHODID => 23,
+            Self::INVALID_LOCATION => 24,
+            Self::INVALID_FIELDID => 25,
+            Self::INVALID_MODULE => 26,
+            Self::NO_MORE_FRAMES => 31,
+            Self::OPAQUE_FRAME => 32,
+            Self::TYPE_MISMATCH => 34,
+            Self::INVALID_SLOT => 35,
+            Self::DUPLICATE => 40,
+            Self::NOT_FOUND => 41,
+            Self::INVALID_MONITOR => 50,
+            Self::NOT_MONITOR_OWNER => 51,
+            Self::INTERRUPT => 52,
+            Self::INVALID_CLASS_FORMAT => 60,
+            Self::CIRCULAR_CLASS_DEFINITION => 61,
+            Self::FAILS_VERIFICATION => 62,
+            Self::UNSUPPORTED_REDEFINITION_METHOD_ADDED => 63,
+            Self::UNSUPPORTED_REDEFINITION_SCHEMA_CHANGED => 64,
+            Self::INVALID_TYPESTATE => 65,
+            Self::UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED => 66,
+            Self::UNSUPPORTED_REDEFINITION_METHOD_DELETED => 67,
+            Self::UNSUPPORTED_VERSION => 68,
+            Self::NAMES_DONT_MATCH => 69,
+            Self::UNSUPPORTED_REDEFINITION_CLASS_MODIFIERS_CHANGED => 70,
+            Self::UNSUPPORTED_REDEFINITION_METHOD_MODIFIERS_CHANGED => 71,
+            Self::UNSUPPORTED_REDEFINITION_CLASS_ATTRIBUTE_CHANGED => 72,
+            Self::UNSUPPORTED_OPERATION => 73,
+            Self::UNMODIFIABLE_CLASS => 79,
+            Self::UNMODIFIABLE_MODULE => 80,
+            Self::NOT_AVAILABLE => 98,
+            Self::MUST_POSSESS_CAPABILITY => 99,
+            Self::NULL_POINTER => 100,
+            Self::ABSENT_INFORMATION => 101,
+            Self::INVALID_EVENT_TYPE => 102,
+            Self::ILLEGAL_ARGUMENT => 103,
+            Self::NATIVE_METHOD => 104,
+            Self::CLASS_LOADER_UNSUPPORTED => 106,
+            Self::OUT_OF_MEMORY => 110,
+            Self::ACCESS_DENIED => 111,
+            Self::WRONG_PHASE => 112,
+            Self::INTERNAL => 113,
+            Self::UNATTACHED_THREAD => 115,
+            Self::INVALID_ENVIRONMENT => 116,
+            Self::OTHER(value) => value,
         }
     }
-}
 
-impl JvmtiError {
     /// Returns true if this `JvmtiError` refers to `JVMTI_ERROR_NONE`
     #[must_use]
     pub const fn is_ok(&self) -> bool {
@@ -432,6 +444,18 @@ impl JvmtiError {
     #[must_use]
     pub const fn is_err(&self) -> bool {
         !self.is_ok()
+    }
+
+    /// Returns `Ok(())` if self is `JVMTI_ERROR_NONE` otherwise returns `Err(self)`
+    ///
+    /// # Errors
+    /// if self is not `JVMTI_ERROR_NONE`
+    pub const fn into_result(self) -> Result<(), Self> {
+        if self.is_ok() {
+            return Ok(());
+        }
+
+        Err(self)
     }
 }
 
@@ -483,13 +507,13 @@ impl From<jvmtiError> for JvmtiError {
 
 impl jvmtiError {
     #[must_use]
-    pub fn is_ok(self) -> bool {
-        self == JVMTI_ERROR_NONE
+    pub const fn is_ok(self) -> bool {
+        self.0 == JVMTI_ERROR_NONE.0
     }
 
     #[must_use]
-    pub fn is_err(self) -> bool {
-        self != JVMTI_ERROR_NONE
+    pub const fn is_err(self) -> bool {
+        self.0 != JVMTI_ERROR_NONE.0
     }
 
     /// This function transforms the jvmtiError into a Result if the jvmtiError is not `JVMTI_ERROR_NONE`.
@@ -520,12 +544,26 @@ impl jvmtiError {
     ///
     /// ```
     ///
-    pub fn into_result(self) -> Result<(), JvmtiError> {
-        if self == JVMTI_ERROR_NONE {
+    pub const fn into_result(self) -> Result<(), JvmtiError> {
+        if self.is_ok() {
             return Ok(());
         }
 
-        Err(self.into())
+        Err(JvmtiError::from_raw(self.0))
+    }
+
+    /// This function will return if self is `JVMTI_ERROR_NONE` otherwise
+    /// it will panic with the given message as well as the value of self.
+    ///
+    /// This method will attempt to resolve self to a known constant and print the name
+    /// of the constant in the panic message if at all possible. If self is not a known
+    /// constant the numeric value of self will be contained in the panic message.
+    ///
+    /// # Panics
+    /// if self is not `JVMTI_ERROR_NONE`
+    ///
+    pub fn expect(self, msg: &str) {
+        self.into_result().expect(msg);
     }
 
     /// This function transforms the jvmtiError into a rust enum that you can easily match on.
@@ -554,8 +592,8 @@ impl jvmtiError {
     /// ```
     ///
     #[must_use]
-    pub fn into_enum(self) -> JvmtiError {
-        self.into()
+    pub const fn into_enum(self) -> JvmtiError {
+        JvmtiError::from_raw(self.0)
     }
 
     /// This function transforms the jvmtiError back into its raw magic number from the jvm.
@@ -1727,7 +1765,7 @@ pub const JVMTI_TIMER_TOTAL_CPU: jvmtiTimerKind = 31;
 
 pub const JVMTI_TIMER_ELAPSED: jvmtiTimerKind = 32;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct jvmtiTimerInfo {
     pub max_value: jlong,
     pub may_skip_forward: jboolean,

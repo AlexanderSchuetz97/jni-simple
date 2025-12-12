@@ -26,10 +26,12 @@ fn test_conversion() {
             assert!(m.is_ok());
             assert!(n.is_ok());
             assert!(n.into_result().is_ok());
+            assert!(m.into_result().is_ok());
         } else {
             assert!(m.is_err());
             assert!(n.is_err());
             assert!(n.into_result().is_err());
+            assert!(m.into_result().is_err());
         }
 
         let f1 = m.to_string();

@@ -12,6 +12,18 @@ pub mod test {
             let (vm, _env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create java VM");
             let jvmti = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2).expect("failed to get JVMTI environment");
 
+            let mut got_cap = jvmtiCapabilities::default();
+            got_cap.set_can_get_thread_cpu_time(true);
+
+            jvmti.GetCapabilities(&raw mut got_cap).expect("failed to get capabilities");
+            assert!(!got_cap.can_get_thread_cpu_time());
+
+            let mut sl = [0; jvmtiCapabilities::size()];
+            got_cap.copy_to_slice(&mut sl);
+            for n in sl {
+                assert_eq!(n, 0, "{:?}", got_cap);
+            }
+
             let mut cap = jvmtiCapabilities::default();
             assert!(jvmti.GetPotentialCapabilities(&raw mut cap).is_ok());
             let mut raw_copy = vec![0u8; jvmtiCapabilities::size()];
