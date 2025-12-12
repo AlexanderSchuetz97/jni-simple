@@ -19,7 +19,17 @@ pub mod test {
 
             if !jvmti.AddCapabilities(&raw const cap).is_ok() {
                 println!("Cannot run jvmtiTimers test because the jvm does not permit adding this capability");
+                return;
             }
+
+            let mut timer_info = jvmtiTimerInfo::default();
+            jvmti.GetTimerInfo(&raw mut timer_info).into_result().expect("failed to get timer info");
+            assert_ne!(timer_info, jvmtiTimerInfo::default());
+            assert!(
+                timer_info.kind == JVMTI_TIMER_ELAPSED || timer_info.kind == JVMTI_TIMER_TOTAL_CPU || timer_info.kind == JVMTI_TIMER_USER_CPU,
+                "{}",
+                timer_info.kind
+            );
 
             let mut tm = 0;
             jvmti.GetCurrentThreadCpuTime(&raw mut tm).into_result().expect("failed to get current thread cpu time");
@@ -36,15 +46,6 @@ pub mod test {
             jvmti.GetTime(&mut tm2).into_result().expect("failed to get time");
             assert_ne!(tm2, 0);
             assert_ne!(tm2, tm);
-
-            let mut timer_info = jvmtiTimerInfo::default();
-            jvmti.GetTimerInfo(&raw mut timer_info).into_result().expect("failed to get timer info");
-            assert_ne!(timer_info, jvmtiTimerInfo::default());
-            assert!(
-                timer_info.kind == JVMTI_TIMER_ELAPSED || timer_info.kind == JVMTI_TIMER_TOTAL_CPU || timer_info.kind == JVMTI_TIMER_USER_CPU,
-                "{}",
-                timer_info.kind
-            )
         }
     }
 }
