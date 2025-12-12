@@ -3776,7 +3776,7 @@ impl JVMTIEnv {
             );
 
             let result = core::slice::from_raw_parts(classes_ptr, count).to_vec();
-            self.Deallocate(classes_ptr).into_result()?;
+            _ = self.Deallocate(classes_ptr);
 
             Ok(result)
         }
@@ -3963,7 +3963,7 @@ impl JVMTIEnv {
             assert!(!classes_ptr.is_null(), "JVMTI returned a null pointer classes array without returning an error");
 
             let result = core::slice::from_raw_parts(classes_ptr, count).to_vec();
-            self.Deallocate(classes_ptr).into_result()?;
+            _ = self.Deallocate(classes_ptr);
 
             Ok(result)
         }
@@ -3985,6 +3985,54 @@ impl JVMTIEnv {
     /// all pointer parameters must not be dangling.
     pub unsafe fn GetClassLoaderClasses(&self, initiating_loader: jobject, count_ptr: *mut jint, classes_ptr: *mut *mut jclass) -> jvmtiError {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jint, *mut *mut jclass) -> jvmtiError>(78)(self.vtable, initiating_loader, count_ptr, classes_ptr) }
+    }
+
+    /// Returns an Vec of all classes which this class loader can find by name via `ClassLoader::loadClass`, `Class::forName` and bytecode linkage.
+    ///
+    /// This convenience method takes care of deallocating the buffer returned by jvmti using the jvmti allocator.
+    /// This method silently ignores errors from the jvmti allocator and leaks the memory in that case.
+    ///
+    /// That is, all classes for which `initiating_loader` has been recorded as an initiating loader.
+    /// Each class in the returned array was created by this class loader, either by defining it directly or by delegation to another class loader.
+    /// See The Java™ Virtual Machine Specification, Chapter 5.3.
+    /// The returned list does not include hidden classes or interfaces or array classes whose element type is a hidden class or interface as they cannot be discovered by any class loader.
+    /// The number of classes in the array is returned via `class_count_ptr`, and the array itself via `classes_ptr`.
+    /// See `Lookup::defineHiddenClass`.
+    ///
+    /// # Errors
+    /// If the call to `GetClassLoaderClasses` fails.
+    ///
+    /// # Panics
+    /// If JVMTI provides a negative number of loaded classes without returning an error.
+    /// If JVMTI provides a null array of loaded classes with a count of more than 0 without return return an error.
+    ///
+    /// # Safety
+    /// `initiating_loader` must be a valid strong reference or null.
+    pub unsafe fn GetClassLoaderClasses_as_vec(&self, initiating_loader: jobject) -> Result<Vec<jclass>, jvmtiError> {
+        unsafe {
+            let mut count: jsize = 0;
+            let mut classes_ptr = null_mut();
+            self.GetClassLoaderClasses(initiating_loader, &raw mut count, &raw mut classes_ptr).into_result()?;
+
+            //We dont risk deallocating the array in the panic case.
+            let count = usize::try_from(count).expect("JVMTI GetClassLoaderClasses provided an array with a negative number of loaded classes.");
+            if count == 0 {
+                if !classes_ptr.is_null() {
+                    _ = self.Deallocate(classes_ptr);
+                }
+                return Ok(Vec::new());
+            }
+
+            assert!(
+                !classes_ptr.is_null(),
+                "JVMTI GetClassLoaderClasses returned a null pointer classes array without returning an error"
+            );
+
+            let result = core::slice::from_raw_parts(classes_ptr, count).to_vec();
+            _ = self.Deallocate(classes_ptr);
+
+            Ok(result)
+        }
     }
 
     /// Return the name and the generic signature of the class indicated by klass.

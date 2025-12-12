@@ -119,11 +119,54 @@ pub mod test {
             assert_ne!(modifiers & REFLECT_MODIFIER_SYNCHRONIZED, 0, "{modifiers}"); //TODO figure out why
 
             env.DeleteLocalRef(alloc);
-            env.DeleteLocalRef(class_loaded);
 
             let mut loader = std::ptr::dangling_mut();
             assert!(jvmti.GetClassLoader(system_class, &raw mut loader).is_ok());
             assert!(loader.is_null()); //Bootstrap loader means set to null, possibly different depending on JVM impl.
+
+            let dummy_cl_bytes = include_bytes!("../java_testcode/DummyClassloader.class");
+            let dummy_cl_class = env.DefineClass_from_slice("DummyClassloader", null_mut(), dummy_cl_bytes);
+            assert!(!dummy_cl_class.is_null());
+
+            let dummy_cl_constructor = env.GetMethodID(dummy_cl_class, "<init>", "()V");
+            assert!(!dummy_cl_constructor.is_null());
+
+            let dummy_cl_instance = env.NewObject0(dummy_cl_class, dummy_cl_constructor);
+            assert!(!dummy_cl_instance.is_null());
+
+            let class_blob = include_bytes!("../java_testcode/ThrowNewZa.class");
+            let class_loaded_by_a_classloader = env.DefineClass_from_slice("ThrowNewZa", dummy_cl_instance, class_blob);
+            assert!(!class_loaded_by_a_classloader.is_null());
+
+            let mut loader = std::ptr::dangling_mut();
+            assert!(jvmti.GetClassLoader(class_loaded_by_a_classloader, &raw mut loader).is_ok());
+            assert!(!loader.is_null());
+
+            assert!(env.IsSameObject(loader, dummy_cl_instance));
+
+            let result = jvmti.GetClassLoaderClasses_as_vec(loader).expect("GetClassLoaderClasses_as_vec");
+            assert!(!result.is_empty());
+            let mut found_loader_loaded_class = false;
+            for clz in result {
+                let mut class_name = null_mut();
+                assert!(jvmti.GetClassSignature(clz, &raw mut class_name, null_mut()).is_ok());
+                let name = CStr::from_ptr(class_name).to_string_lossy().to_string();
+                if env.IsSameObject(class_loaded_by_a_classloader, clz) {
+                    assert_eq!(name, "LThrowNewZa;");
+                    found_loader_loaded_class = true;
+                }
+
+                if env.IsSameObject(class_loaded, clz) {
+                    panic!("Found a class that was not loaded by the loader {name}");
+                }
+
+                _ = jvmti.Deallocate(class_name);
+                env.DeleteLocalRef(clz);
+            }
+
+            assert!(found_loader_loaded_class);
+
+            env.DeleteLocalRef(class_loaded);
         }
     }
 }
