@@ -24,7 +24,7 @@ pub mod test {
             let mut tm = 0;
             jvmti.GetCurrentThreadCpuTime(&raw mut tm).into_result().expect("failed to get current thread cpu time");
             assert_ne!(tm, 0);
-            thread::sleep(std::time::Duration::from_millis(100));
+            thread::sleep(std::time::Duration::from_millis(5000));
             let mut tm2 = 0;
             jvmti.GetCurrentThreadCpuTime(&raw mut tm2).into_result().expect("failed to get current thread cpu time");
             assert_ne!(tm2, 0);
@@ -32,7 +32,7 @@ pub mod test {
 
             jvmti.GetTime(&mut tm).into_result().expect("failed to get time");
             assert_ne!(tm2, 0);
-            thread::sleep(std::time::Duration::from_millis(100));
+            thread::sleep(std::time::Duration::from_millis(5000));
             jvmti.GetTime(&mut tm2).into_result().expect("failed to get time");
             assert_ne!(tm2, 0);
             assert_ne!(tm2, tm);
