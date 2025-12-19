@@ -31,6 +31,8 @@ pub mod test {
                 timer_info.kind
             );
 
+            eprintln!("{timer_info:?}");
+
             let mut tm = 0;
             jvmti.GetCurrentThreadCpuTime(&raw mut tm).into_result().expect("failed to get current thread cpu time");
             assert_ne!(tm, 0);
