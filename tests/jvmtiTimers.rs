@@ -33,6 +33,17 @@ pub mod test {
 
             eprintln!("{timer_info:?}");
 
+            let mut timer_info2 = jvmtiTimerInfo::default();
+            jvmti.GetCurrentThreadCpuTimerInfo(&mut timer_info2).into_result().expect("failed to get current thread cpu timer info");
+            assert_ne!(timer_info2, jvmtiTimerInfo::default());
+            assert!(
+                timer_info2.kind == JVMTI_TIMER_ELAPSED || timer_info2.kind == JVMTI_TIMER_TOTAL_CPU || timer_info2.kind == JVMTI_TIMER_USER_CPU,
+                "{}",
+                timer_info2.kind
+            );
+
+            eprintln!("{timer_info2:?}");
+
             let mut tm = 0;
             jvmti.GetCurrentThreadCpuTime(&raw mut tm).into_result().expect("failed to get current thread cpu time");
             assert_ne!(tm, 0);
