@@ -245,7 +245,7 @@ jobs:
         run: cargo test --verbose --release --no-default-features --features loadjvm
 
   macos-jdk-8:
-    runs-on: macos-13
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
