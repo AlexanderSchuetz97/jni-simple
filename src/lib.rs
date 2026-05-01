@@ -3151,14 +3151,14 @@ impl JVMTIEnv {
 
     /// Starts the execution of an agent thread. with the specified rust closure/function.
     ///
-    /// This is a convenience function that automatically handles wrapping of a rust FnOnce to
+    /// This is a convenience function that automatically handles wrapping of a rust `FnOnce` to
     /// be invoked by the JVM in a new thread.
     ///
     /// In case of error the `proc` parameter is dropped without ever being executed.
     ///
     /// # Safety
     /// `thread` must refer to a valid strong reference to a thread.
-    /// `proc` must not panic when called. (compile with panic=abort or use panic::catch_unwind.)
+    /// `proc` must not panic when called. (compile with panic=abort or use `panic::catch_unwind`.)
     /// # Example
     /// ```rust
     /// use jni_simple::{JNIEnv, JVMTIEnv};
@@ -3183,7 +3183,7 @@ impl JVMTIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn RunAgentThread_fn(&self, thread: jthread, priority: jint, proc: impl FnOnce(JVMTIEnv, JNIEnv) + 'static + Send + Sync) -> jvmtiError {
+    pub unsafe fn RunAgentThread_fn(&self, thread: jthread, priority: jint, proc: impl FnOnce(Self, JNIEnv) + 'static + Send + Sync) -> jvmtiError {
         extern "system" fn agent_new_thread_wrapper_shim(jvmti: JVMTIEnv, env: JNIEnv, arg: *mut c_void) {
             // SAFETY: As long as the jvm passes us the pointer we gave it
             // and doesnt call this function in case of it returning an error we should be good.
@@ -3192,7 +3192,7 @@ impl JVMTIEnv {
         }
 
         unsafe {
-            let boxed = Box::new(proc) as Box<dyn FnOnce(JVMTIEnv, JNIEnv) + 'static + Send + Sync>;
+            let boxed = Box::new(proc) as Box<dyn FnOnce(Self, JNIEnv) + 'static + Send + Sync>;
             //We must double box it because otherwise we run into compiler error E0277.
             let raw_box = Box::into_raw(Box::new(boxed));
             let err = self.RunAgentThread(thread, agent_new_thread_wrapper_shim, raw_box.cast(), priority);
