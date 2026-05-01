@@ -36,8 +36,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "sync-ptr"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29caca00a9f331827b856fc7615414d593f22c7b8b5e84839f773b1b3bee48f3"
+source = "git+https://github.com/AlexanderSchuetz97/sync-ptr.git?rev=c19893f3e1260393783ea34488c6bfe68be225c9#c19893f3e1260393783ea34488c6bfe68be225c9"
 
 [[package]]
 name = "windows-link"

@@ -3,7 +3,7 @@
 #[cfg(feature = "std")]
 pub mod test {
     use jni_simple::*;
-    use std::thread;
+    use std::ptr::null_mut;
 
     #[test]
     pub fn test() {
@@ -13,13 +13,15 @@ pub mod test {
             let (vm, _env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create java VM");
             let jvmti = vm.GetEnv::<JVMTIEnv>(JVMTI_VERSION_1_2).expect("Failed to get jvmti env");
 
-            let mut nproc = 0;
-            jvmti.GetAvailableProcessors(&mut nproc).expect("failed to get nproc");
-            assert_ne!(nproc, 0);
-            assert!(nproc > 0);
+            let mut memory = null_mut();
+            assert!(jvmti.Allocate(64, &raw mut memory).is_ok());
+            assert!(!memory.is_null());
 
-            //TODO not 100% sure about this assertion.
-            assert_eq!(thread::available_parallelism().map(|n| n.get()).unwrap_or_else(|_e| nproc as usize), nproc as usize);
+            std::ptr::write_bytes(memory, 0, 64);
+            std::slice::from_raw_parts_mut(memory, 64).fill(1);
+            assert_eq!(1, std::ptr::read_volatile(memory));
+            assert_eq!(1, std::ptr::read_volatile(memory.wrapping_add(5)));
+            assert!(jvmti.Deallocate(memory).is_ok());
         }
     }
 }

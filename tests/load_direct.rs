@@ -1,4 +1,5 @@
 #[cfg(feature = "loadjvm")]
+#[cfg(any(target_os = "windows", target_vendor = "apple", target_os = "linux"))]
 mod test {
     use jni_simple::{JNI_CreateJavaVM_with_string_args, JNI_VERSION_1_8, load_jvm_from_library};
     use std::ptr::null;

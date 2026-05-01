@@ -59,9 +59,8 @@ pub mod test {
             let (_vm, env) = JNI_CreateJavaVM_with_string_args(JNI_VERSION_1_8, &args, false).expect("failed to create java VM");
             let jvmti = DEBUGGER.get().copied().unwrap();
 
-            let mut val = jvmtiEventCallbacks::default();
-            val.MethodExit = Some(blah);
-            assert!(jvmti.SetEventCallbacks(&val).is_ok());
+            static EVENT_CALLBACKS: jvmtiEventCallbacks = jvmtiEventCallbacks::new().with_MethodExit(blah);
+            assert!(jvmti.SetEventCallbacks(&EVENT_CALLBACKS).is_ok());
 
             let sys = env.FindClass("java/lang/System");
             let nano_time = env.GetStaticMethodID(sys, "nanoTime", "()J");

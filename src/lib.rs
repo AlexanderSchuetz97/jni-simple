@@ -64,7 +64,7 @@ use core::hash::{Hash, Hasher};
 use core::ptr::null;
 use core::ptr::null_mut;
 use core::sync::atomic::Ordering::SeqCst;
-use sync_ptr::{FromMutPtr, SyncMutPtr};
+use sync_ptr::{FromMutPtr, SyncFnPtr, SyncMutPtr, sync_fn_ptr, sync_fn_ptr_opt};
 
 pub const JNI_TRUE: jboolean = true;
 pub const JNI_FALSE: jboolean = false;
@@ -89,6 +89,8 @@ pub const JVMTI_VERSION_9: jint = 0x3009_0000;
 pub const JVMTI_VERSION_11: jint = 0x300B_0000;
 pub const JVMTI_VERSION_19: jint = 0x3013_0000;
 pub const JVMTI_VERSION_21: jint = 0x3015_0000;
+
+pub const JVMTI_VERSION_25: jint = 0x3019_0000;
 
 pub const JNI_VERSION_1_1: jint = 0x0001_0001;
 pub const JNI_VERSION_1_2: jint = 0x0001_0002;
@@ -1337,6 +1339,7 @@ pub struct JNINativeMethod {
     fnPtr: *const c_void,
 }
 
+/// The invocation interface pointer
 type JNIInvPtr = SyncMutPtr<*mut *mut c_void>;
 
 #[repr(transparent)]
@@ -1586,46 +1589,184 @@ pub type jvmtiEventVMStart = extern "system" fn(jvmti_env: JVMTIEnv, jni_env: JN
 
 #[derive(Debug, Clone, Default)]
 #[repr(C)]
+#[allow(clippy::missing_docs_in_private_items)] //TODO later
 pub struct jvmtiEventCallbacks {
-    pub VMInit: Option<jvmtiEventVMInit>,
-    pub VMDeath: Option<jvmtiEventVMDeath>,
-    pub ThreadStart: Option<jvmtiEventThreadStart>,
-    pub ThreadEnd: Option<jvmtiEventThreadEnd>,
-    pub ClassFileLoadHook: Option<jvmtiEventClassFileLoadHook>,
-    pub ClassLoad: Option<jvmtiEventClassLoad>,
-    pub ClassPrepare: Option<jvmtiEventClassPrepare>,
-    pub VMStart: Option<jvmtiEventVMStart>,
-    pub Exception: Option<jvmtiEventException>,
-    pub ExceptionCatch: Option<jvmtiEventExceptionCatch>,
-    pub SingleStep: Option<jvmtiEventSingleStep>,
-    pub FramePop: Option<jvmtiEventFramePop>,
-    pub Breakpoint: Option<jvmtiEventBreakpoint>,
-    pub FieldAccess: Option<jvmtiEventFieldAccess>,
-    pub FieldModification: Option<jvmtiEventFieldModification>,
-    pub MethodEntry: Option<jvmtiEventMethodEntry>,
-    pub MethodExit: Option<jvmtiEventMethodExit>,
-    pub NativeMethodBind: Option<jvmtiEventNativeMethodBind>,
-    pub CompiledMethodLoad: Option<jvmtiEventCompiledMethodLoad>,
-    pub CompiledMethodUnload: Option<jvmtiEventCompiledMethodUnload>,
-    pub DynamicCodeGenerated: Option<jvmtiEventDynamicCodeGenerated>,
-    pub DataDumpRequest: Option<jvmtiEventDataDumpRequest>,
-    pub reserved72: Option<jvmtiEventReserved>,
-    pub MonitorWait: Option<jvmtiEventMonitorWait>,
-    pub MonitorWaited: Option<jvmtiEventMonitorWaited>,
-    pub MonitorContendedEnter: Option<jvmtiEventMonitorContendedEnter>,
-    pub MonitorContendedEntered: Option<jvmtiEventMonitorContendedEntered>,
-    pub reserved77: Option<jvmtiEventReserved>,
-    pub reserved78: Option<jvmtiEventReserved>,
-    pub reserved79: Option<jvmtiEventReserved>,
-    pub ResourceExhausted: Option<jvmtiEventResourceExhausted>,
-    pub GarbageCollectionStart: Option<jvmtiEventGarbageCollectionStart>,
-    pub GarbageCollectionFinish: Option<jvmtiEventGarbageCollectionFinish>,
-    pub ObjectFree: Option<jvmtiEventObjectFree>,
-    pub VMObjectAlloc: Option<jvmtiEventVMObjectAlloc>,
-    pub reserved85: Option<jvmtiEventReserved>,
-    pub SampledObjectAlloc: Option<jvmtiEventSampledObjectAlloc>,
-    pub VirtualThreadStart: Option<jvmtiEventVirtualThreadStart>,
-    pub VirtualThreadEnd: Option<jvmtiEventVirtualThreadEnd>,
+    VMInit: SyncFnPtr<jvmtiEventVMInit>,
+    VMDeath: SyncFnPtr<jvmtiEventVMDeath>,
+    ThreadStart: SyncFnPtr<jvmtiEventThreadStart>,
+    ThreadEnd: SyncFnPtr<jvmtiEventThreadEnd>,
+    ClassFileLoadHook: SyncFnPtr<jvmtiEventClassFileLoadHook>,
+    ClassLoad: SyncFnPtr<jvmtiEventClassLoad>,
+    ClassPrepare: SyncFnPtr<jvmtiEventClassPrepare>,
+    VMStart: SyncFnPtr<jvmtiEventVMStart>,
+    Exception: SyncFnPtr<jvmtiEventException>,
+    ExceptionCatch: SyncFnPtr<jvmtiEventExceptionCatch>,
+    SingleStep: SyncFnPtr<jvmtiEventSingleStep>,
+    FramePop: SyncFnPtr<jvmtiEventFramePop>,
+    Breakpoint: SyncFnPtr<jvmtiEventBreakpoint>,
+    FieldAccess: SyncFnPtr<jvmtiEventFieldAccess>,
+    FieldModification: SyncFnPtr<jvmtiEventFieldModification>,
+    MethodEntry: SyncFnPtr<jvmtiEventMethodEntry>,
+    MethodExit: SyncFnPtr<jvmtiEventMethodExit>,
+    NativeMethodBind: SyncFnPtr<jvmtiEventNativeMethodBind>,
+    CompiledMethodLoad: SyncFnPtr<jvmtiEventCompiledMethodLoad>,
+    CompiledMethodUnload: SyncFnPtr<jvmtiEventCompiledMethodUnload>,
+    DynamicCodeGenerated: SyncFnPtr<jvmtiEventDynamicCodeGenerated>,
+    DataDumpRequest: SyncFnPtr<jvmtiEventDataDumpRequest>,
+    reserved72: SyncFnPtr<jvmtiEventReserved>,
+    MonitorWait: SyncFnPtr<jvmtiEventMonitorWait>,
+    MonitorWaited: SyncFnPtr<jvmtiEventMonitorWaited>,
+    MonitorContendedEnter: SyncFnPtr<jvmtiEventMonitorContendedEnter>,
+    MonitorContendedEntered: SyncFnPtr<jvmtiEventMonitorContendedEntered>,
+    reserved77: SyncFnPtr<jvmtiEventReserved>,
+    reserved78: SyncFnPtr<jvmtiEventReserved>,
+    reserved79: SyncFnPtr<jvmtiEventReserved>,
+    ResourceExhausted: SyncFnPtr<jvmtiEventResourceExhausted>,
+    GarbageCollectionStart: SyncFnPtr<jvmtiEventGarbageCollectionStart>,
+    GarbageCollectionFinish: SyncFnPtr<jvmtiEventGarbageCollectionFinish>,
+    ObjectFree: SyncFnPtr<jvmtiEventObjectFree>,
+    VMObjectAlloc: SyncFnPtr<jvmtiEventVMObjectAlloc>,
+    reserved85: SyncFnPtr<jvmtiEventReserved>,
+    SampledObjectAlloc: SyncFnPtr<jvmtiEventSampledObjectAlloc>,
+    VirtualThreadStart: SyncFnPtr<jvmtiEventVirtualThreadStart>,
+    VirtualThreadEnd: SyncFnPtr<jvmtiEventVirtualThreadEnd>,
+}
+
+/// private helper macro to generate getters/setters for some ffi structs.
+macro_rules! sync_ptr_setter {
+    ($field:ident, $setter:ident, $with:ident, $typ:ty) => {
+        /// Gets the function pointer value.
+        ///
+        /// # Returns
+        /// None if the function pointer is null.
+        #[must_use]
+        pub const fn $field(&self) -> Option<$typ> {
+            self.$field.inner()
+        }
+
+        /// Sets the function pointer value.
+        /// Pass None to set the function pointer value to null.
+        pub const fn $setter(&mut self, function: Option<$typ>) {
+            self.$field = sync_fn_ptr_opt!($typ, function);
+        }
+
+        /// Sets the function pointer value.
+        ///
+        /// # Returns
+        /// Self to allow for using the builder pattern.
+        #[must_use]
+        pub const fn $with(mut self, function: $typ) -> Self {
+            self.$field = sync_fn_ptr!($typ, function);
+            self
+        }
+    };
+}
+impl jvmtiEventCallbacks {
+    /// Creates new jvmtiEventCallbacks with all callback function pointers set to null.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            VMInit: SyncFnPtr::null(),
+            VMDeath: SyncFnPtr::null(),
+            ThreadStart: SyncFnPtr::null(),
+            ThreadEnd: SyncFnPtr::null(),
+            ClassFileLoadHook: SyncFnPtr::null(),
+            ClassLoad: SyncFnPtr::null(),
+            ClassPrepare: SyncFnPtr::null(),
+            VMStart: SyncFnPtr::null(),
+            Exception: SyncFnPtr::null(),
+            ExceptionCatch: SyncFnPtr::null(),
+            SingleStep: SyncFnPtr::null(),
+            FramePop: SyncFnPtr::null(),
+            Breakpoint: SyncFnPtr::null(),
+            FieldAccess: SyncFnPtr::null(),
+            FieldModification: SyncFnPtr::null(),
+            MethodEntry: SyncFnPtr::null(),
+            MethodExit: SyncFnPtr::null(),
+            NativeMethodBind: SyncFnPtr::null(),
+            CompiledMethodLoad: SyncFnPtr::null(),
+            CompiledMethodUnload: SyncFnPtr::null(),
+            DynamicCodeGenerated: SyncFnPtr::null(),
+            DataDumpRequest: SyncFnPtr::null(),
+            reserved72: SyncFnPtr::null(),
+            MonitorWait: SyncFnPtr::null(),
+            MonitorWaited: SyncFnPtr::null(),
+            MonitorContendedEnter: SyncFnPtr::null(),
+            MonitorContendedEntered: SyncFnPtr::null(),
+            reserved77: SyncFnPtr::null(),
+            reserved78: SyncFnPtr::null(),
+            reserved79: SyncFnPtr::null(),
+            ResourceExhausted: SyncFnPtr::null(),
+            GarbageCollectionStart: SyncFnPtr::null(),
+            GarbageCollectionFinish: SyncFnPtr::null(),
+            ObjectFree: SyncFnPtr::null(),
+            VMObjectAlloc: SyncFnPtr::null(),
+            reserved85: SyncFnPtr::null(),
+            SampledObjectAlloc: SyncFnPtr::null(),
+            VirtualThreadStart: SyncFnPtr::null(),
+            VirtualThreadEnd: SyncFnPtr::null(),
+        }
+    }
+
+    sync_ptr_setter!(VMInit, set_VMInit, with_VMInit, jvmtiEventVMInit);
+    sync_ptr_setter!(VMDeath, set_VMDeath, with_VMDeath, jvmtiEventVMDeath);
+    sync_ptr_setter!(ThreadStart, set_ThreadStart, with_ThreadStart, jvmtiEventThreadStart);
+    sync_ptr_setter!(ThreadEnd, set_ThreadEnd, with_ThreadEnd, jvmtiEventThreadEnd);
+    sync_ptr_setter!(ClassFileLoadHook, set_ClassFileLoadHook, with_ClassFileLoadHook, jvmtiEventClassFileLoadHook);
+    sync_ptr_setter!(ClassLoad, set_ClassLoad, with_ClassLoad, jvmtiEventClassLoad);
+    sync_ptr_setter!(ClassPrepare, set_ClassPrepare, with_ClassPrepare, jvmtiEventClassPrepare);
+    sync_ptr_setter!(VMStart, set_VMStart, with_VMStart, jvmtiEventVMStart);
+    sync_ptr_setter!(Exception, set_Exception, with_Exception, jvmtiEventException);
+    sync_ptr_setter!(ExceptionCatch, set_ExceptionCatch, with_ExceptionCatch, jvmtiEventExceptionCatch);
+    sync_ptr_setter!(SingleStep, set_SingleStep, with_SingleStep, jvmtiEventSingleStep);
+    sync_ptr_setter!(FramePop, set_FramePop, with_FramePop, jvmtiEventFramePop);
+    sync_ptr_setter!(Breakpoint, set_Breakpoint, with_Breakpoint, jvmtiEventBreakpoint);
+    sync_ptr_setter!(FieldAccess, set_FieldAccess, with_FieldAccess, jvmtiEventFieldAccess);
+    sync_ptr_setter!(FieldModification, set_FieldModification, with_FieldModification, jvmtiEventFieldModification);
+    sync_ptr_setter!(MethodEntry, set_MethodEntry, with_MethodEntry, jvmtiEventMethodEntry);
+    sync_ptr_setter!(MethodExit, set_MethodExit, with_MethodExit, jvmtiEventMethodExit);
+    sync_ptr_setter!(NativeMethodBind, set_NativeMethodBind, with_NativeMethodBind, jvmtiEventNativeMethodBind);
+    sync_ptr_setter!(CompiledMethodLoad, set_CompiledMethodLoad, with_CompiledMethodLoad, jvmtiEventCompiledMethodLoad);
+    sync_ptr_setter!(CompiledMethodUnload, set_CompiledMethodUnload, with_CompiledMethodUnload, jvmtiEventCompiledMethodUnload);
+    sync_ptr_setter!(DynamicCodeGenerated, set_DynamicCodeGenerated, with_DynamicCodeGenerated, jvmtiEventDynamicCodeGenerated);
+    sync_ptr_setter!(DataDumpRequest, set_DataDumpRequest, with_DataDumpRequest, jvmtiEventDataDumpRequest);
+    sync_ptr_setter!(reserved72, set_reserved72, with_reserved72, jvmtiEventReserved);
+    sync_ptr_setter!(MonitorWait, set_MonitorWait, with_MonitorWait, jvmtiEventMonitorWait);
+    sync_ptr_setter!(MonitorWaited, set_MonitorWaited, with_MonitorWaited, jvmtiEventMonitorWaited);
+    sync_ptr_setter!(
+        MonitorContendedEnter,
+        set_MonitorContendedEnter,
+        with_MonitorContendedEnter,
+        jvmtiEventMonitorContendedEnter
+    );
+    sync_ptr_setter!(
+        MonitorContendedEntered,
+        set_MonitorContendedEntered,
+        with_MonitorContendedEntered,
+        jvmtiEventMonitorContendedEntered
+    );
+    sync_ptr_setter!(reserved77, set_reserved77, with_reserved77, jvmtiEventReserved);
+    sync_ptr_setter!(reserved78, set_reserved78, with_reserved78, jvmtiEventReserved);
+    sync_ptr_setter!(reserved79, set_reserved79, with_reserved79, jvmtiEventReserved);
+    sync_ptr_setter!(ResourceExhausted, set_ResourceExhausted, with_ResourceExhausted, jvmtiEventResourceExhausted);
+    sync_ptr_setter!(
+        GarbageCollectionStart,
+        set_GarbageCollectionStart,
+        with_GarbageCollectionStart,
+        jvmtiEventGarbageCollectionStart
+    );
+    sync_ptr_setter!(
+        GarbageCollectionFinish,
+        set_GarbageCollectionFinish,
+        with_GarbageCollectionFinish,
+        jvmtiEventGarbageCollectionFinish
+    );
+    sync_ptr_setter!(ObjectFree, set_ObjectFree, with_ObjectFree, jvmtiEventObjectFree);
+    sync_ptr_setter!(VMObjectAlloc, set_VMObjectAlloc, with_VMObjectAlloc, jvmtiEventVMObjectAlloc);
+    sync_ptr_setter!(reserved85, set_reserved85, with_reserved85, jvmtiEventReserved);
+    sync_ptr_setter!(SampledObjectAlloc, set_SampledObjectAlloc, with_SampledObjectAlloc, jvmtiEventSampledObjectAlloc);
+    sync_ptr_setter!(VirtualThreadStart, set_VirtualThreadStart, with_VirtualThreadStart, jvmtiEventVirtualThreadStart);
+    sync_ptr_setter!(VirtualThreadEnd, set_VirtualThreadEnd, with_VirtualThreadEnd, jvmtiEventVirtualThreadEnd);
 }
 
 #[repr(C)]
@@ -2731,7 +2872,7 @@ impl JVMTIEnv {
 
     /// Get the state of a thread.
     ///
-    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetThreadStatee>
+    /// See <https://docs.oracle.com/en/java/javase/24/docs/specs/jvmti.html#GetThreadState>
     ///
     /// # Safety
     /// The `thread` must be a valid strong reference to a thread.
@@ -2770,6 +2911,48 @@ impl JVMTIEnv {
     ///
     pub unsafe fn GetAllThreads(&self, threads_count_ptr: *mut jint, threads_ptr: *mut *mut jthread) -> jvmtiError {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, *mut jint, *mut *mut jthread) -> jvmtiError>(3)(self.vtable, threads_count_ptr, threads_ptr) }
+    }
+
+    /// Get all live platform threads that are attached to the VM as a Vec.
+    /// Each jthread inside the returned Vec must be freed by the caller by calling `JniEnv::DeleteLocalRef`
+    ///
+    /// This convenience function automatically handles deallocating the memory using the jvmti allocator.
+    ///
+    /// The list of threads includes agent threads.
+    /// It does not include virtual threads.
+    /// A thread is live if `java.lang.Thread.isAlive()` would return true, that is, the thread has been started and has not yet terminated.
+    /// The universe of threads is determined by the context of the JVM TI environment, which typically is all threads attached to the VM.
+    ///
+    /// # Safety
+    /// JVM implementation specific.
+    ///
+    /// # Panics
+    /// If the jvm returns unexpected data such as negative array lengths or null pointers without providing an error code.
+    ///
+    /// # Errors
+    /// If the jvm fails to list the threads.
+    ///
+    pub unsafe fn GetAllThreads_as_vec(&self) -> Result<Vec<jthread>, jvmtiError> {
+        unsafe {
+            let mut count = 0;
+            let mut threads_ptr = null_mut();
+            self.GetAllThreads(&raw mut count, &raw mut threads_ptr).into_result()?;
+            let count = usize::try_from(count).expect("JVMTI GetAllThreads provided an array with a negative number of threads");
+            if count == 0 {
+                if !threads_ptr.is_null() {
+                    _ = self.Deallocate(threads_ptr);
+                }
+                return Ok(Vec::new());
+            }
+
+            assert!(
+                !threads_ptr.is_null(),
+                "JVMTI GetAllThreads returned a null pointer thread array without returning an error"
+            );
+            let result = core::slice::from_raw_parts(threads_ptr, count).to_vec();
+            _ = self.Deallocate(threads_ptr);
+            Ok(result)
+        }
     }
 
     /// Suspend the specified thread.
