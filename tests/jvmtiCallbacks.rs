@@ -47,7 +47,7 @@ pub mod test {
         unsafe {
             load_jvm_from_java_home().expect("failed to load jvm");
 
-            let ptr = shim_agent as usize;
+            let ptr = shim_agent as *const () as usize;
 
             #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "netbsd"))]
             let args: Vec<String> = vec![format!("-agentpath:jvmti_shim/target/release/libjvmti_shim.so={ptr}")];

@@ -64,6 +64,7 @@ use core::hash::{Hash, Hasher};
 use core::ptr::null;
 use core::ptr::null_mut;
 use core::sync::atomic::Ordering::SeqCst;
+use std::prelude::v1::Box;
 use sync_ptr::{FromMutPtr, SyncFnPtr, SyncMutPtr, sync_fn_ptr, sync_fn_ptr_opt};
 
 pub const JNI_TRUE: jboolean = true;
@@ -3146,6 +3147,66 @@ impl JVMTIEnv {
     ///
     pub unsafe fn RunAgentThread(&self, thread: jthread, proc: jvmtiStartFunction, arg: *mut c_void, priority: jint) -> jvmtiError {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jthread, jvmtiStartFunction, *mut c_void, jint) -> jvmtiError>(11)(self.vtable, thread, proc, arg, priority) }
+    }
+
+    /// Starts the execution of an agent thread. with the specified rust closure/function.
+    ///
+    /// This is a convineince function that automatically handles wrapping of a rust FnOnce to
+    /// be invoked by the JVM in a new thread.
+    ///
+    /// In case of error the `proc` parameter is dropped without ever being executed.
+    ///
+    /// # Safety
+    /// `thread` must refer to a valid strong reference to a thread.
+    /// `proc` must not panic when called. (compile with panic=abort or use panic::catch_unwind.)
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{JNIEnv, JVMTIEnv};
+    ///
+    /// fn start_agent_thread(jvmti: JVMTIEnv, env: JNIEnv) {
+    ///     unsafe {
+    ///         //Do this once in your init function, remember to check for errors!
+    ///         let thread_class = env.FindClass("java/lang/Thread");
+    ///         let thread_constructor = env.GetMethodID(thread_class, "<init>", "()V");
+    ///
+    ///         // Create a new java thread handle.
+    ///         let virgin_thread = env.NewObject0(thread_class, thread_constructor);
+    ///         // Customize your thread here as needed using jni. (set_name for example)
+    ///
+    ///         eprintln!("JVMTI Agent thread {:?}", std::thread::current().id());
+    ///
+    ///         jvmti.RunAgentThread_fn(virgin_thread, 1, |jvmti, env| {
+    ///             eprintln!("JVMTI Agent thread {:?}", std::thread::current().id());
+    ///             //...
+    ///         }).expect("Failed to start agent thread");
+    ///     }
+    /// }
+    /// ```
+    ///
+    pub unsafe fn RunAgentThread_fn(&self, thread: jthread, priority: jint, proc: impl FnOnce(JVMTIEnv, JNIEnv) + 'static + Send + Sync) -> jvmtiError {
+        extern "system" fn agent_new_thread_wrapper_shim(jvmti: JVMTIEnv, env: JNIEnv, arg: *mut c_void) {
+            // SAFETY: As long as the jvm passes us the pointer we gave it
+            // and doesnt call this function in case of it returning an error we should be good.
+            // Both of those assumptions are fair for any properly implemented jvm.
+            unsafe { Box::from_raw(arg.cast::<Box<dyn FnOnce(JVMTIEnv, JNIEnv) + 'static + Send + Sync>>())(jvmti, env) };
+        }
+
+        unsafe {
+            let boxed = Box::new(proc) as Box<dyn FnOnce(JVMTIEnv, JNIEnv) + 'static + Send + Sync>;
+            //We must double box it because otherwise we run into compiler error E0277.
+            let raw_box = Box::into_raw(Box::new(boxed));
+            let err = self.RunAgentThread(thread, agent_new_thread_wrapper_shim, raw_box.cast(), priority);
+            if err.is_ok() {
+                //No error we asssume agent_new_thread_wrapper_shim was or is going to be invoked.
+                return err;
+            }
+
+            // Reclaim the memory in case of error.
+            // SAFETY: We assume the jvm did not call agent_new_thread_wrapper_shim with this pointer in case of error.
+            _ = Box::from_raw(raw_box);
+
+            err
+        }
     }
 
     /// The VM stores a pointer value associated with each environment-thread pair.
@@ -24827,11 +24888,21 @@ impl JavaVM {
             {
                 assert!(!args.is_null(), "AttachCurrentThread args must not be null");
             }
+
             let mut envptr: JNIEnvVTable = null_mut();
 
             let result = self.ivk::<extern "system" fn(JNIInvPtr, *mut JNIEnvVTable, *mut JavaVMAttachArgs) -> jint>(4)(self.vtable, &raw mut envptr, args);
             if result != JNI_OK {
                 return Err(result);
+            }
+
+            #[cfg(feature = "asserts")]
+            {
+                let jni_version = (*args).version;
+                assert!(
+                    jni_version & 0x3000_0000 != 0x3000_0000,
+                    "AttachCurrentThread called with jni version 0x{jni_version:X} which should cause an error in the JVM but it did not. Using the resulting vtable is likely ub."
+                );
             }
 
             assert!(!envptr.is_null(), "AttachCurrentThread returned JNI_OK but did not set the JNIEnv pointer!");
