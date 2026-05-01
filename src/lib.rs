@@ -57,6 +57,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::private::{SealedAsJNILinkage, SealedEnvVTable};
+use alloc::boxed::Box;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int, c_uchar, c_void};
 use core::fmt::{Debug, Display, Formatter};
@@ -64,7 +65,6 @@ use core::hash::{Hash, Hasher};
 use core::ptr::null;
 use core::ptr::null_mut;
 use core::sync::atomic::Ordering::SeqCst;
-use std::prelude::v1::Box;
 use sync_ptr::{FromMutPtr, SyncFnPtr, SyncMutPtr, sync_fn_ptr, sync_fn_ptr_opt};
 
 pub const JNI_TRUE: jboolean = true;
@@ -3151,7 +3151,7 @@ impl JVMTIEnv {
 
     /// Starts the execution of an agent thread. with the specified rust closure/function.
     ///
-    /// This is a convineince function that automatically handles wrapping of a rust FnOnce to
+    /// This is a convenience function that automatically handles wrapping of a rust FnOnce to
     /// be invoked by the JVM in a new thread.
     ///
     /// In case of error the `proc` parameter is dropped without ever being executed.
