@@ -4368,6 +4368,50 @@ impl JVMTIEnv {
         unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut *mut c_char) -> jvmtiError>(49)(self.vtable, klass, source_name_ptr) }
     }
 
+    /// For the class indicated by klass, return the source file name as a String.
+    ///
+    /// The returned string is a file name only and never contains a directory name.
+    ///
+    /// For primitive classes (for example, java.lang.Integer.TYPE) and for arrays this function returns `JVMTI_ERROR_ABSENT_INFORMATION`.
+    ///
+    /// This function serves as a convinence wrapper function and automatically handles JVMTI memory for you.
+    ///
+    /// # Returns
+    /// This function will return Err(JVMTI_ERROR_NONE) in case the file name contains
+    /// supplementary characters in CESU-8 encoding. Otherwise Err values always come from the jvm.
+    ///
+    /// # Safety
+    /// `klass` must be a valid strong reference or null.
+    /// `source_name_ptr` must not be dangling.
+    pub unsafe fn GetSourceFileName_as_string(&self, klass: jclass) -> Result<String, jvmtiError> {
+        unsafe {
+            let mut str = null_mut();
+            let res = self.GetSourceFileName(klass, &raw mut str);
+            if !res.is_ok() {
+                if !str.is_null() {
+                    _= self.Deallocate(str);
+                }
+                return Err(res);
+            }
+
+            if str.is_null() {
+                //TODO should we panic here?
+                return Ok(String::new());
+            }
+
+            let Ok(val) = CStr::from_ptr(str).to_str() else {
+                _= self.Deallocate(str);
+                //CESU-8 my old friend
+                return Err(JVMTI_ERROR_NONE);
+            };
+
+            let copy = val.to_string();
+            _= self.Deallocate(str);
+
+            Ok(copy)
+        }
+    }
+
     /// For the class indicated by klass, return the access flags via `modifiers_ptr`.
     ///
     /// Access flags are defined in The Java™ Virtual Machine Specification, Chapter 4.
