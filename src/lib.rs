@@ -4376,8 +4376,8 @@ impl JVMTIEnv {
     ///
     /// This function serves as a convinence wrapper function and automatically handles JVMTI memory for you.
     ///
-    /// # Returns
-    /// This function will return Err(JVMTI_ERROR_NONE) in case the file name contains
+    /// # Errors
+    /// This function will return `Err(JVMTI_ERROR_NONE)` in case the file name contains
     /// supplementary characters in CESU-8 encoding. Otherwise Err values always come from the jvm.
     ///
     /// # Safety
@@ -4389,7 +4389,7 @@ impl JVMTIEnv {
             let res = self.GetSourceFileName(klass, &raw mut str);
             if !res.is_ok() {
                 if !str.is_null() {
-                    _= self.Deallocate(str);
+                    _ = self.Deallocate(str);
                 }
                 return Err(res);
             }
@@ -4400,13 +4400,13 @@ impl JVMTIEnv {
             }
 
             let Ok(val) = CStr::from_ptr(str).to_str() else {
-                _= self.Deallocate(str);
+                _ = self.Deallocate(str);
                 //CESU-8 my old friend
                 return Err(JVMTI_ERROR_NONE);
             };
 
             let copy = val.to_string();
-            _= self.Deallocate(str);
+            _ = self.Deallocate(str);
 
             Ok(copy)
         }

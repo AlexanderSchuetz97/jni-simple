@@ -2,8 +2,8 @@
 #[cfg(feature = "loadjvm")]
 #[cfg(feature = "std")]
 pub mod test {
+    use jni_simple::{JNI_CreateJavaVM_with_string_args, JNI_VERSION_1_8, JVMTI_VERSION_1_2, JVMTIEnv, load_jvm_from_java_home};
     use std::ptr::null_mut;
-    use jni_simple::{load_jvm_from_java_home, JNI_CreateJavaVM_with_string_args, JVMTIEnv, JNI_VERSION_1_8, JVMTI_VERSION_1_2};
 
     #[test]
     pub fn test() {
