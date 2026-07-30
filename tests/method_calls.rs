@@ -171,7 +171,7 @@ pub mod test {
                 return;
             }
             assert!(!value.is_null());
-            assert!(env.IsSameObject(v, value));
+            assert!(env.IsSameObject(v, value) != JNI_FALSE);
             env.DeleteLocalRef(value);
         }
     }
@@ -1575,7 +1575,7 @@ pub mod test {
             let class = get_test_class();
             let meth = env.GetMethodID(class, "dynBooleanMethod0", "()Z");
             let result = env.CallBooleanMethod0(inst, meth);
-            assert_eq!(result, true);
+            assert_eq!(result, JNI_TRUE);
             assert_fn_name("dynBooleanMethod0");
             assert_a(0i16);
             assert_b(null_mut());
@@ -1583,7 +1583,7 @@ pub mod test {
 
             let meth = env.GetMethodID(class, "dynBooleanMethod1", "(S)Z");
             let result = env.CallBooleanMethod1(inst, meth, 15i16);
-            assert_eq!(result, true);
+            assert_eq!(result, JNI_TRUE);
             assert_fn_name("dynBooleanMethod1");
             assert_a(15i16);
             assert_b(null_mut());
@@ -1591,7 +1591,7 @@ pub mod test {
 
             let meth = env.GetMethodID(class, "dynBooleanMethod2", "(SLjava/lang/Object;)Z");
             let result = env.CallBooleanMethod2(inst, meth, 1245i16, null_mut());
-            assert_eq!(result, true);
+            assert_eq!(result, JNI_TRUE);
             assert_fn_name("dynBooleanMethod2");
             assert_a(1245i16);
             assert_b(null_mut());
@@ -1600,7 +1600,7 @@ pub mod test {
             let meth = env.GetMethodID(class, "dynBooleanMethod3", "(SLjava/lang/Object;D)Z");
             let my_value = 88 as std::ffi::c_double;
             let result = env.CallBooleanMethod3(inst, meth, 26225i16, global, my_value);
-            assert_eq!(result, true);
+            assert_eq!(result, JNI_TRUE);
             assert_fn_name("dynBooleanMethod3");
             assert_a(26225i16);
             assert_b(global);
@@ -1609,7 +1609,7 @@ pub mod test {
             let meth = env.GetMethodID(class, "dynBooleanMethod3", "(SLjava/lang/Object;D)Z");
             let my_value = 69.2 as std::ffi::c_double;
             let result = env.CallBooleanMethodA(inst, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
-            assert_eq!(result, true);
+            assert_eq!(result, JNI_TRUE);
             assert_fn_name("dynBooleanMethod3");
             assert_a(32695i16);
             assert_b(null_mut());
@@ -2150,7 +2150,7 @@ pub mod test {
             let class = get_test_class();
             let meth = env.GetStaticMethodID(class, "staticBooleanMethod0", "()Z");
             let result = env.CallStaticBooleanMethod0(class, meth);
-            assert_eq!(result, true);
+            assert_eq!(result, JNI_TRUE);
             assert_fn_name("staticBooleanMethod0");
             assert_a(0i16);
             assert_b(null_mut());
@@ -2158,7 +2158,7 @@ pub mod test {
 
             let meth = env.GetStaticMethodID(class, "staticBooleanMethod1", "(S)Z");
             let result = env.CallStaticBooleanMethod1(class, meth, 15i16);
-            assert_eq!(result, true);
+            assert_eq!(result, JNI_TRUE);
             assert_fn_name("staticBooleanMethod1");
             assert_a(15i16);
             assert_b(null_mut());
@@ -2166,7 +2166,7 @@ pub mod test {
 
             let meth = env.GetStaticMethodID(class, "staticBooleanMethod2", "(SLjava/lang/Object;)Z");
             let result = env.CallStaticBooleanMethod2(class, meth, 1245i16, null_mut());
-            assert_eq!(result, true);
+            assert_eq!(result, JNI_TRUE);
             assert_fn_name("staticBooleanMethod2");
             assert_a(1245i16);
             assert_b(null_mut());
@@ -2175,7 +2175,7 @@ pub mod test {
             let meth = env.GetStaticMethodID(class, "staticBooleanMethod3", "(SLjava/lang/Object;D)Z");
             let my_value = 88 as std::ffi::c_double;
             let result = env.CallStaticBooleanMethod3(class, meth, 26225i16, global, my_value);
-            assert_eq!(result, true);
+            assert_eq!(result, JNI_TRUE);
             assert_fn_name("staticBooleanMethod3");
             assert_a(26225i16);
             assert_b(global);
@@ -2184,7 +2184,7 @@ pub mod test {
             let meth = env.GetStaticMethodID(class, "staticBooleanMethod3", "(SLjava/lang/Object;D)Z");
             let my_value = 69.2 as std::ffi::c_double;
             let result = env.CallStaticBooleanMethodA(class, meth, [32695i16.into(), jtype::null(), my_value.into()].as_ptr());
-            assert_eq!(result, true);
+            assert_eq!(result, JNI_TRUE);
             assert_fn_name("staticBooleanMethod3");
             assert_a(32695i16);
             assert_b(null_mut());
@@ -2598,7 +2598,7 @@ pub mod test {
             let env = get_env();
             let class = get_test_class();
             let meth = env.GetMethodID(class, "dynLongMethod0", "()J");
-            let refl = env.ToReflectedMethod(class, meth, false);
+            let refl = env.ToReflectedMethod(class, meth, JNI_FALSE);
             let meth = env.FromReflectedMethod(refl);
             env.DeleteLocalRef(refl);
 
@@ -2610,7 +2610,7 @@ pub mod test {
             assert_c(0f64);
 
             let meth = env.GetMethodID(class, "dynLongMethod1", "(S)J");
-            let refl = env.ToReflectedMethod(class, meth, false);
+            let refl = env.ToReflectedMethod(class, meth, JNI_FALSE);
             let meth = env.FromReflectedMethod(refl);
             env.DeleteLocalRef(refl);
 
@@ -2622,7 +2622,7 @@ pub mod test {
             assert_c(0f64);
 
             let meth = env.GetMethodID(class, "dynLongMethod2", "(SLjava/lang/Object;)J");
-            let refl = env.ToReflectedMethod(class, meth, false);
+            let refl = env.ToReflectedMethod(class, meth, JNI_FALSE);
             let meth = env.FromReflectedMethod(refl);
             env.DeleteLocalRef(refl);
 
@@ -2634,7 +2634,7 @@ pub mod test {
             assert_c(0f64);
 
             let meth = env.GetMethodID(class, "dynLongMethod3", "(SLjava/lang/Object;D)J");
-            let refl = env.ToReflectedMethod(class, meth, false);
+            let refl = env.ToReflectedMethod(class, meth, JNI_FALSE);
             let meth = env.FromReflectedMethod(refl);
             env.DeleteLocalRef(refl);
 
@@ -2647,7 +2647,7 @@ pub mod test {
             assert_c(my_value);
 
             let meth = env.GetMethodID(class, "dynLongMethod3", "(SLjava/lang/Object;D)J");
-            let refl = env.ToReflectedMethod(class, meth, false);
+            let refl = env.ToReflectedMethod(class, meth, JNI_FALSE);
             let meth = env.FromReflectedMethod(refl);
             env.DeleteLocalRef(refl);
 
@@ -2675,7 +2675,7 @@ pub mod test {
             let env = get_env();
             let class = get_test_class();
             let meth = env.GetStaticMethodID(class, "staticLongMethod0", "()J");
-            let refl = env.ToReflectedMethod(class, meth, true);
+            let refl = env.ToReflectedMethod(class, meth, JNI_TRUE);
             let meth = env.FromReflectedMethod(refl);
             env.DeleteLocalRef(refl);
 
@@ -2687,7 +2687,7 @@ pub mod test {
             assert_c(0f64);
 
             let meth = env.GetStaticMethodID(class, "staticLongMethod1", "(S)J");
-            let refl = env.ToReflectedMethod(class, meth, true);
+            let refl = env.ToReflectedMethod(class, meth, JNI_TRUE);
             let meth = env.FromReflectedMethod(refl);
             env.DeleteLocalRef(refl);
 
@@ -2699,7 +2699,7 @@ pub mod test {
             assert_c(0f64);
 
             let meth = env.GetStaticMethodID(class, "staticLongMethod2", "(SLjava/lang/Object;)J");
-            let refl = env.ToReflectedMethod(class, meth, true);
+            let refl = env.ToReflectedMethod(class, meth, JNI_TRUE);
             let meth = env.FromReflectedMethod(refl);
             env.DeleteLocalRef(refl);
 
@@ -2711,7 +2711,7 @@ pub mod test {
             assert_c(0f64);
 
             let meth = env.GetStaticMethodID(class, "staticLongMethod3", "(SLjava/lang/Object;D)J");
-            let refl = env.ToReflectedMethod(class, meth, true);
+            let refl = env.ToReflectedMethod(class, meth, JNI_TRUE);
             let meth = env.FromReflectedMethod(refl);
             env.DeleteLocalRef(refl);
 
@@ -2724,7 +2724,7 @@ pub mod test {
             assert_c(my_value);
 
             let meth = env.GetStaticMethodID(class, "staticLongMethod3", "(SLjava/lang/Object;D)J");
-            let refl = env.ToReflectedMethod(class, meth, true);
+            let refl = env.ToReflectedMethod(class, meth, JNI_TRUE);
             let meth = env.FromReflectedMethod(refl);
             env.DeleteLocalRef(refl);
 

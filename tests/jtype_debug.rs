@@ -1,4 +1,4 @@
-use jni_simple::{jlong, jtype};
+use jni_simple::{JNI_FALSE, JNI_TRUE, jlong, jtype};
 
 #[test]
 pub fn test_float() {
@@ -47,8 +47,8 @@ pub fn test_char() {
 #[test]
 pub fn test_bool() {
     unsafe {
-        let x = jtype::from(true);
-        assert!(x.boolean());
+        let x = jtype::from(JNI_TRUE);
+        assert_eq!(x.boolean(), JNI_TRUE);
         let format_str = format!("{:?}", x.debug());
         println!("{}", format_str);
 
@@ -56,8 +56,8 @@ pub fn test_bool() {
         #[cfg(target_endian = "little")]
         assert!(format_str.contains("byte=0x1"));
 
-        let x = jtype::from(false);
-        assert!(!x.boolean());
+        let x = jtype::from(JNI_FALSE);
+        assert_eq!(x.boolean(), JNI_FALSE);
         let format_str = format!("{:?}", x.debug());
         println!("{}", format_str);
 
@@ -137,6 +137,6 @@ pub fn test_setter() {
 
 #[test]
 pub fn test_default_fmt() {
-    let x = jtype::from(false);
+    let x = jtype::from(JNI_FALSE);
     assert_eq!("jtype", format!("{x:?}").as_str());
 }

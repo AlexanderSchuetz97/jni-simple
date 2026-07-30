@@ -14,32 +14,32 @@ pub mod test {
             let throwable_constructor = env.GetMethodID(throwable, "<init>", "()V");
             let throwable_get_message = env.GetMethodID(throwable, "getMessage", "()Ljava/lang/String;");
             let throwable_instance = env.NewObject0(throwable, throwable_constructor);
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
             env.Throw(throwable_instance);
-            assert!(env.ExceptionCheck());
+            assert!(env.ExceptionCheck() != JNI_FALSE);
             let throwable_thrown = env.ExceptionOccurred();
             assert!(!throwable_thrown.is_null());
-            assert!(env.ExceptionCheck());
+            assert!(env.ExceptionCheck() != JNI_FALSE);
             env.ExceptionDescribe();
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
             env.ExceptionClear();
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
             env.ExceptionDescribe();
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
             env.Throw(throwable_instance);
-            assert!(env.ExceptionCheck());
+            assert!(env.ExceptionCheck() != JNI_FALSE);
             env.ExceptionClear();
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
             let should_be_null = env.ExceptionOccurred();
             assert!(should_be_null.is_null());
-            assert!(env.IsSameObject(throwable_thrown, throwable_instance));
+            assert!(env.IsSameObject(throwable_thrown, throwable_instance) != JNI_FALSE);
 
             assert_eq!(JNI_OK, env.ThrowNew(throwable, "Some Error"));
-            assert!(env.ExceptionCheck());
+            assert!(env.ExceptionCheck() != JNI_FALSE);
             let different_obj = env.ExceptionOccurred();
             env.ExceptionClear();
-            assert!(!env.ExceptionCheck());
-            assert!(!env.IsSameObject(throwable_thrown, different_obj));
+            assert!(env.ExceptionCheck() == JNI_FALSE);
+            assert!(env.IsSameObject(throwable_thrown, different_obj) == JNI_FALSE);
 
             let message = env.CallObjectMethod0(different_obj, throwable_get_message);
             let rust_msg = env.GetStringUTFChars_as_string(message).unwrap();
@@ -47,15 +47,15 @@ pub mod test {
 
             assert_eq!(JNI_OK, env.ThrowNew(throwable, ()));
 
-            assert!(env.ExceptionCheck());
+            assert!(env.ExceptionCheck() != JNI_FALSE);
             let another_obj = env.ExceptionOccurred();
             env.ExceptionClear();
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
 
             let message = env.CallObjectMethod0(another_obj, throwable_get_message);
             assert!(message.is_null());
-            assert!(!env.IsSameObject(throwable_thrown, another_obj));
-            assert!(!env.IsSameObject(different_obj, another_obj));
+            assert!(env.IsSameObject(throwable_thrown, another_obj) == JNI_FALSE);
+            assert!(env.IsSameObject(different_obj, another_obj) == JNI_FALSE);
 
             vm.DestroyJavaVM();
         }

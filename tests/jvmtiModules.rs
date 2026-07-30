@@ -41,7 +41,7 @@ pub mod test {
             let mut found_sys_mod = false;
 
             for module in modules {
-                if env.IsSameObject(sys_mod, module) {
+                if env.IsSameObject(sys_mod, module) != JNI_FALSE {
                     found_sys_mod = true;
                 }
 
@@ -62,7 +62,7 @@ pub mod test {
                 .into_result()
                 .expect("GetNamedModule failed");
             assert!(!sys_mod2.is_null());
-            assert!(env.IsSameObject(sys_mod2, sys_mod));
+            assert!(env.IsSameObject(sys_mod2, sys_mod) != JNI_FALSE);
 
             let class_blob = include_bytes!("../java_testcode/ThrowNew.class");
             let class_loaded = env.DefineClass_from_slice("ThrowNew", null_mut(), class_blob);

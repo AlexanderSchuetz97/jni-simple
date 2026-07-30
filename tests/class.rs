@@ -23,12 +23,12 @@ pub mod test {
             assert!(!abstract_list_class_from_weak.is_null());
 
             assert!(!abstract_list_class.is_null());
-            assert!(env.IsInstanceOf(array_list_instance, abstract_list_class));
-            assert!(!env.IsInstanceOf(abstract_list_class, array_list_class));
-            assert!(!env.IsAssignableFrom(abstract_list_class, array_list_class));
-            assert!(env.IsAssignableFrom(array_list_class, abstract_list_class));
+            assert!(env.IsInstanceOf(array_list_instance, abstract_list_class) != JNI_FALSE);
+            assert!(env.IsInstanceOf(abstract_list_class, array_list_class) == JNI_FALSE);
+            assert!(env.IsAssignableFrom(abstract_list_class, array_list_class) == JNI_FALSE);
+            assert!(env.IsAssignableFrom(array_list_class, abstract_list_class) != JNI_FALSE);
 
-            assert!(env.IsSameObject(abstract_list_class, abstract_list_class_from_weak));
+            assert!(env.IsSameObject(abstract_list_class, abstract_list_class_from_weak) != JNI_FALSE);
         }
     }
 }

@@ -877,35 +877,35 @@ pub unsafe fn JNI_CreateJavaVM(arguments: *mut JavaVMInitArgs) -> Result<(JavaVM
 ///     ], false).expect("Failed to start jvm");
 ///
 ///     let main_class = env.FindClass(main_class);
-///     if env.ExceptionCheck() {
+///     if env.ExceptionCheck() != JNI_FALSE {
 ///         //Main class not found
 ///         env.ExceptionDescribe();
 ///         return std::process::exit(-1);
 ///     }
 ///
 ///     let main_method = env.GetStaticMethodID(main_class, "main","([Ljava/lang/String)V");
-///     if env.ExceptionCheck() {
+///     if env.ExceptionCheck() != JNI_FALSE {
 ///         //no static main(String[] args) method in the main class.
 ///         env.ExceptionDescribe();
 ///         return std::process::exit(-1);
 ///     }
 ///
 ///     let string_class = env.FindClass("java/lang/String");
-///     if env.ExceptionCheck() {
+///     if env.ExceptionCheck() != JNI_FALSE {
 ///         //Unlikely, java.lang.String not found.
 ///         env.ExceptionDescribe();
 ///         return std::process::exit(-1);
 ///     }
 ///
 ///     let main_method_string_parameter_array = env.NewObjectArray(0, string_class, null_mut());
-///      if env.ExceptionCheck() {
+///     if env.ExceptionCheck() != JNI_FALSE {
 ///         //Unlikely jvm ran out of memory when creating "new String[0];"
 ///         env.ExceptionDescribe();
 ///         return std::process::exit(-1);
 ///     }
 ///
 ///     env.CallStaticVoidMethod1(main_class, main_method, main_method_string_parameter_array);
-///     if env.ExceptionCheck() {
+///     if env.ExceptionCheck() != JNI_FALSE {
 ///         //Main method threw an exception
 ///         env.ExceptionDescribe();
 ///         return std::process::exit(-1);

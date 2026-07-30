@@ -52,7 +52,7 @@ pub mod test {
             assert_eq!(ptr, env.GetDirectBufferAddress(dir_buf));
 
             let buf_class = env.FindClass("java/nio/ByteBuffer");
-            assert!(env.IsInstanceOf(dir_buf, buf_class));
+            assert!(env.IsInstanceOf(dir_buf, buf_class) != JNI_FALSE);
             let get_next_byte = env.GetMethodID(buf_class, "get", "()B");
             let set_next_byte = env.GetMethodID(buf_class, "put", "(B)Ljava/nio/ByteBuffer;");
             let set_position = env.GetMethodID(buf_class, "position", "(I)Ljava/nio/Buffer;");

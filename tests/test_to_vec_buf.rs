@@ -2,13 +2,14 @@
 #[cfg(feature = "std")]
 mod test {
     use jni_simple::{
-        JNI_CreateJavaVM_with_string_args, JNI_VERSION_1_8, JNIEnv, jboolean, jbyte, jchar, jdouble, jfloat, jint, jlong, jobject, jshort, jsize, load_jvm_from_java_home,
+        JNI_CreateJavaVM_with_string_args, JNI_FALSE, JNI_TRUE, JNI_VERSION_1_8, JNIEnv, jboolean, jbyte, jchar, jdouble, jfloat, jint, jlong, jobject, jshort, jsize,
+        load_jvm_from_java_home,
     };
     use std::fmt::Debug;
 
     fn assert_aiob(env: JNIEnv) {
         unsafe {
-            assert!(env.ExceptionCheck());
+            assert!(env.ExceptionCheck() != JNI_FALSE);
             let occ = env.ExceptionOccurred();
             assert!(!occ.is_null());
             env.ExceptionClear();
@@ -17,7 +18,7 @@ mod test {
             env.DeleteLocalRef(occ);
             let ar_cl = env.FindClass("java/lang/ArrayIndexOutOfBoundsException");
             assert!(!ar_cl.is_null());
-            assert!(env.IsSameObject(ar_cl, exc_class));
+            assert!(env.IsSameObject(ar_cl, exc_class) != JNI_FALSE);
             env.DeleteLocalRef(ar_cl);
             env.DeleteLocalRef(exc_class);
         }
@@ -71,7 +72,7 @@ mod test {
 
     impl FromNum for jboolean {
         fn from(by: jbyte) -> Self {
-            by & 1 == 0
+            if by & 1 == 0 { JNI_TRUE } else { JNI_FALSE }
         }
     }
 
@@ -96,27 +97,27 @@ mod test {
                 T::from(15),
             ];
             let under_test = constructor(env, data);
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
 
             let copy = getter(env, under_test, 0, None);
             assert_eq!(data, copy.as_slice());
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
 
             let copy = getter(env, under_test, 0, Some(1));
             assert_eq!(&[T::from(0)], copy.as_slice());
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
 
             let copy = getter(env, under_test, 4, Some(4));
             assert_eq!(&[T::from(4), T::from(5), T::from(6), T::from(7)], copy.as_slice());
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
 
             let copy = getter(env, under_test, 16, None);
             assert!(copy.is_empty());
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
 
             let copy = getter(env, under_test, 13, Some(0));
             assert!(copy.is_empty());
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
 
             let copy = getter(env, under_test, 16, Some(-5));
             assert!(copy.is_empty());

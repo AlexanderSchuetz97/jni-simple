@@ -33,7 +33,7 @@ pub mod test {
             let test_string = env.NewStringUTF("test_string");
 
             env.CallStaticVoidMethod1(registered_class, t1m, test_string);
-            assert!(env.ExceptionCheck());
+            assert!(env.ExceptionCheck() != JNI_FALSE);
             let exc = env.ExceptionOccurred();
             assert!(!exc.is_null());
             env.ExceptionClear();
@@ -49,7 +49,7 @@ pub mod test {
             assert_eq!(exc_class_name_str.as_str(), "java.lang.UnsatisfiedLinkError");
 
             env.CallStaticVoidMethod1(registered_class, t2m, 754.156f64);
-            assert!(env.ExceptionCheck());
+            assert!(env.ExceptionCheck() != JNI_FALSE);
             let exc = env.ExceptionOccurred();
             assert!(!exc.is_null());
             env.ExceptionClear();
@@ -71,15 +71,15 @@ pub mod test {
             assert_eq!(JNI_OK, env.RegisterNatives_from_slice(registered_class, &[method1, method2]));
 
             env.CallStaticVoidMethod1(registered_class, t2m, 754.156f64);
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
 
             env.CallStaticVoidMethod1(registered_class, t1m, test_string);
-            assert!(!env.ExceptionCheck());
+            assert!(env.ExceptionCheck() == JNI_FALSE);
 
             env.UnregisterNatives(registered_class);
 
             env.CallStaticVoidMethod1(registered_class, t2m, 754.156f64);
-            assert!(env.ExceptionCheck());
+            assert!(env.ExceptionCheck() != JNI_FALSE);
             let exc = env.ExceptionOccurred();
             assert!(!exc.is_null());
             env.ExceptionClear();
@@ -92,7 +92,7 @@ pub mod test {
             env.DeleteLocalRef(exc_class_name);
 
             env.CallStaticVoidMethod1(registered_class, t1m, test_string);
-            assert!(env.ExceptionCheck());
+            assert!(env.ExceptionCheck() != JNI_FALSE);
             let exc = env.ExceptionOccurred();
             assert!(!exc.is_null());
             env.ExceptionClear();

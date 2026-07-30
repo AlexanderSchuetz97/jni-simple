@@ -67,8 +67,8 @@ use core::ptr::null_mut;
 use core::sync::atomic::Ordering::SeqCst;
 use sync_ptr::{FromMutPtr, SyncFnPtr, SyncMutPtr, sync_fn_ptr, sync_fn_ptr_opt};
 
-pub const JNI_TRUE: jboolean = true;
-pub const JNI_FALSE: jboolean = false;
+pub const JNI_TRUE: jboolean = 1;
+pub const JNI_FALSE: jboolean = 0;
 
 pub const JNI_OK: jint = 0;
 
@@ -150,7 +150,16 @@ pub type jsize = jint;
 pub type jshort = i16;
 pub type jchar = u16;
 pub type jbyte = i8;
-pub type jboolean = bool;
+/// JNI's `jboolean`, declared in `jni.h` as `unsigned char`.
+///
+/// This is deliberately not Rust's `bool`. A `bool` return is lowered as `zeroext i1`, which promises
+/// the ABI that the entire register is exactly 0 or 1 — a promise the JVM does not make. JNI only
+/// defines the low byte, and ART in particular leaves the rest of the return register undefined. A
+/// `bool` holding any other bit pattern is immediate undefined behaviour, and an optimizing build,
+/// trusting the promise, forwards the raw register instead of masking it.
+///
+/// Compare against [`JNI_TRUE`]/[`JNI_FALSE`], or normalize with `!= 0`.
+pub type jboolean = u8;
 
 pub type jfloat = core::ffi::c_float;
 
@@ -1040,7 +1049,7 @@ impl ReceiveJrawMonitorID for *mut jrawMonitorID {}
 ///         unimplemented!("handle method not found");
 ///     }
 ///     // methodWith5Params(16, 32, 12, 13, false);
-///     env.CallStaticVoidMethodA(class, meth, jtypes!(16i32, 64i32, 12i64, 13i64, false).as_ptr());
+///     env.CallStaticVoidMethodA(class, meth, jtypes!(16i32, 64i32, 12i64, 13i64, JNI_FALSE).as_ptr());
 /// }
 /// ```
 ///
@@ -1448,7 +1457,7 @@ impl Default for jvmtiThreadInfo {
         Self {
             name: null(),
             priority: 0,
-            is_daemon: false,
+            is_daemon: JNI_FALSE,
             thread_group: null_mut(),
             context_class_loader: null_mut(),
         }
@@ -6779,7 +6788,7 @@ impl JNIEnv {
     ///     let class_blob = &[0u8]; // = include_bytes!("../my_java_project/src/main/java/org/example/Main.class");
     ///     let name = CString::new("org/example/Main").unwrap();
     ///     let class = env.DefineClass(name.as_ptr(), null_mut(), class_blob.as_ptr().cast(), class_blob.len() as i32);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         env.ExceptionDescribe();
     ///         panic!("Failed to load main class check stderr for an error");
     ///     }
@@ -6855,7 +6864,7 @@ impl JNIEnv {
     ///     let class_blob = &[0u8]; // = include_bytes!("../my_java_project/src/main/java/org/example/Main.class");
     ///     let name = CString::new("org/example/Main").unwrap();
     ///     let class = env.DefineClass_from_slice(name.as_ptr(), null_mut(), class_blob);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         env.ExceptionDescribe();
     ///         panic!("Failed to load main class check stderr for an error");
     ///     }
@@ -6923,7 +6932,7 @@ impl JNIEnv {
     /// unsafe fn find_main_class(env: JNIEnv) -> jclass {
     ///     let name = CString::new("org/example/Main").unwrap();
     ///     let class = env.FindClass(name.as_ptr());
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         env.ExceptionDescribe();
     ///         panic!("Failed to find main class check stderr for an error");
     ///     }
@@ -7058,7 +7067,7 @@ impl JNIEnv {
     ///     let result = env.IsAssignableFrom(local, throwable_class);
     ///     env.DeleteLocalRef(local);
     ///     env.DeleteLocalRef(throwable_class);
-    ///     result
+    ///     result != JNI_FALSE
     /// }
     /// ```
     ///
@@ -7305,10 +7314,10 @@ impl JNIEnv {
     ///         unimplemented!("handle no zero arg constructor")
     ///     }
     ///     let my_object = env.NewObject0(my_class, my_zero_arg_constructor);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         let exception_object = env.ExceptionOccurred();
     ///         env.ExceptionClear();
-    ///         if env.IsInstanceOf(exception_object, special_exception) {
+    ///         if env.IsInstanceOf(exception_object, special_exception) != JNI_FALSE {
     ///             panic!("zero arg constructor threw SuperSpecialException!")
     ///         }
     ///
@@ -7484,7 +7493,7 @@ impl JNIEnv {
     ///         unimplemented!("handle no zero arg constructor")
     ///     }
     ///     let my_object = env.NewObject0(my_class, my_zero_arg_constructor);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         panic!("org/example/TestClass zero arg constructor threw an exception!");
     ///     }
     ///     unimplemented!()
@@ -7621,7 +7630,7 @@ impl JNIEnv {
             {
                 self.check_not_critical("DeleteLocalRef");
                 assert!(!obj.is_null(), "DeleteLocalRef obj is null");
-                if !self.ExceptionCheck() {
+                if self.ExceptionCheck() == JNI_FALSE {
                     match self.GetObjectRefType(obj) {
                         jobjectRefType::JNIInvalidRefType => panic!("DeleteLocalRef invalid non null reference"),
                         jobjectRefType::JNILocalRefType => {}
@@ -7895,7 +7904,7 @@ impl JNIEnv {
             {
                 self.check_not_critical("DeleteWeakGlobalRef");
                 assert!(!obj.is_null(), "DeleteWeakGlobalRef obj is null");
-                if !self.ExceptionCheck() {
+                if self.ExceptionCheck() == JNI_FALSE {
                     match self.GetObjectRefType(obj) {
                         jobjectRefType::JNIInvalidRefType => panic!("DeleteWeakGlobalRef invalid non null reference"),
                         jobjectRefType::JNILocalRefType => panic!("DeleteWeakGlobalRef local reference passed"),
@@ -21179,7 +21188,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetBooleanArrayRegion_into_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -21234,7 +21243,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.SetByteArrayRegion_from_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -21300,16 +21309,16 @@ impl JNIEnv {
         unsafe {
             let len = len.unwrap_or_else(|| self.GetArrayLength(array).saturating_sub(start.max(0)).max(0));
             if let Ok(len) = usize::try_from(len) {
-                let mut data = vec![false; len]; //We could un-init this, but better play it safe...
+                let mut data = vec![JNI_FALSE; len]; //We could un-init this, but better play it safe...
                 self.GetBooleanArrayRegion_into_slice(array, start, data.as_mut_slice());
-                if self.ExceptionCheck() {
+                if self.ExceptionCheck() != JNI_FALSE {
                     return Vec::new();
                 }
                 return data;
             }
 
             //Negative len
-            let mut sentinel_buffer = [false];
+            let mut sentinel_buffer = [JNI_FALSE];
             self.GetBooleanArrayRegion(array, start, len.min(-1), sentinel_buffer.as_mut_ptr());
             Vec::new()
         }
@@ -21353,12 +21362,12 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
-    ///         array: jbooleanArray, chunk_buffer: &mut [bool], chunk_offset: usize) -> bool {
+    ///         array: jbooleanArray, chunk_buffer: &mut [jboolean], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
     ///     env.GetBooleanArrayRegion(array, chunk_offset as jsize, chunk_buffer.len() as jsize, chunk_buffer.as_mut_ptr());
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -21424,7 +21433,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetByteArrayRegion(array, chunk_offset as jsize, chunk_buffer.len() as jsize, chunk_buffer.as_mut_ptr());
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -21488,7 +21497,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetByteArrayRegion_into_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -21543,7 +21552,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.SetByteArrayRegion_from_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -21611,7 +21620,7 @@ impl JNIEnv {
             if let Ok(len) = usize::try_from(len) {
                 let mut data = vec![0i8; len]; //We could un-init this, but better play it safe...
                 self.GetByteArrayRegion_into_slice(array, start, data.as_mut_slice());
-                if self.ExceptionCheck() {
+                if self.ExceptionCheck() != JNI_FALSE {
                     return Vec::new();
                 }
                 return data;
@@ -21668,7 +21677,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetCharArrayRegion(array, chunk_offset as jsize, chunk_buffer.len() as jsize, chunk_buffer.as_mut_ptr());
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -21733,7 +21742,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetCharArrayRegion_into_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -21788,7 +21797,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.SetCharArrayRegion_from_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -21856,7 +21865,7 @@ impl JNIEnv {
             if let Ok(len) = usize::try_from(len) {
                 let mut data = vec![0u16; len]; //We could un-init this, but better play it safe...
                 self.GetCharArrayRegion_into_slice(array, start, data.as_mut_slice());
-                if self.ExceptionCheck() {
+                if self.ExceptionCheck() != JNI_FALSE {
                     return Vec::new();
                 }
                 return data;
@@ -21913,7 +21922,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetShortArrayRegion(array, chunk_offset as jsize, chunk_buffer.len() as jsize, chunk_buffer.as_mut_ptr());
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -21978,7 +21987,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetShortArrayRegion_into_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22033,7 +22042,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.SetShortArrayRegion_from_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22101,7 +22110,7 @@ impl JNIEnv {
             if let Ok(len) = usize::try_from(len) {
                 let mut data = vec![0i16; len]; //We could un-init this, but better play it safe...
                 self.GetShortArrayRegion_into_slice(array, start, data.as_mut_slice());
-                if self.ExceptionCheck() {
+                if self.ExceptionCheck() != JNI_FALSE {
                     return Vec::new();
                 }
                 return data;
@@ -22158,7 +22167,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetIntArrayRegion(array, chunk_offset as jsize, chunk_buffer.len() as jsize, chunk_buffer.as_mut_ptr());
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22223,7 +22232,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetIntArrayRegion_into_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22278,7 +22287,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.SetIntArrayRegion_from_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22346,7 +22355,7 @@ impl JNIEnv {
             if let Ok(len) = usize::try_from(len) {
                 let mut data = vec![0i32; len]; //We could un-init this, but better play it safe...
                 self.GetIntArrayRegion_into_slice(array, start, data.as_mut_slice());
-                if self.ExceptionCheck() {
+                if self.ExceptionCheck() != JNI_FALSE {
                     return Vec::new();
                 }
                 return data;
@@ -22403,7 +22412,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetLongArrayRegion(array, chunk_offset as jsize, chunk_buffer.len() as jsize, chunk_buffer.as_mut_ptr());
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22468,7 +22477,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetLongArrayRegion_into_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22523,7 +22532,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.SetLongArrayRegion_from_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22591,7 +22600,7 @@ impl JNIEnv {
             if let Ok(len) = usize::try_from(len) {
                 let mut data = vec![0i64; len]; //We could un-init this, but better play it safe...
                 self.GetLongArrayRegion_into_slice(array, start, data.as_mut_slice());
-                if self.ExceptionCheck() {
+                if self.ExceptionCheck() != JNI_FALSE {
                     return Vec::new();
                 }
                 return data;
@@ -22648,7 +22657,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetFloatArrayRegion(array, chunk_offset as jsize, chunk_buffer.len() as jsize, chunk_buffer.as_mut_ptr());
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22713,7 +22722,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetFloatArrayRegion_into_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22768,7 +22777,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.SetFloatArrayRegion_from_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22836,7 +22845,7 @@ impl JNIEnv {
             if let Ok(len) = usize::try_from(len) {
                 let mut data = vec![jfloat::default(); len]; //We could un-init this, but better play it safe...
                 self.GetFloatArrayRegion_into_slice(array, start, data.as_mut_slice());
-                if self.ExceptionCheck() {
+                if self.ExceptionCheck() != JNI_FALSE {
                     return Vec::new();
                 }
                 return data;
@@ -22893,7 +22902,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetDoubleArrayRegion(array, chunk_offset as jsize, chunk_buffer.len() as jsize, chunk_buffer.as_mut_ptr());
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -22958,7 +22967,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.GetDoubleArrayRegion_into_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -23013,7 +23022,7 @@ impl JNIEnv {
     ///     }
     ///
     ///     env.SetDoubleArrayRegion_from_slice(array, chunk_offset as jsize, chunk_buffer);
-    ///     if env.ExceptionCheck() {
+    ///     if env.ExceptionCheck() != JNI_FALSE {
     ///         //ArrayIndexOutOfBoundsException
     ///         env.ExceptionClear();
     ///         return false;
@@ -23081,7 +23090,7 @@ impl JNIEnv {
             if let Ok(len) = usize::try_from(len) {
                 let mut data = vec![jdouble::default(); len]; //We could un-init this, but better play it safe...
                 self.GetDoubleArrayRegion_into_slice(array, start, data.as_mut_slice());
-                if self.ExceptionCheck() {
+                if self.ExceptionCheck() != JNI_FALSE {
                     return Vec::new();
                 }
                 return data;
@@ -24280,12 +24289,12 @@ impl JNIEnv {
 
             let is_array = self.GetMethodID(clazz, "isArray", "()Z");
             let r = self.CallBooleanMethod0(cl, is_array);
-            if self.ExceptionCheck() {
+            if self.ExceptionCheck() != JNI_FALSE {
                 self.ExceptionDescribe();
                 panic!("{context} Class#isArray() is throws?");
             }
 
-            assert!(r, "{context} arg is not an array");
+            assert!(r != JNI_FALSE, "{context} arg is not an array");
 
             self.DeleteLocalRef(cl);
             self.DeleteLocalRef(clazz);
@@ -24296,7 +24305,7 @@ impl JNIEnv {
     #[cfg(feature = "asserts")]
     unsafe fn check_no_exception(self, context: &str) {
         unsafe {
-            if !self.ExceptionCheck() {
+            if self.ExceptionCheck() == JNI_FALSE {
                 return;
             }
 
@@ -24313,7 +24322,7 @@ impl JNIEnv {
                 return;
             }
 
-            if self.ExceptionCheck() {
+            if self.ExceptionCheck() != JNI_FALSE {
                 //We cannot do this check currently...
                 return;
             }
@@ -24328,7 +24337,7 @@ impl JNIEnv {
         unsafe {
             assert!(!obj.is_null(), "{context} ref is null");
 
-            if self.ExceptionCheck() {
+            if self.ExceptionCheck() != JNI_FALSE {
                 //We cannot do this check currently...
                 return;
             }
@@ -24352,7 +24361,10 @@ impl JNIEnv {
                     //This is just best effort really since we have absolutely NO clue when the GC will run.
                     //CallStaticVoidMethod
                     self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID)>(141)(self.vtable, obj, gc_method);
-                    assert!(!self.IsSameObject(obj, null_mut()), "{context} weak reference that has already been garbage collected");
+                    assert!(
+                        self.IsSameObject(obj, null_mut()) == JNI_FALSE,
+                        "{context} weak reference that has already been garbage collected"
+                    );
                 }
                 _ => {}
             }
@@ -24368,7 +24380,7 @@ impl JNIEnv {
             self.check_is_class(context, obj);
             let throwable_cl = self.FindClass("java/lang/Throwable");
             assert!(!throwable_cl.is_null(), "{context} java/lang/Throwable not found???");
-            assert!(self.IsAssignableFrom(obj, throwable_cl), "{context} class is not throwable");
+            assert!(self.IsAssignableFrom(obj, throwable_cl) != JNI_FALSE, "{context} class is not throwable");
             self.DeleteLocalRef(throwable_cl);
         }
     }
@@ -24384,7 +24396,7 @@ impl JNIEnv {
             assert!(!meth.is_null(), "{context} java/lang/Class#getModifiers not found???");
             let mods = self.CallIntMethod0(obj, meth);
             self.DeleteLocalRef(class_cl);
-            if self.ExceptionCheck() {
+            if self.ExceptionCheck() != JNI_FALSE {
                 self.ExceptionDescribe();
                 panic!("{context} java/lang/Class#getModifiers throws?");
             }
@@ -24411,7 +24423,7 @@ impl JNIEnv {
             assert!(!class_cl.is_null(), "{context} java/lang/Class not found???");
             //GET OBJECT CLASS
             let tcl = self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jobject>(31)(self.vtable, obj);
-            assert!(self.IsSameObject(tcl, class_cl), "{context} not a class!");
+            assert!(self.IsSameObject(tcl, class_cl) != JNI_FALSE, "{context} not a class!");
             self.DeleteLocalRef(tcl);
             self.DeleteLocalRef(class_cl);
         }
@@ -24427,7 +24439,10 @@ impl JNIEnv {
             self.check_ref_obj(context, obj);
             let classloader_cl = self.FindClass("java/lang/ClassLoader");
             assert!(!classloader_cl.is_null(), "{context} java/lang/ClassLoader not found");
-            assert!(self.IsInstanceOf(obj, classloader_cl), "{context} argument is not a valid instanceof ClassLoader");
+            assert!(
+                self.IsInstanceOf(obj, classloader_cl) != JNI_FALSE,
+                "{context} argument is not a valid instanceof ClassLoader"
+            );
 
             self.DeleteLocalRef(classloader_cl);
         }
@@ -24445,7 +24460,7 @@ impl JNIEnv {
             assert!(!clazz.is_null(), "{src} string.class is null?");
             let str_class = self.FindClass("java/lang/String");
             assert!(!str_class.is_null(), "{src} java/lang/String not found?");
-            assert!(self.IsSameObject(clazz, str_class), "{src} Non string passed to GetStringCritical");
+            assert!(self.IsSameObject(clazz, str_class) != JNI_FALSE, "{src} Non string passed to GetStringCritical");
             self.DeleteLocalRef(clazz);
             self.DeleteLocalRef(str_class);
         }
@@ -24457,7 +24472,7 @@ impl JNIEnv {
         unsafe {
             self.check_is_class(context, obj);
             assert!(!fieldID.is_null(), "{context} fieldID is null");
-            let f = self.ToReflectedField(obj, fieldID, true);
+            let f = self.ToReflectedField(obj, fieldID, JNI_TRUE);
             assert!(!f.is_null(), "{context} -> ToReflectedField returned null");
             let field_cl = self.FindClass("java/lang/reflect/Field");
             assert!(!f.is_null(), "{context} java/lang/reflect/Method not found???");
@@ -24506,7 +24521,7 @@ impl JNIEnv {
         unsafe {
             self.check_is_class(context, obj);
             assert!(!methodID.is_null(), "{context} methodID is null");
-            let m = self.ToReflectedMethod(obj, methodID, true);
+            let m = self.ToReflectedMethod(obj, methodID, JNI_TRUE);
             assert!(!m.is_null(), "{context} -> ToReflectedMethod returned null");
             let meth_cl = self.FindClass("java/lang/reflect/Method");
             assert!(!m.is_null(), "{context} java/lang/reflect/Method not found???");
@@ -24561,7 +24576,7 @@ impl JNIEnv {
         unsafe {
             self.check_is_class(context, clazz);
             assert!(!methodID.is_null(), "{context} methodID is null");
-            let java_method = self.ToReflectedMethod(clazz, methodID, true);
+            let java_method = self.ToReflectedMethod(clazz, methodID, JNI_TRUE);
             assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
             let meth_cl = self.FindClass("java/lang/reflect/Method");
             assert!(!java_method.is_null(), "{context} java/lang/reflect/Method not found???");
@@ -24609,12 +24624,15 @@ impl JNIEnv {
                 'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
                 'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
                 'L' => {
-                    assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
+                    assert!(
+                        param1_is_primitive == JNI_FALSE,
+                        "{context} param{idx} wrong type. Method has {the_name} but passed an object or null"
+                    );
                     let jt: jtype = param1.into();
                     let obj = jt.object;
                     if !obj.is_null() {
                         assert!(
-                            self.IsInstanceOf(obj, param1_class),
+                            self.IsInstanceOf(obj, param1_class) != JNI_FALSE,
                             "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
                         );
                     }
@@ -24633,7 +24651,7 @@ impl JNIEnv {
             self.check_ref_obj(context, clazz);
             assert!(!clazz.is_null(), "{context} obj.class is null??");
             assert!(!methodID.is_null(), "{context} methodID is null");
-            let java_method = self.ToReflectedMethod(clazz, methodID, false);
+            let java_method = self.ToReflectedMethod(clazz, methodID, JNI_FALSE);
             assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
             let meth_cl = self.FindClass("java/lang/reflect/Method");
             assert!(!java_method.is_null(), "{context} java/lang/reflect/Method not found???");
@@ -24681,12 +24699,15 @@ impl JNIEnv {
                 'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
                 'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
                 'L' => {
-                    assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
+                    assert!(
+                        param1_is_primitive == JNI_FALSE,
+                        "{context} param{idx} wrong type. Method has {the_name} but passed an object or null"
+                    );
                     let jt: jtype = param1.into();
                     let obj = jt.object;
                     if !obj.is_null() {
                         assert!(
-                            self.IsInstanceOf(obj, param1_class),
+                            self.IsInstanceOf(obj, param1_class) != JNI_FALSE,
                             "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
                         );
                     }
@@ -24707,7 +24728,7 @@ impl JNIEnv {
             let clazz = self.GetObjectClass(obj);
             assert!(!clazz.is_null(), "{context} obj.class is null??");
             assert!(!methodID.is_null(), "{context} methodID is null");
-            let java_method = self.ToReflectedMethod(clazz, methodID, false);
+            let java_method = self.ToReflectedMethod(clazz, methodID, JNI_FALSE);
             assert!(!java_method.is_null(), "{context} -> ToReflectedMethod returned null");
             self.DeleteLocalRef(clazz);
             let meth_cl = self.FindClass("java/lang/reflect/Method");
@@ -24757,12 +24778,15 @@ impl JNIEnv {
                 'F' => assert_eq!("float", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed float"),
                 'D' => assert_eq!("double", the_name, "{context} param{idx} wrong type. Method has {the_name} but passed double"),
                 'L' => {
-                    assert!(!param1_is_primitive, "{context} param{idx} wrong type. Method has {the_name} but passed an object or null");
+                    assert!(
+                        param1_is_primitive == JNI_FALSE,
+                        "{context} param{idx} wrong type. Method has {the_name} but passed an object or null"
+                    );
                     let jt: jtype = param1.into();
                     let obj = jt.object;
                     if !obj.is_null() {
                         assert!(
-                            self.IsInstanceOf(obj, param1_class),
+                            self.IsInstanceOf(obj, param1_class) != JNI_FALSE,
                             "{context} param{idx} wrong type. Method has {the_name} but passed an object that is not null and not instanceof"
                         );
                     }
@@ -24783,7 +24807,7 @@ impl JNIEnv {
             let clazz = self.GetObjectClass(obj);
             assert!(!clazz.is_null(), "{context} obj.class is null??");
             assert!(!methodID.is_null(), "{context} methodID is null");
-            let m = self.ToReflectedMethod(clazz, methodID, false);
+            let m = self.ToReflectedMethod(clazz, methodID, JNI_FALSE);
             self.DeleteLocalRef(clazz);
             assert!(!m.is_null(), "{context} -> ToReflectedMethod returned null");
             let meth_cl = self.FindClass("java/lang/reflect/Method");
@@ -24841,7 +24865,7 @@ impl JNIEnv {
             let clazz = self.GetObjectClass(obj);
             assert!(!clazz.is_null(), "{context} obj.class is null??");
             assert!(!fieldID.is_null(), "{context} fieldID is null");
-            let f = self.ToReflectedField(clazz, fieldID, false);
+            let f = self.ToReflectedField(clazz, fieldID, JNI_FALSE);
             assert!(!f.is_null(), "{context} -> ToReflectedField returned null");
             let field_cl = self.FindClass("java/lang/reflect/Field");
             assert!(!f.is_null(), "{context} java/lang/reflect/Method not found???");

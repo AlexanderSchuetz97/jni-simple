@@ -23,7 +23,7 @@ pub mod test {
             assert!(!classes.is_empty());
             for c in classes {
                 assert_eq!(env.GetObjectRefType(c), jobjectRefType::JNILocalRefType);
-                if env.IsSameObject(c, system_class) {
+                if env.IsSameObject(c, system_class) != JNI_FALSE {
                     found_my_class = true;
                 }
                 env.DeleteLocalRef(c);
@@ -142,7 +142,7 @@ pub mod test {
             assert!(jvmti.GetClassLoader(class_loaded_by_a_classloader, &raw mut loader).is_ok());
             assert!(!loader.is_null());
 
-            assert!(env.IsSameObject(loader, dummy_cl_instance));
+            assert!(env.IsSameObject(loader, dummy_cl_instance) != JNI_FALSE);
 
             let result = jvmti.GetClassLoaderClasses_as_vec(loader).expect("GetClassLoaderClasses_as_vec");
             assert!(!result.is_empty());
@@ -151,12 +151,12 @@ pub mod test {
                 let mut class_name = null_mut();
                 assert!(jvmti.GetClassSignature(clz, &raw mut class_name, null_mut()).is_ok());
                 let name = CStr::from_ptr(class_name).to_string_lossy().to_string();
-                if env.IsSameObject(class_loaded_by_a_classloader, clz) {
+                if env.IsSameObject(class_loaded_by_a_classloader, clz) != JNI_FALSE {
                     assert_eq!(name, "LThrowNewZa;");
                     found_loader_loaded_class = true;
                 }
 
-                if env.IsSameObject(class_loaded, clz) {
+                if env.IsSameObject(class_loaded, clz) != JNI_FALSE {
                     panic!("Found a class that was not loaded by the loader {name}");
                 }
 

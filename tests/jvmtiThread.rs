@@ -29,9 +29,9 @@ pub mod test {
             let mut found = false;
             for iter_thr in threads {
                 if found {
-                    assert!(!env.IsSameObject(thread, iter_thr));
+                    assert!(env.IsSameObject(thread, iter_thr) == JNI_FALSE);
                 } else {
-                    found = env.IsSameObject(thread, iter_thr);
+                    found = env.IsSameObject(thread, iter_thr) != JNI_FALSE;
                 }
 
                 env.DeleteLocalRef(iter_thr);

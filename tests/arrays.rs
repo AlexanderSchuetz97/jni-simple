@@ -107,7 +107,7 @@ pub mod test {
             env.ReleasePrimitiveArrayCritical(array, ptr3, JNI_OK);
 
             //Now we shouldnt panic
-            assert_eq!(false, env.ExceptionCheck());
+            assert_eq!(JNI_FALSE, env.ExceptionCheck());
 
             let result = std::panic::catch_unwind(|| {
                 //Should panic because double free
@@ -357,7 +357,7 @@ pub mod test {
     #[test]
     fn test_boolean_array() {
         run_array_test(
-            |x: usize| x % 2 == 1,
+            |x: usize| u8::from(x % 2 == 1),
             |env, size| unsafe {
                 return env.NewBooleanArray(size);
             },
