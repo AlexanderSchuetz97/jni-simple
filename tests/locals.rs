@@ -19,7 +19,7 @@ pub mod test {
             let obj = env.AllocObject(clazz);
             let n = env.NewGlobalRef(obj);
             let r = env.PopLocalFrame(obj);
-            assert!(env.IsSameObject(r, n) != JNI_FALSE);
+            assert!(env.IsSameObject(r, n));
             vm.DestroyJavaVM();
         }
     }

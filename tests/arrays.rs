@@ -107,7 +107,7 @@ pub mod test {
             env.ReleasePrimitiveArrayCritical(array, ptr3, JNI_OK);
 
             //Now we shouldnt panic
-            assert_eq!(JNI_FALSE, env.ExceptionCheck());
+            assert_eq!(false, env.ExceptionCheck());
 
             let result = std::panic::catch_unwind(|| {
                 //Should panic because double free

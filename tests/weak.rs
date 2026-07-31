@@ -26,11 +26,11 @@ pub mod test {
                 _ => panic!("{:?}", env.GetObjectRefType(weak_to_local)),
             }
 
-            assert!(env.IsInstanceOf(local, weak_class) != JNI_FALSE);
-            assert!(env.IsSameObject(weak_class, clz) != JNI_FALSE);
-            assert!(env.IsSameObject(weak, weak_to_local) != JNI_FALSE);
-            assert!(env.IsInstanceOf(global, weak_class) != JNI_FALSE);
-            assert!(env.IsInstanceOf(weak, weak_class) != JNI_FALSE);
+            assert!(env.IsInstanceOf(local, weak_class));
+            assert!(env.IsSameObject(weak_class, clz));
+            assert!(env.IsSameObject(weak, weak_to_local));
+            assert!(env.IsInstanceOf(global, weak_class));
+            assert!(env.IsInstanceOf(weak, weak_class));
 
             match env.GetObjectRefType(weak) {
                 jobjectRefType::JNIWeakGlobalRefType => {}

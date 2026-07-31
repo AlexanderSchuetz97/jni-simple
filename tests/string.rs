@@ -198,7 +198,7 @@ pub mod test {
             );
             env.ReleaseStringCritical(str, n);
             env.ReleasePrimitiveArrayCritical(m, arr, JNI_OK);
-            assert!(env.ExceptionCheck() == JNI_FALSE);
+            assert!(!env.ExceptionCheck());
             env.DeleteLocalRef(str);
             env.DeleteLocalRef(m);
         }
@@ -242,7 +242,7 @@ pub mod test {
             env.ReleaseStringCritical(array, ptr3);
 
             //Now we shouldnt panic
-            assert_eq!(JNI_FALSE, env.ExceptionCheck());
+            assert_eq!(false, env.ExceptionCheck());
 
             let result = std::panic::catch_unwind(|| {
                 //Should panic because double free
@@ -299,55 +299,55 @@ pub mod test {
             assert!(!java_string.is_null());
             let mut utf_16_slice = [0u16; 3];
             env.GetStringRegion_into_slice(java_string, 0, &mut utf_16_slice);
-            assert!(env.ExceptionCheck() == JNI_FALSE);
+            assert!(!env.ExceptionCheck());
 
             let rust_string_from_slice = String::from_utf16_lossy(&utf_16_slice);
             assert_eq!("ÄÖÜ", rust_string_from_slice.as_str());
 
             let mut utf_16_slice = [0u16; 2];
             env.GetStringRegion_into_slice(java_string, 1, &mut utf_16_slice);
-            assert!(env.ExceptionCheck() == JNI_FALSE);
+            assert!(!env.ExceptionCheck());
 
             let rust_string_from_slice = String::from_utf16_lossy(&utf_16_slice);
             assert_eq!("ÖÜ", rust_string_from_slice.as_str());
 
             let mut utf_16_slice = [0u16; 2];
             env.GetStringRegion_into_slice(java_string, 0, &mut utf_16_slice);
-            assert!(env.ExceptionCheck() == JNI_FALSE);
+            assert!(!env.ExceptionCheck());
 
             let rust_string_from_slice = String::from_utf16_lossy(&utf_16_slice);
             assert_eq!("ÄÖ", rust_string_from_slice.as_str());
 
             let mut utf_16_slice = [0u16; 2];
             env.GetStringRegion_into_slice(java_string, 2, &mut utf_16_slice);
-            assert!(env.ExceptionCheck() != JNI_FALSE);
+            assert!(env.ExceptionCheck());
             let thr = env.ExceptionOccurred();
             assert!(!thr.is_null());
             env.ExceptionClear();
-            assert!(env.IsInstanceOf(thr, exc_cl) != JNI_FALSE);
+            assert!(env.IsInstanceOf(thr, exc_cl));
             env.DeleteLocalRef(thr);
 
             let mut utf_16_slice = [0u16; 2];
             env.GetStringRegion_into_slice(java_string, 3, &mut utf_16_slice);
-            assert!(env.ExceptionCheck() != JNI_FALSE);
+            assert!(env.ExceptionCheck());
             let thr = env.ExceptionOccurred();
             assert!(!thr.is_null());
             env.ExceptionClear();
-            assert!(env.IsInstanceOf(thr, exc_cl) != JNI_FALSE);
+            assert!(env.IsInstanceOf(thr, exc_cl));
             env.DeleteLocalRef(thr);
 
             let mut utf_16_slice = [0u16; 0];
             env.GetStringRegion_into_slice(java_string, 4, &mut utf_16_slice);
-            assert!(env.ExceptionCheck() != JNI_FALSE);
+            assert!(env.ExceptionCheck());
             let thr = env.ExceptionOccurred();
             assert!(!thr.is_null());
             env.ExceptionClear();
-            assert!(env.IsInstanceOf(thr, exc_cl) != JNI_FALSE);
+            assert!(env.IsInstanceOf(thr, exc_cl));
             env.DeleteLocalRef(thr);
 
             let mut utf_16_slice = [0u16; 0];
             env.GetStringRegion_into_slice(java_string, 3, &mut utf_16_slice);
-            assert!(env.ExceptionCheck() == JNI_FALSE);
+            assert!(!env.ExceptionCheck());
 
             //MUST REMAIN HERE, CLEANUP
             env.DeleteLocalRef(exc_cl);

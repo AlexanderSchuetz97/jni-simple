@@ -118,33 +118,33 @@ pub mod test {
             let env = get_env();
             let test_class = get_test_class();
             let field = env.GetStaticFieldID(test_class, "staticBool", "Z");
-            env.SetStaticBooleanField(test_class, field, JNI_TRUE);
-            assert_eq!(JNI_TRUE, env.GetStaticBooleanField(test_class, field));
-            env.SetStaticBooleanField(test_class, field, JNI_FALSE);
-            assert_eq!(JNI_FALSE, env.GetStaticBooleanField(test_class, field));
-            env.SetStaticBooleanField(test_class, field, JNI_FALSE);
-            assert_eq!(JNI_FALSE, env.GetStaticBooleanField(test_class, field));
-            env.SetStaticBooleanField(test_class, field, JNI_TRUE);
-            env.SetStaticBooleanField(test_class, field, JNI_TRUE);
-            assert_eq!(JNI_TRUE, env.GetStaticBooleanField(test_class, field));
+            env.SetStaticBooleanField(test_class, field, true);
+            assert_eq!(true, env.GetStaticBooleanField(test_class, field));
+            env.SetStaticBooleanField(test_class, field, false);
+            assert_eq!(false, env.GetStaticBooleanField(test_class, field));
+            env.SetStaticBooleanField(test_class, field, false);
+            assert_eq!(false, env.GetStaticBooleanField(test_class, field));
+            env.SetStaticBooleanField(test_class, field, true);
+            env.SetStaticBooleanField(test_class, field, true);
+            assert_eq!(true, env.GetStaticBooleanField(test_class, field));
 
             add_it();
-            assert_eq!(JNI_FALSE, env.GetStaticBooleanField(test_class, field));
+            assert_eq!(false, env.GetStaticBooleanField(test_class, field));
 
             let test_obj = get_test_obj();
             let field = env.GetFieldID(test_class, "dynBool", "Z");
-            env.SetBooleanField(test_obj, field, JNI_TRUE);
-            assert_eq!(JNI_TRUE, env.GetBooleanField(test_obj, field));
-            env.SetBooleanField(test_obj, field, JNI_FALSE);
-            assert_eq!(JNI_FALSE, env.GetBooleanField(test_obj, field));
-            env.SetBooleanField(test_obj, field, JNI_FALSE);
-            assert_eq!(JNI_FALSE, env.GetBooleanField(test_obj, field));
-            env.SetBooleanField(test_obj, field, JNI_TRUE);
-            env.SetBooleanField(test_obj, field, JNI_TRUE);
-            assert_eq!(JNI_TRUE, env.GetBooleanField(test_obj, field));
+            env.SetBooleanField(test_obj, field, true);
+            assert_eq!(true, env.GetBooleanField(test_obj, field));
+            env.SetBooleanField(test_obj, field, false);
+            assert_eq!(false, env.GetBooleanField(test_obj, field));
+            env.SetBooleanField(test_obj, field, false);
+            assert_eq!(false, env.GetBooleanField(test_obj, field));
+            env.SetBooleanField(test_obj, field, true);
+            env.SetBooleanField(test_obj, field, true);
+            assert_eq!(true, env.GetBooleanField(test_obj, field));
 
             add_it();
-            assert_eq!(JNI_FALSE, env.GetBooleanField(test_obj, field));
+            assert_eq!(false, env.GetBooleanField(test_obj, field));
 
             env.DeleteLocalRef(test_obj);
             env.DeleteGlobalRef(test_class);
@@ -450,26 +450,26 @@ pub mod test {
             let test_class = get_test_class();
             let field = env.GetStaticFieldID(test_class, "staticObject", "Ljava/lang/Object;");
             env.SetStaticObjectField(test_class, field, g1);
-            assert!(env.IsSameObject(g1, env.GetStaticObjectField(test_class, field)) != JNI_FALSE);
+            assert!(env.IsSameObject(g1, env.GetStaticObjectField(test_class, field)));
             env.SetStaticObjectField(test_class, field, g1);
-            assert!(env.IsSameObject(g1, env.GetStaticObjectField(test_class, field)) != JNI_FALSE);
+            assert!(env.IsSameObject(g1, env.GetStaticObjectField(test_class, field)));
             env.SetStaticObjectField(test_class, field, null_mut());
-            assert!(env.IsSameObject(null_mut(), env.GetStaticObjectField(test_class, field)) != JNI_FALSE);
+            assert!(env.IsSameObject(null_mut(), env.GetStaticObjectField(test_class, field)));
             env.SetStaticObjectField(test_class, field, g2);
             env.SetStaticObjectField(test_class, field, g2);
-            assert!(env.IsSameObject(g2, env.GetStaticObjectField(test_class, field)) != JNI_FALSE);
+            assert!(env.IsSameObject(g2, env.GetStaticObjectField(test_class, field)));
 
             let test_obj = get_test_obj();
             let field = env.GetFieldID(test_class, "dynObject", "Ljava/lang/Object;");
             env.SetObjectField(test_obj, field, g1);
-            assert!(env.IsSameObject(g1, env.GetObjectField(test_obj, field)) != JNI_FALSE);
+            assert!(env.IsSameObject(g1, env.GetObjectField(test_obj, field)));
             env.SetObjectField(test_obj, field, g1);
-            assert!(env.IsSameObject(g1, env.GetObjectField(test_obj, field)) != JNI_FALSE);
+            assert!(env.IsSameObject(g1, env.GetObjectField(test_obj, field)));
             env.SetObjectField(test_obj, field, null_mut());
-            assert!(env.IsSameObject(null_mut(), env.GetObjectField(test_obj, field)) != JNI_FALSE);
+            assert!(env.IsSameObject(null_mut(), env.GetObjectField(test_obj, field)));
             env.SetObjectField(test_obj, field, g2);
             env.SetObjectField(test_obj, field, g2);
-            assert!(env.IsSameObject(g2, env.GetObjectField(test_obj, field)) != JNI_FALSE);
+            assert!(env.IsSameObject(g2, env.GetObjectField(test_obj, field)));
 
             env.DeleteLocalRef(test_obj);
             env.DeleteGlobalRef(test_class);
@@ -491,10 +491,10 @@ pub mod test {
             let field_dyn = env.GetFieldID(test_class, "dynObject", "Ljava/lang/Object;");
             assert!(!field_dyn.is_null());
 
-            let reflect_static = env.ToReflectedField(test_class, field_static, JNI_TRUE);
+            let reflect_static = env.ToReflectedField(test_class, field_static, true);
             assert!(!reflect_static.is_null());
 
-            let reflect_dyn = env.ToReflectedField(test_class, field_dyn, JNI_FALSE);
+            let reflect_dyn = env.ToReflectedField(test_class, field_dyn, false);
             assert!(!reflect_dyn.is_null());
 
             let de_static = env.FromReflectedField(reflect_static);
@@ -504,25 +504,25 @@ pub mod test {
             let g2 = new_global_obj();
 
             env.SetStaticObjectField(test_class, de_static, g1);
-            assert!(env.IsSameObject(g1, env.GetStaticObjectField(test_class, de_static)) != JNI_FALSE);
+            assert!(env.IsSameObject(g1, env.GetStaticObjectField(test_class, de_static)));
             env.SetStaticObjectField(test_class, de_static, g1);
-            assert!(env.IsSameObject(g1, env.GetStaticObjectField(test_class, de_static)) != JNI_FALSE);
+            assert!(env.IsSameObject(g1, env.GetStaticObjectField(test_class, de_static)));
             env.SetStaticObjectField(test_class, de_static, null_mut());
-            assert!(env.IsSameObject(null_mut(), env.GetStaticObjectField(test_class, de_static)) != JNI_FALSE);
+            assert!(env.IsSameObject(null_mut(), env.GetStaticObjectField(test_class, de_static)));
             env.SetStaticObjectField(test_class, de_static, g2);
             env.SetStaticObjectField(test_class, de_static, g2);
-            assert!(env.IsSameObject(g2, env.GetStaticObjectField(test_class, de_static)) != JNI_FALSE);
+            assert!(env.IsSameObject(g2, env.GetStaticObjectField(test_class, de_static)));
 
             let test_obj = get_test_obj();
             env.SetObjectField(test_obj, de_dyn, g1);
-            assert!(env.IsSameObject(g1, env.GetObjectField(test_obj, de_dyn)) != JNI_FALSE);
+            assert!(env.IsSameObject(g1, env.GetObjectField(test_obj, de_dyn)));
             env.SetObjectField(test_obj, de_dyn, g1);
-            assert!(env.IsSameObject(g1, env.GetObjectField(test_obj, de_dyn)) != JNI_FALSE);
+            assert!(env.IsSameObject(g1, env.GetObjectField(test_obj, de_dyn)));
             env.SetObjectField(test_obj, de_dyn, null_mut());
-            assert!(env.IsSameObject(null_mut(), env.GetObjectField(test_obj, de_dyn)) != JNI_FALSE);
+            assert!(env.IsSameObject(null_mut(), env.GetObjectField(test_obj, de_dyn)));
             env.SetObjectField(test_obj, de_dyn, g2);
             env.SetObjectField(test_obj, de_dyn, g2);
-            assert!(env.IsSameObject(g2, env.GetObjectField(test_obj, de_dyn)) != JNI_FALSE);
+            assert!(env.IsSameObject(g2, env.GetObjectField(test_obj, de_dyn)));
 
             env.DeleteLocalRef(reflect_static);
             env.DeleteLocalRef(reflect_dyn);
