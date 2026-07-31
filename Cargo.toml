@@ -12,6 +12,7 @@ readme = "README.md"
 repository = "https://github.com/AlexanderSchuetz97/jni-simple"
 exclude = [
     "example_project/*",
+    "android_mre/*",
     "loop_test.sh",
     "jvmti_shim/target",
     "bitfield_gen/*",

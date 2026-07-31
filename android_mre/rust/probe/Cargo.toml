@@ -1,0 +1,32 @@
+[package]
+name = "jboolean_probe"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+# The same package from two different sources, selected by feature. Cargo treats
+# them as distinct packages because their source ids differ, so both can be
+# declared at once and only the enabled one is built.
+#
+# `published` is jni-simple as it exists on crates.io today, where
+# `jboolean = bool`. `local` is this working tree, where it is `u8`. Nothing else
+# about the two builds differs.
+[dependencies]
+jni-published = { package = "jni-simple", version = "=0.3.2", optional = true }
+jni-local = { package = "jni-simple", path = "../../..", optional = true }
+
+[features]
+published = ["dep:jni-published"]
+local = ["dep:jni-local"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+debug = 1
+# Must stay off: the disassembly evidence needs the probe symbols to survive.
+strip = false
