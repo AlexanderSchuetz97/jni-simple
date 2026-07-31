@@ -149,16 +149,6 @@ the answer, so whatever ART left above the low byte decides the branch. Needs no
 
 On x86_64 both typings emit `movzbl %al, %eax`, which is why check [2] cannot fire there.
 
-## Regression tests
-
-- [../tests/jboolean_dirty_register.rs](../tests/jboolean_dirty_register.rs) — feeds jni-simple's own
-  `CallBooleanMethod0` a conforming callee that returns `0x01d8de00` (low byte 0, junk above) through a
-  synthetic vtable. Deterministic, no ART, no CheckJNI. Passes on this branch; against crates.io on arm64
-  `if b` returns 256 and `assert_eq!(0, 0)` fails.
-- [../tests/jboolean_jvm_byte.rs](../tests/jboolean_jvm_byte.rs) — a real HotSpot JVM round-trips every
-  byte through a `boolean[]`, showing `jboolean` must be able to hold values other than 0 and 1. No
-  assembly, no optimizer reasoning.
-
 ## Notes
 
 - The probe applies `black_box` to each result before testing it. Without that, LLVM folds the test away
