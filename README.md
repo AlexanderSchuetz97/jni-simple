@@ -374,6 +374,61 @@ Should the std feature be disabled, then those checks are not done.
 
 ## Further Info
 
+### ABI for bool, jboolean etc
+Thanks to Robin Stevi (https://github.com/rstenvi) for making me aware of this.
+See https://github.com/AlexanderSchuetz97/jni-simple/pull/5
+
+Basically JNI's bool type is an u8 where 0 is false and 1 true.
+2-255 are also possible values which may be evaluated as true on some JVM implementations.
+It is unclear how values 2-255 behave for JNI C programs since if they compare jboolean's to the constant JNI_TRUE defined
+in jni.h then those values would also be false. However, they are NEVER undefined behavior in C (at least in the jni library).
+The JNI specification explicitly mentions that the type for jboolean is "unsigned char" in c. (see jni.h)
+
+This is not ABI compatible with rust's bool type at all.
+Rusts bool type is forced to be 1 byte in size and be either 0 or 1. 
+LLVM optimizes for this and setting a rust bool byte to 2 for example will cause undefined behavior in rust.
+
+On some architectures the return ABI is different. I.e. on 
+AARCH64 the android jvm apparently does not clear the return register
+and only clears the lower 8 bits of the return register to for example indicate false. 
+Rusts bool however would have a different behavior. LLVM expects that the register
+was fully cleared and not just the lower 8 bits set to 0 in this case. 
+This difference would cause UB in the Rust program.
+`core::ffi::c_uchar` has a fully compatible abi and jni-simple uses that for all fii calls that involve booleans.
+
+Because of this, rusts bool type can only be used as input/parameter to a jni function call without causing any problems but
+any jboolean handed out by the jvm to Rust code must either be treated as a `core::ffi::c_uchar` or 
+explicitly narrowed to a rust boolean by doing a "jboolean != 0" narrowing.
+
+jni-simple will do this automatically for you:
+- Methods that simply return a boolean will automatically narrow the jboolean to a rust boolean.
+  - `JNIEnv::ExceptionCheck` for example does this.
+  - `JNIEnv::CallStaticBooleanMethodA` and its friends also do this.
+- Methods that accepts a mutable boolean pointer to return some flag to you automatically narrow the jboolean to a rust boolean.
+  Writes to that pointer, if it is a *mut bool pointer, are "intercepted" and automatically narrowed to a rust bool.
+  - `JNIEnv::GetIntArrayElements` - for example has a "is_copy" boolean pointer parameter.
+- Methods that accept a const ptr to a boolean as input will accept a const ptr to bool or jboolean.
+  - `JNIEnv::SetBooleanArrayRegion` for example does this
+- Methods that read data into a rust owned pointer cannot be used with rusts native bool type.
+  - `JNIEnv::GetBooleanArrayRegion` for example does this
+    - A convenience method called `GetBooleanArrayRegion_as_bool_vec` which performs narrowing, in this case to `Vec<bool>` exists in such cases.
+
+#### Behavior of jboolean values that are not 0 or 1.
+The hotspot jvm on x86_64 appears to treat jboolean values that are not 0 or 1 inconsistently.
+For branching in java the JVM appears to evaluate all values that are not 0 as true.
+When returning a boolean to native code it considers all values that have their least signficant bit set as true. 
+(The JVM basically appears to do "AND 0x1" on the values before it returns them)
+
+It appears the behavior is entirely implementation dependant. 
+It is completely unclear how different jvm implementations such as Android JVM's handle this.
+
+jni-simple treats any boolean value that is non 0 as true when performing narrowing.
+
+When the `asserts` feature is enabled jni-simple will treat an attempt to set a boolean value 
+to a non 0 or 1 value as an error. I would recommend avoiding storing 
+any non 0 or 1 value in a boolean field or array.
+
+
 ### String handling
 
 Many JNI functions accept a zero-terminated utf-8 string as a parameter. 

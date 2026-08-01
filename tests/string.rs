@@ -112,7 +112,7 @@ pub mod test {
         unsafe {
             let env = get_env();
             let str = env.NewStringUTF("Test String");
-            let cstr = env.GetStringUTFChars(str, null_mut());
+            let cstr = env.GetStringUTFChars(str, ());
             let sl = std::slice::from_raw_parts(cstr, (env.GetStringUTFLength(str) + 1) as usize);
             assert_eq!(
                 [
@@ -144,7 +144,7 @@ pub mod test {
         unsafe {
             let env = get_env();
             let str = env.NewStringUTF("Test String");
-            let cstr = env.GetStringChars(str, null_mut());
+            let cstr = env.GetStringChars(str, ());
             let sl = std::slice::from_raw_parts(cstr, (env.GetStringLength(str) + 1) as usize);
             assert_eq!(
                 [
@@ -184,9 +184,9 @@ pub mod test {
             let m = env.NewByteArray(16);
             let str = env.NewStringUTF("Test String");
             let l = env.GetStringLength(str);
-            let n = env.GetStringCritical(str, null_mut());
+            let n = env.GetStringCritical(str, ());
             assert!(!n.is_null());
-            let arr = env.GetPrimitiveArrayCritical(m, null_mut());
+            let arr = env.GetPrimitiveArrayCritical(m, ());
             assert!(!arr.is_null());
             let slice = std::slice::from_raw_parts(n, l as usize);
             assert_eq!(
@@ -214,11 +214,11 @@ pub mod test {
             assert!(!array.is_null());
             let array2 = env.NewStringUTF("Test String 2");
             assert!(!array2.is_null());
-            let ptr = env.GetStringCritical(array, null_mut());
+            let ptr = env.GetStringCritical(array, ());
             assert!(!ptr.is_null());
-            let ptr2 = env.GetStringCritical(array2, null_mut());
+            let ptr2 = env.GetStringCritical(array2, ());
             assert!(!ptr2.is_null());
-            let ptr3 = env.GetStringCritical(array2, null_mut());
+            let ptr3 = env.GetStringCritical(array2, ());
             assert!(!ptr3.is_null());
             let result = std::panic::catch_unwind(|| {
                 //Should panic because not allowed when 3 crit ptr is not released
