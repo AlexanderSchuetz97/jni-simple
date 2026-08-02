@@ -7,8 +7,8 @@ use core::ops::{Deref, DerefMut, Not};
 use crate::private::{SealedJBooleanInputLayout, SealedJBooleanMutPtr};
 use crate::{JBooleanInputLayout, JBooleanMutPtr};
 use alloc::vec::Vec;
-use std::ffi::c_uchar;
-use std::ptr::null_mut;
+use core::ffi::c_uchar;
+use core::ptr::null_mut;
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
