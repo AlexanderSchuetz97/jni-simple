@@ -23274,7 +23274,7 @@ impl JNIEnv {
                 self.check_no_exception("SetBooleanArrayRegion");
                 assert!(!array.is_null(), "SetBooleanArrayRegion jarray must not be null");
                 assert!(!buf.is_null(), "SetBooleanArrayRegion buf must not be null");
-                self.check_bool_array_is_narrow("SetBooleanArrayRegion", ptr, len);
+                Self::check_bool_array_is_narrow("SetBooleanArrayRegion", ptr, len);
             }
             self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jboolean)>(207)(self.vtable, array, start, len, ptr);
         }
@@ -24434,8 +24434,9 @@ impl JNIEnv {
         }
     }
 
+    /// Checks that all boolean values in the array determined by len are 0 or 1 in memory (aka not wide booleans)
     #[cfg(feature = "asserts")]
-    unsafe fn check_bool_array_is_narrow(self, context: &str, ptr: *const jboolean, len: jsize) {
+    unsafe fn check_bool_array_is_narrow(context: &str, ptr: *const jboolean, len: jsize) {
         unsafe {
             if ptr.is_null() {
                 return;
