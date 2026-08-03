@@ -10,7 +10,7 @@ checksum = "2fd1289c04a9ea8cb22300a459a72a385d7c73d3259e2ed7dcb2af674838cfa9"
 
 [[package]]
 name = "jni-simple"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "libloading",
  "static_assertions",
@@ -35,8 +35,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "sync-ptr"
-version = "0.2.1"
-source = "git+https://github.com/AlexanderSchuetz97/sync-ptr.git?rev=c19893f3e1260393783ea34488c6bfe68be225c9#c19893f3e1260393783ea34488c6bfe68be225c9"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4a62d284be34f60339c99d46fb8d236674a3d439130796ccc66cacef6e70ab6"
 
 [[package]]
 name = "windows-link"

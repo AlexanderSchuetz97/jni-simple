@@ -48,10 +48,10 @@ pub mod test {
             let env = get_env();
             let array = env.NewByteArray(512);
             assert!(!array.is_null());
-            let ptr = env.GetPrimitiveArrayCritical(array, null_mut());
+            let ptr = env.GetPrimitiveArrayCritical(array, ());
             assert!(!ptr.is_null());
             {
-                let critical_slice: &mut [i8] = std::slice::from_raw_parts_mut(ptr.cast(), 512);
+                let critical_slice: &mut [i8] = slice::from_raw_parts_mut(ptr.cast(), 512);
 
                 for i in 0usize..512 {
                     assert_eq!(critical_slice[i], 0); //JVM guarantees zeroed mem.
@@ -79,11 +79,11 @@ pub mod test {
             assert!(!array.is_null());
             let array2 = env.NewByteArray(512);
             assert!(!array2.is_null());
-            let ptr = env.GetPrimitiveArrayCritical(array, null_mut());
+            let ptr = env.GetPrimitiveArrayCritical(array, ());
             assert!(!ptr.is_null());
-            let ptr2 = env.GetPrimitiveArrayCritical(array2, null_mut());
+            let ptr2 = env.GetPrimitiveArrayCritical(array2, ());
             assert!(!ptr2.is_null());
-            let ptr3 = env.GetPrimitiveArrayCritical(array2, null_mut());
+            let ptr3 = env.GetPrimitiveArrayCritical(array2, ());
             assert!(!ptr3.is_null());
             let result = std::panic::catch_unwind(|| {
                 //Should panic because not allowed when 3 crit ptr is not released
@@ -357,7 +357,7 @@ pub mod test {
     #[test]
     fn test_boolean_array() {
         run_array_test(
-            |x: usize| x % 2 == 1,
+            |x: usize| jboolean::from(x % 2 == 1),
             |env, size| unsafe {
                 return env.NewBooleanArray(size);
             },

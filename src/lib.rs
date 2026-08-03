@@ -34,6 +34,8 @@
 #![allow(clippy::inline_always)]
 //#![allow(clippy::trivially_copy_pass_by_ref)]
 
+/// This module contains the abi wrapper for jboolean using `core::ffi::c_uchar`
+mod jbool;
 /// This module contains all functions that are relevant for dynamic linking of the jvm.
 mod linking;
 
@@ -56,7 +58,7 @@ use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::private::{SealedAsJNILinkage, SealedEnvVTable};
+use crate::private::{SealedAsJNILinkage, SealedEnvVTable, SealedJBooleanInputLayout, SealedJBooleanMutPtr};
 use alloc::boxed::Box;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int, c_uchar, c_void};
@@ -67,8 +69,31 @@ use core::ptr::null_mut;
 use core::sync::atomic::Ordering::SeqCst;
 use sync_ptr::{FromMutPtr, SyncFnPtr, SyncMutPtr, sync_fn_ptr, sync_fn_ptr_opt};
 
-pub const JNI_TRUE: jboolean = true;
-pub const JNI_FALSE: jboolean = false;
+pub use crate::jbool::jboolean;
+pub const JNI_TRUE: jboolean = jboolean::TRUE;
+pub const JNI_FALSE: jboolean = jboolean::FALSE;
+
+///
+/// Trait for all types that can be used as a mutable boolean pointer for jni.
+/// JVM commonly uses this for functions that have an c-style output parameter via a pointer.
+///
+/// Implemented by
+/// - `&mut jboolean`
+/// - `* mut jboolean`
+/// - `&mut bool`
+/// - `* mut bool`
+/// - `()` -> "null pointer"
+///
+pub trait JBooleanMutPtr: SealedJBooleanMutPtr {}
+
+/// Trait for all types that have a ABI that is compatible for
+/// passing a jboolean from rust to java.
+///
+/// Implemented by:
+/// - `core::ffi::c_uchar`
+/// - `bool`
+/// - `jboolean`
+pub trait JBooleanInputLayout: SealedJBooleanInputLayout {}
 
 pub const JNI_OK: jint = 0;
 
@@ -150,7 +175,6 @@ pub type jsize = jint;
 pub type jshort = i16;
 pub type jchar = u16;
 pub type jbyte = i8;
-pub type jboolean = bool;
 
 pub type jfloat = core::ffi::c_float;
 
@@ -743,7 +767,7 @@ pub const JVMTI_THREAD_STATE_VENDOR_3: jint = 0x4000_0000;
 
 /// Mod for private trait seals that should be hidden.
 mod private {
-    use crate::jrawMonitorID;
+    use crate::{jboolean, jrawMonitorID};
     use core::ffi::{c_char, c_void};
 
     /// Trait seal for `AsJrawMonitorID`
@@ -769,6 +793,15 @@ mod private {
         /// Returns the jni linkage index.
         fn linkage(self) -> usize;
     }
+
+    /// Trait seal for `JBooleanMutPtr`
+    pub trait SealedJBooleanMutPtr {
+        /// Call the closure with a *mut jboolean pointer that is valid for at least the duration of the call.
+        fn use_jboolean_mut<R>(self, func: impl FnOnce(*mut jboolean) -> R) -> R;
+    }
+
+    /// Trait seal for `JBooleanInputLayout`
+    pub trait SealedJBooleanInputLayout {}
 
     /// Trait seal for `JType`
     pub trait SealedJType {}
@@ -1135,6 +1168,15 @@ impl jtype {
         unsafe { self.boolean }
     }
 
+    /// read this jtype as jboolean
+    /// # Safety
+    /// only safe if jtype was a jboolean.
+    #[inline(always)]
+    #[must_use]
+    pub const unsafe fn bool(&self) -> bool {
+        unsafe { self.boolean.as_bool() }
+    }
+
     /// read this jtype as jfloat
     /// # Safety
     /// only safe if jtype was a jfloat.
@@ -1301,6 +1343,14 @@ impl From<jboolean> for jtype {
     }
 }
 
+impl From<bool> for jtype {
+    fn from(value: bool) -> Self {
+        let mut jt = jtype { long: 0 };
+        jt.boolean = jboolean::from(value);
+        jt
+    }
+}
+
 /// Debug helper struct that ensures that the caller understands the safety of printing/debugging the jtype.
 /// Its impossible to construct this type without unsafe code.
 #[repr(transparent)]
@@ -1448,7 +1498,7 @@ impl Default for jvmtiThreadInfo {
         Self {
             name: null(),
             priority: 0,
-            is_daemon: false,
+            is_daemon: jboolean::from(false),
             thread_group: null_mut(),
             context_class_loader: null_mut(),
         }
@@ -4137,8 +4187,11 @@ impl JVMTIEnv {
     /// `module` must be a valid strong reference or null
     /// `service` must be a valid strong reference or null
     /// `impl_class` must be a valid strong reference or null
-    pub unsafe fn IsModifiableModule(&self, module: jobject, is_modifiable_module_ptr: *mut jboolean) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jboolean) -> jvmtiError>(98)(self.vtable, module, is_modifiable_module_ptr) }
+    /// `is_modifiable_module_ptr` must not be dangling
+    pub unsafe fn IsModifiableModule(&self, module: jobject, is_modifiable_module_ptr: impl JBooleanMutPtr) -> jvmtiError {
+        is_modifiable_module_ptr.use_jboolean_mut(|is_modifiable_module_ptr| unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jobject, *mut jboolean) -> jvmtiError>(98)(self.vtable, module, is_modifiable_module_ptr)
+        })
     }
 
     /// Return an array of all classes loaded in the virtual machine.
@@ -4671,8 +4724,10 @@ impl JVMTIEnv {
     /// # Safety
     /// `klass` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
-    pub unsafe fn IsInterface(&self, klass: jclass, is_interface_ptr: *mut jboolean) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(54)(self.vtable, klass, is_interface_ptr) }
+    pub unsafe fn IsInterface(&self, klass: jclass, is_interface_ptr: impl JBooleanMutPtr) -> jvmtiError {
+        is_interface_ptr.use_jboolean_mut(|is_interface_ptr| unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(54)(self.vtable, klass, is_interface_ptr)
+        })
     }
 
     /// Determines whether a class object reference represents an array.
@@ -4683,8 +4738,10 @@ impl JVMTIEnv {
     /// # Safety
     /// `klass` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
-    pub unsafe fn IsArrayClass(&self, klass: jclass, is_array_class_ptr: *mut jboolean) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(55)(self.vtable, klass, is_array_class_ptr) }
+    pub unsafe fn IsArrayClass(&self, klass: jclass, is_array_class_ptr: impl JBooleanMutPtr) -> jvmtiError {
+        is_array_class_ptr.use_jboolean_mut(|is_array_class_ptr| unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(55)(self.vtable, klass, is_array_class_ptr)
+        })
     }
 
     /// Determines whether a class is modifiable.
@@ -4700,8 +4757,10 @@ impl JVMTIEnv {
     /// # Safety
     /// `klass` must be a valid strong reference or null.
     /// all pointer parameters must not be dangling.
-    pub unsafe fn IsModifiableClass(&self, klass: jclass, is_modifiable_class_ptr: *mut jboolean) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(44)(self.vtable, klass, is_modifiable_class_ptr) }
+    pub unsafe fn IsModifiableClass(&self, klass: jclass, is_modifiable_class_ptr: impl JBooleanMutPtr) -> jvmtiError {
+        is_modifiable_class_ptr.use_jboolean_mut(|is_modifiable_class_ptr| unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, *mut jboolean) -> jvmtiError>(44)(self.vtable, klass, is_modifiable_class_ptr)
+        })
     }
 
     /// For the class indicated by klass, return via `classloader_ptr` a reference to the class loader for the class.
@@ -4890,8 +4949,10 @@ impl JVMTIEnv {
     /// `klass` must be a valid strong reference or null.
     /// `field` must be a valid field reference in the class referred to by `klass`
     /// all pointer parameters must not be dangling.
-    pub unsafe fn IsFieldSynthetic(&self, klass: jclass, field: jfieldID, is_synthetic_ptr: *mut jboolean) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jboolean) -> jvmtiError>(62)(self.vtable, klass, field, is_synthetic_ptr) }
+    pub unsafe fn IsFieldSynthetic(&self, klass: jclass, field: jfieldID, is_synthetic_ptr: impl JBooleanMutPtr) -> jvmtiError {
+        is_synthetic_ptr.use_jboolean_mut(|is_synthetic_ptr| unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jclass, jfieldID, *mut jboolean) -> jvmtiError>(62)(self.vtable, klass, field, is_synthetic_ptr)
+        })
     }
 
     /// For the method indicated by method, return the method name via `name_ptr` and method signature via `signature_ptr`.
@@ -5040,8 +5101,10 @@ impl JVMTIEnv {
     /// # Safety
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
-    pub unsafe fn IsMethodNative(&self, method: jmethodID, is_native_ptr: *mut jboolean) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(75)(self.vtable, method, is_native_ptr) }
+    pub unsafe fn IsMethodNative(&self, method: jmethodID, is_native_ptr: impl JBooleanMutPtr) -> jvmtiError {
+        is_native_ptr.use_jboolean_mut(|is_native_ptr| unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(75)(self.vtable, method, is_native_ptr)
+        })
     }
 
     /// For the method indicated by method, return a value indicating whether the method is synthetic via `is_synthetic_ptr`.
@@ -5053,8 +5116,10 @@ impl JVMTIEnv {
     /// # Safety
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
-    pub unsafe fn IsMethodSynthetic(&self, method: jmethodID, is_synthetic_ptr: *mut jboolean) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(76)(self.vtable, method, is_synthetic_ptr) }
+    pub unsafe fn IsMethodSynthetic(&self, method: jmethodID, is_synthetic_ptr: impl JBooleanMutPtr) -> jvmtiError {
+        is_synthetic_ptr.use_jboolean_mut(|is_synthetic_ptr| unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(76)(self.vtable, method, is_synthetic_ptr)
+        })
     }
 
     /// Determine if a method ID refers to an obsolete method version.
@@ -5064,8 +5129,10 @@ impl JVMTIEnv {
     /// # Safety
     /// `method` must be a valid methodID or null.
     /// all pointer parameters must not be dangling.
-    pub unsafe fn IsMethodObsolete(&self, method: jmethodID, is_obsolete_ptr: *mut jboolean) -> jvmtiError {
-        unsafe { self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(90)(self.vtable, method, is_obsolete_ptr) }
+    pub unsafe fn IsMethodObsolete(&self, method: jmethodID, is_obsolete_ptr: impl JBooleanMutPtr) -> jvmtiError {
+        is_obsolete_ptr.use_jboolean_mut(|is_obsolete_ptr| unsafe {
+            self.jvmti::<extern "system" fn(JVMTIEnvVTable, jmethodID, *mut jboolean) -> jvmtiError>(90)(self.vtable, method, is_obsolete_ptr)
+        })
     }
 
     /// This function modifies the failure handling of native method resolution by allowing retry with a prefix applied to the name.
@@ -7062,7 +7129,7 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn IsAssignableFrom(&self, class1: jclass, class2: jclass) -> jboolean {
+    pub unsafe fn IsAssignableFrom(&self, class1: jclass, class2: jclass) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -7071,7 +7138,7 @@ impl JNIEnv {
                 self.check_is_class("IsAssignableFrom", class1);
                 self.check_is_class("IsAssignableFrom", class2);
             }
-            self.jni::<extern "system" fn(JNIEnvVTable, jclass, jclass) -> jboolean>(11)(self.vtable, class1, class2)
+            self.jni::<extern "system" fn(JNIEnvVTable, jclass, jclass) -> jboolean>(11)(self.vtable, class1, class2).as_bool()
         }
     }
 
@@ -7492,13 +7559,13 @@ impl JNIEnv {
     /// ```
     ///
     #[must_use]
-    pub unsafe fn ExceptionCheck(&self) -> jboolean {
+    pub unsafe fn ExceptionCheck(&self) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
                 self.check_not_critical("ExceptionCheck");
             }
-            self.jni::<extern "system" fn(JNIEnvVTable) -> jboolean>(228)(self.vtable)
+            self.jni::<extern "system" fn(JNIEnvVTable) -> jboolean>(228)(self.vtable).as_bool()
         }
     }
 
@@ -8423,7 +8490,7 @@ impl JNIEnv {
     /// `obj` must be null or a valid reference that is not already garbage collected.
     /// `clazz` must be a valid non-null reference to a class that is not already garbage collected.
     ///
-    pub unsafe fn IsInstanceOf(&self, obj: jobject, clazz: jclass) -> jboolean {
+    pub unsafe fn IsInstanceOf(&self, obj: jobject, clazz: jclass) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -8432,7 +8499,7 @@ impl JNIEnv {
                 self.check_is_class("IsInstanceOf", clazz);
                 self.check_ref_obj_permit_null("IsInstanceOf", obj);
             }
-            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass) -> jboolean>(32)(self.vtable, obj, clazz)
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass) -> jboolean>(32)(self.vtable, obj, clazz).as_bool()
         }
     }
 
@@ -8472,7 +8539,7 @@ impl JNIEnv {
     /// `obj1` must be null or a valid reference that is not already garbage collected.
     /// `obj2` must be null or a valid reference that is not already garbage collected.
     ///
-    pub unsafe fn IsSameObject(&self, obj1: jobject, obj2: jobject) -> jboolean {
+    pub unsafe fn IsSameObject(&self, obj1: jobject, obj2: jobject) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -8481,7 +8548,7 @@ impl JNIEnv {
                 self.check_ref_obj_permit_null("IsSameObject obj1", obj1);
                 self.check_ref_obj_permit_null("IsSameObject obj2", obj2);
             }
-            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jobject) -> jboolean>(24)(self.vtable, obj1, obj2)
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jobject) -> jboolean>(24)(self.vtable, obj1, obj2).as_bool()
         }
     }
 
@@ -8632,7 +8699,7 @@ impl JNIEnv {
     /// `fieldID` must not be from a static field
     /// `fieldID` must refer to a field that is a boolean and not something else.
     ///
-    pub unsafe fn GetBooleanField(&self, obj: jobject, fieldID: jfieldID) -> jboolean {
+    pub unsafe fn GetBooleanField(&self, obj: jobject, fieldID: jfieldID) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -8640,7 +8707,7 @@ impl JNIEnv {
                 self.check_no_exception("GetBooleanField");
                 self.check_field_type_object("GetBooleanField", obj, fieldID, "boolean");
             }
-            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jboolean>(96)(self.vtable, obj, fieldID)
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jboolean>(96)(self.vtable, obj, fieldID).as_bool()
         }
     }
 
@@ -9070,13 +9137,15 @@ impl JNIEnv {
     /// `fieldID` must not be from a static field
     /// `fieldID` must refer to a field that is a boolean.
     ///
-    pub unsafe fn SetBooleanField(&self, obj: jobject, fieldID: jfieldID, value: jboolean) {
+    pub unsafe fn SetBooleanField(&self, obj: jobject, fieldID: jfieldID, value: impl Into<jboolean>) {
+        let value = value.into();
         unsafe {
             #[cfg(feature = "asserts")]
             {
                 self.check_not_critical("SetBooleanField");
                 self.check_no_exception("SetBooleanField");
                 self.check_field_type_object("SetBooleanField", obj, fieldID, "boolean");
+                assert!(!value.is_wide(), "SetBooleanField with wide boolean value");
             }
             self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(105)(self.vtable, obj, fieldID, value);
         }
@@ -10067,7 +10136,7 @@ impl JNIEnv {
     /// `args` union must contain types that match the java methods parameters.
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
-    pub unsafe fn CallBooleanMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> jboolean {
+    pub unsafe fn CallBooleanMethodA(&self, obj: jobject, methodID: jmethodID, args: *const jtype) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -10075,7 +10144,7 @@ impl JNIEnv {
                 self.check_no_exception("CallBooleanMethodA");
                 self.check_return_type_object("CallBooleanMethodA", obj, methodID, "boolean");
             }
-            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, obj, methodID, args)
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(39)(self.vtable, obj, methodID, args).as_bool()
         }
     }
 
@@ -10120,7 +10189,7 @@ impl JNIEnv {
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have no parameters
     ///
-    pub unsafe fn CallBooleanMethod0(&self, obj: jobject, methodID: jmethodID) -> jboolean {
+    pub unsafe fn CallBooleanMethod0(&self, obj: jobject, methodID: jmethodID) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -10128,7 +10197,7 @@ impl JNIEnv {
                 self.check_no_exception("CallBooleanMethod");
                 self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jboolean>(37)(self.vtable, obj, methodID)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jboolean>(37)(self.vtable, obj, methodID).as_bool()
         }
     }
 
@@ -10174,7 +10243,7 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 1 parameter
     /// The parameter types must exactly match the java method parameters.
     ///
-    pub unsafe fn CallBooleanMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> jboolean {
+    pub unsafe fn CallBooleanMethod1<A: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -10183,7 +10252,7 @@ impl JNIEnv {
                 self.check_return_type_object("CallBooleanMethod", obj, methodID, "boolean");
                 self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg1, 0, 1);
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1).as_bool()
         }
     }
 
@@ -10229,7 +10298,7 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 2 parameter
     /// The parameter types must exactly match the java method parameters.
     ///
-    pub unsafe fn CallBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
+    pub unsafe fn CallBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -10239,7 +10308,7 @@ impl JNIEnv {
                 self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg1, 0, 2);
                 self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg2, 1, 2);
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2).as_bool()
         }
     }
 
@@ -10285,7 +10354,7 @@ impl JNIEnv {
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 3 parameter
     /// The parameter types must exactly match the java method parameters.
     ///
-    pub unsafe fn CallBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
+    pub unsafe fn CallBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -10296,7 +10365,7 @@ impl JNIEnv {
                 self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg2, 1, 3);
                 self.check_parameter_types_object("CallBooleanMethod", obj, methodID, arg3, 2, 3);
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2, arg3)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(37)(self.vtable, obj, methodID, arg1, arg2, arg3).as_bool()
         }
     }
 
@@ -12867,7 +12936,7 @@ impl JNIEnv {
     /// `args` union must contain types that match the java methods parameters.
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
-    pub unsafe fn CallNonvirtualBooleanMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> jboolean {
+    pub unsafe fn CallNonvirtualBooleanMethodA(&self, obj: jobject, class: jclass, methodID: jmethodID, args: *const jtype) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -12876,7 +12945,7 @@ impl JNIEnv {
                 self.check_return_type_object("CallNonvirtualBooleanMethodA", obj, methodID, "boolean");
                 self.check_is_class("CallNonvirtualBooleanMethodA", class);
             }
-            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jboolean>(69)(self.vtable, obj, class, methodID, args)
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jclass, jmethodID, *const jtype) -> jboolean>(69)(self.vtable, obj, class, methodID, args).as_bool()
         }
     }
 
@@ -12924,7 +12993,7 @@ impl JNIEnv {
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have no parameters
     ///
-    pub unsafe fn CallNonvirtualBooleanMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> jboolean {
+    pub unsafe fn CallNonvirtualBooleanMethod0(&self, obj: jobject, class: jclass, methodID: jmethodID) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -12933,7 +13002,7 @@ impl JNIEnv {
                 self.check_return_type_object("CallNonvirtualBooleanMethod", obj, methodID, "boolean");
                 self.check_is_class("CallNonvirtualBooleanMethod", class);
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jboolean>(67)(self.vtable, obj, class, methodID)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID) -> jboolean>(67)(self.vtable, obj, class, methodID).as_bool()
         }
     }
 
@@ -12981,7 +13050,7 @@ impl JNIEnv {
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 1 arguments
     ///
-    pub unsafe fn CallNonvirtualBooleanMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> jboolean {
+    pub unsafe fn CallNonvirtualBooleanMethod1<A: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -12991,7 +13060,7 @@ impl JNIEnv {
                 self.check_is_class("CallNonvirtualBooleanMethod", class);
                 self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg1, 0, 1);
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1).as_bool()
         }
     }
 
@@ -13039,7 +13108,7 @@ impl JNIEnv {
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 2 arguments
     ///
-    pub unsafe fn CallNonvirtualBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
+    pub unsafe fn CallNonvirtualBooleanMethod2<A: JType, B: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -13050,7 +13119,7 @@ impl JNIEnv {
                 self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg1, 0, 2);
                 self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg2, 1, 2);
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2).as_bool()
         }
     }
 
@@ -13098,7 +13167,7 @@ impl JNIEnv {
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, non-static and actually be a method of `obj`, return boolean and have 3 arguments
     ///
-    pub unsafe fn CallNonvirtualBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
+    pub unsafe fn CallNonvirtualBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jobject, class: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -13110,7 +13179,7 @@ impl JNIEnv {
                 self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg2, 1, 3);
                 self.check_parameter_types_object("CallNonvirtualBooleanMethod", obj, methodID, arg3, 2, 3);
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2, arg3)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jclass, jmethodID, ...) -> jboolean>(67)(self.vtable, obj, class, methodID, arg1, arg2, arg3).as_bool()
         }
     }
 
@@ -15333,7 +15402,7 @@ impl JNIEnv {
     /// `fieldID` must be from a static field
     /// `fieldID` must refer to a field that is a boolean.
     ///
-    pub unsafe fn GetStaticBooleanField(&self, obj: jclass, fieldID: jfieldID) -> jboolean {
+    pub unsafe fn GetStaticBooleanField(&self, obj: jclass, fieldID: jfieldID) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -15341,7 +15410,7 @@ impl JNIEnv {
                 self.check_no_exception("GetStaticBooleanField");
                 self.check_field_type_static("GetStaticBooleanField", obj, fieldID, "boolean");
             }
-            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jboolean>(146)(self.vtable, obj, fieldID)
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID) -> jboolean>(146)(self.vtable, obj, fieldID).as_bool()
         }
     }
 
@@ -15773,13 +15842,15 @@ impl JNIEnv {
     /// `fieldID` must be from a static field
     /// `fieldID` must refer to a field that is a boolean.
     ///
-    pub unsafe fn SetStaticBooleanField(&self, obj: jclass, fieldID: jfieldID, value: jboolean) {
+    pub unsafe fn SetStaticBooleanField(&self, obj: jclass, fieldID: jfieldID, value: impl Into<jboolean>) {
+        let value = value.into();
         unsafe {
             #[cfg(feature = "asserts")]
             {
                 self.check_not_critical("SetStaticBooleanField");
                 self.check_no_exception("SetStaticBooleanField");
                 self.check_field_type_static("SetStaticBooleanField", obj, fieldID, "boolean");
+                assert!(!value.is_wide(), "SetStaticBooleanField with wide boolean value");
             }
             self.jni::<extern "system" fn(JNIEnvVTable, jobject, jfieldID, jboolean)>(155)(self.vtable, obj, fieldID, value);
         }
@@ -16771,7 +16842,7 @@ impl JNIEnv {
     /// `args` union must contain types that match the java methods parameters.
     /// (i.e. do not use a float instead of an object as parameter, beware of java boxed types)
     ///
-    pub unsafe fn CallStaticBooleanMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> jboolean {
+    pub unsafe fn CallStaticBooleanMethodA(&self, obj: jclass, methodID: jmethodID, args: *const jtype) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -16779,7 +16850,7 @@ impl JNIEnv {
                 self.check_no_exception("CallStaticBooleanMethodA");
                 self.check_return_type_static("CallStaticBooleanMethodA", obj, methodID, "boolean");
             }
-            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(119)(self.vtable, obj, methodID, args)
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject, jmethodID, *const jtype) -> jboolean>(119)(self.vtable, obj, methodID, args).as_bool()
         }
     }
 
@@ -16824,7 +16895,7 @@ impl JNIEnv {
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 0 arguments
     ///
-    pub unsafe fn CallStaticBooleanMethod0(&self, obj: jclass, methodID: jmethodID) -> jboolean {
+    pub unsafe fn CallStaticBooleanMethod0(&self, obj: jclass, methodID: jmethodID) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -16832,7 +16903,7 @@ impl JNIEnv {
                 self.check_no_exception("CallStaticBooleanMethod");
                 self.check_return_type_static("CallStaticBooleanMethod", obj, methodID, "boolean");
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jboolean>(117)(self.vtable, obj, methodID)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID) -> jboolean>(117)(self.vtable, obj, methodID).as_bool()
         }
     }
 
@@ -16877,7 +16948,7 @@ impl JNIEnv {
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 1 arguments
     ///
-    pub unsafe fn CallStaticBooleanMethod1<A: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A) -> jboolean {
+    pub unsafe fn CallStaticBooleanMethod1<A: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -16886,7 +16957,7 @@ impl JNIEnv {
                 self.check_return_type_static("CallStaticBooleanMethod", obj, methodID, "boolean");
                 self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg1, 0, 1);
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1).as_bool()
         }
     }
 
@@ -16931,7 +17002,7 @@ impl JNIEnv {
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 2 arguments
     ///
-    pub unsafe fn CallStaticBooleanMethod2<A: JType, B: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B) -> jboolean {
+    pub unsafe fn CallStaticBooleanMethod2<A: JType, B: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -16941,7 +17012,7 @@ impl JNIEnv {
                 self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg1, 0, 2);
                 self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg2, 1, 2);
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2).as_bool()
         }
     }
 
@@ -16986,7 +17057,7 @@ impl JNIEnv {
     /// `obj` must a valid and not already garbage collected.
     /// `methodID` must be valid, static and actually be a method of `obj`, return boolean and have 3 arguments
     ///
-    pub unsafe fn CallStaticBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> jboolean {
+    pub unsafe fn CallStaticBooleanMethod3<A: JType, B: JType, C: JType>(&self, obj: jclass, methodID: jmethodID, arg1: A, arg2: B, arg3: C) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -16997,7 +17068,7 @@ impl JNIEnv {
                 self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg2, 1, 3);
                 self.check_parameter_types_static("CallStaticBooleanMethod", obj, methodID, arg3, 2, 3);
             }
-            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2, arg3)
+            self.jni::<extern "C" fn(JNIEnvVTable, jobject, jmethodID, ...) -> jboolean>(117)(self.vtable, obj, methodID, arg1, arg2, arg3).as_bool()
         }
     }
 
@@ -19124,7 +19195,7 @@ impl JNIEnv {
     /// `string` must be a valid reference that is not yet garbage collected and refer to a String.
     /// `isCopy` must be null or valid.
     ///
-    pub unsafe fn GetStringChars(&self, string: jstring, isCopy: *mut jboolean) -> *const jchar {
+    pub unsafe fn GetStringChars(&self, string: jstring, isCopy: impl JBooleanMutPtr) -> *const jchar {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -19133,7 +19204,7 @@ impl JNIEnv {
                 assert!(!string.is_null(), "GetStringChars string must not be null");
                 self.check_if_arg_is_string("GetStringChars", string);
             }
-            self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const jchar>(165)(self.vtable, string, isCopy)
+            isCopy.use_jboolean_mut(|isCopy| self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const jchar>(165)(self.vtable, string, isCopy))
         }
     }
 
@@ -19183,7 +19254,7 @@ impl JNIEnv {
                 return Some(String::new());
             }
 
-            let str = self.GetStringChars(string, null_mut());
+            let str = self.GetStringChars(string, ());
             if str.is_null() {
                 return None;
             }
@@ -19423,7 +19494,7 @@ impl JNIEnv {
     ///
     /// `string` must not be null, must refer to a string and not already be garbage collected.
     ///
-    pub unsafe fn GetStringUTFChars(&self, string: jstring, isCopy: *mut jboolean) -> *const c_char {
+    pub unsafe fn GetStringUTFChars(&self, string: jstring, isCopy: impl JBooleanMutPtr) -> *const c_char {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -19431,8 +19502,7 @@ impl JNIEnv {
                 assert!(!string.is_null(), "GetStringUTFChars string must not be null");
                 self.check_if_arg_is_string("GetStringUTFChars", string);
             }
-
-            self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const c_char>(169)(self.vtable, string, isCopy)
+            isCopy.use_jboolean_mut(|isCopy| self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const c_char>(169)(self.vtable, string, isCopy))
         }
     }
 
@@ -19490,7 +19560,7 @@ impl JNIEnv {
                 self.check_if_arg_is_string("GetStringUTFChars_as_string", string);
             }
 
-            let str = self.GetStringUTFChars(string, null_mut());
+            let str = self.GetStringUTFChars(string, ());
             if str.is_null() {
                 return None;
             }
@@ -19755,7 +19825,7 @@ impl JNIEnv {
     /// Writing to the returned `*const jchar` in any way is UB.
     /// `string` must be non-null, valid, actually refer to a string and not yet be garbage collected.
     ///
-    pub unsafe fn GetStringCritical(&self, string: jstring, isCopy: *mut jboolean) -> *const jchar {
+    pub unsafe fn GetStringCritical(&self, string: jstring, isCopy: impl JBooleanMutPtr) -> *const jchar {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -19777,7 +19847,7 @@ impl JNIEnv {
                 }
             }
 
-            let crit = self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const jchar>(224)(self.vtable, string, isCopy);
+            let crit = isCopy.use_jboolean_mut(|isCopy| self.jni::<extern "system" fn(JNIEnvVTable, jstring, *mut jboolean) -> *const jchar>(224)(self.vtable, string, isCopy));
 
             #[cfg(all(feature = "asserts", feature = "std"))]
             {
@@ -20409,7 +20479,7 @@ impl JNIEnv {
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
-    pub unsafe fn GetBooleanArrayElements(&self, array: jbooleanArray, is_copy: *mut jboolean) -> *mut jboolean {
+    pub unsafe fn GetBooleanArrayElements(&self, array: jbooleanArray, is_copy: impl JBooleanMutPtr) -> *mut jboolean {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -20417,8 +20487,7 @@ impl JNIEnv {
                 self.check_no_exception("GetBooleanArrayElements");
                 assert!(!array.is_null(), "GetBooleanArrayElements jarray must not be null");
             }
-
-            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, *mut jboolean) -> *mut jboolean>(183)(self.vtable, array, is_copy)
+            is_copy.use_jboolean_mut(|is_copy| self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, *mut jboolean) -> *mut jboolean>(183)(self.vtable, array, is_copy))
         }
     }
 
@@ -20455,7 +20524,7 @@ impl JNIEnv {
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
-    pub unsafe fn GetByteArrayElements(&self, array: jbyteArray, is_copy: *mut jboolean) -> *mut jbyte {
+    pub unsafe fn GetByteArrayElements(&self, array: jbyteArray, is_copy: impl JBooleanMutPtr) -> *mut jbyte {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -20464,7 +20533,7 @@ impl JNIEnv {
                 assert!(!array.is_null(), "GetByteArrayElements jarray must not be null");
             }
 
-            self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, *mut jboolean) -> *mut jbyte>(184)(self.vtable, array, is_copy)
+            is_copy.use_jboolean_mut(|is_copy| self.jni::<extern "system" fn(JNIEnvVTable, jbyteArray, *mut jboolean) -> *mut jbyte>(184)(self.vtable, array, is_copy))
         }
     }
 
@@ -20501,7 +20570,7 @@ impl JNIEnv {
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
-    pub unsafe fn GetCharArrayElements(&self, array: jcharArray, is_copy: *mut jboolean) -> *mut jchar {
+    pub unsafe fn GetCharArrayElements(&self, array: jcharArray, is_copy: impl JBooleanMutPtr) -> *mut jchar {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -20510,7 +20579,7 @@ impl JNIEnv {
                 assert!(!array.is_null(), "GetCharArrayElements jarray must not be null");
             }
 
-            self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, *mut jboolean) -> *mut jchar>(185)(self.vtable, array, is_copy)
+            is_copy.use_jboolean_mut(|is_copy| self.jni::<extern "system" fn(JNIEnvVTable, jcharArray, *mut jboolean) -> *mut jchar>(185)(self.vtable, array, is_copy))
         }
     }
 
@@ -20547,7 +20616,7 @@ impl JNIEnv {
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
-    pub unsafe fn GetShortArrayElements(&self, array: jshortArray, is_copy: *mut jboolean) -> *mut jshort {
+    pub unsafe fn GetShortArrayElements(&self, array: jshortArray, is_copy: impl JBooleanMutPtr) -> *mut jshort {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -20556,7 +20625,7 @@ impl JNIEnv {
                 assert!(!array.is_null(), "GetShortArrayElements jarray must not be null");
             }
 
-            self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, *mut jboolean) -> *mut jshort>(186)(self.vtable, array, is_copy)
+            is_copy.use_jboolean_mut(|is_copy| self.jni::<extern "system" fn(JNIEnvVTable, jshortArray, *mut jboolean) -> *mut jshort>(186)(self.vtable, array, is_copy))
         }
     }
 
@@ -20593,7 +20662,7 @@ impl JNIEnv {
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
-    pub unsafe fn GetIntArrayElements(&self, array: jintArray, is_copy: *mut jboolean) -> *mut jint {
+    pub unsafe fn GetIntArrayElements(&self, array: jintArray, is_copy: impl JBooleanMutPtr) -> *mut jint {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -20602,7 +20671,7 @@ impl JNIEnv {
                 assert!(!array.is_null(), "GetIntArrayElements jarray must not be null");
             }
 
-            self.jni::<extern "system" fn(JNIEnvVTable, jintArray, *mut jboolean) -> *mut jint>(187)(self.vtable, array, is_copy)
+            is_copy.use_jboolean_mut(|is_copy| self.jni::<extern "system" fn(JNIEnvVTable, jintArray, *mut jboolean) -> *mut jint>(187)(self.vtable, array, is_copy))
         }
     }
 
@@ -20639,7 +20708,7 @@ impl JNIEnv {
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
-    pub unsafe fn GetLongArrayElements(&self, array: jlongArray, is_copy: *mut jboolean) -> *mut jlong {
+    pub unsafe fn GetLongArrayElements(&self, array: jlongArray, is_copy: impl JBooleanMutPtr) -> *mut jlong {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -20648,7 +20717,7 @@ impl JNIEnv {
                 assert!(!array.is_null(), "GetLongArrayElements jarray must not be null");
             }
 
-            self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, *mut jboolean) -> *mut jlong>(188)(self.vtable, array, is_copy)
+            is_copy.use_jboolean_mut(|is_copy| self.jni::<extern "system" fn(JNIEnvVTable, jlongArray, *mut jboolean) -> *mut jlong>(188)(self.vtable, array, is_copy))
         }
     }
 
@@ -20685,7 +20754,7 @@ impl JNIEnv {
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
-    pub unsafe fn GetFloatArrayElements(&self, array: jfloatArray, is_copy: *mut jboolean) -> *mut jfloat {
+    pub unsafe fn GetFloatArrayElements(&self, array: jfloatArray, is_copy: impl JBooleanMutPtr) -> *mut jfloat {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -20694,7 +20763,7 @@ impl JNIEnv {
                 assert!(!array.is_null(), "GetFloatArrayElements jarray must not be null");
             }
 
-            self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, *mut jboolean) -> *mut jfloat>(189)(self.vtable, array, is_copy)
+            is_copy.use_jboolean_mut(|is_copy| self.jni::<extern "system" fn(JNIEnvVTable, jfloatArray, *mut jboolean) -> *mut jfloat>(189)(self.vtable, array, is_copy))
         }
     }
 
@@ -20731,7 +20800,7 @@ impl JNIEnv {
     ///
     /// `array` must not be null, must refer to a array and not already be garbage collected.
     ///
-    pub unsafe fn GetDoubleArrayElements(&self, array: jdoubleArray, is_copy: *mut jboolean) -> *mut jdouble {
+    pub unsafe fn GetDoubleArrayElements(&self, array: jdoubleArray, is_copy: impl JBooleanMutPtr) -> *mut jdouble {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -20740,7 +20809,7 @@ impl JNIEnv {
                 assert!(!array.is_null(), "GetDoubleArrayElements jarray must not be null");
             }
 
-            self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, *mut jboolean) -> *mut jdouble>(190)(self.vtable, array, is_copy)
+            is_copy.use_jboolean_mut(|is_copy| self.jni::<extern "system" fn(JNIEnvVTable, jdoubleArray, *mut jboolean) -> *mut jdouble>(190)(self.vtable, array, is_copy))
         }
     }
 
@@ -21243,9 +21312,10 @@ impl JNIEnv {
     /// }
     /// ```
     ///
-    pub unsafe fn SetBooleanArrayRegion_from_slice(&self, array: jbooleanArray, start: jsize, buf: &[jboolean]) {
+    pub unsafe fn SetBooleanArrayRegion_from_slice(&self, array: jbooleanArray, start: jsize, buf: &[impl JBooleanInputLayout]) {
+        let ptr: *const jboolean = buf.as_ptr().cast();
         unsafe {
-            self.SetBooleanArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), buf.as_ptr());
+            self.SetBooleanArrayRegion(array, start, jsize::try_from(buf.len()).expect("buf.len() > jsize::MAX"), ptr);
         }
     }
 
@@ -21258,7 +21328,7 @@ impl JNIEnv {
     /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
     ///
     /// # Returns:
-    /// a new `Vec<jbyte>` that contains the copied data.
+    /// a new `Vec<jboolean>` that contains the copied data.
     ///
     /// # Returns empty Vec:
     /// * When the array in fact was empty or len was zero.
@@ -21300,7 +21370,7 @@ impl JNIEnv {
         unsafe {
             let len = len.unwrap_or_else(|| self.GetArrayLength(array).saturating_sub(start.max(0)).max(0));
             if let Ok(len) = usize::try_from(len) {
-                let mut data = vec![false; len]; //We could un-init this, but better play it safe...
+                let mut data = vec![jboolean::FALSE; len]; //We could un-init this, but better play it safe...
                 self.GetBooleanArrayRegion_into_slice(array, start, data.as_mut_slice());
                 if self.ExceptionCheck() {
                     return Vec::new();
@@ -21309,7 +21379,74 @@ impl JNIEnv {
             }
 
             //Negative len
-            let mut sentinel_buffer = [false];
+            let mut sentinel_buffer = [jboolean::FALSE];
+            self.GetBooleanArrayRegion(array, start, len.min(-1), sentinel_buffer.as_mut_ptr());
+            Vec::new()
+        }
+    }
+
+    ///
+    /// Copies data from a Java jbooleanArray `array` into a new `Vec<bool>`
+    ///
+    /// # Arguments
+    /// * `array` - handle to a Java jbooleanArray.
+    /// * `start` - the index of the first element to copy in the Java jbooleanArray
+    /// * `len` - the amount of data that should be copied. If `None` then all remaining elements in the array are copied.
+    ///
+    /// # Returns:
+    /// a new `Vec<bool>` that contains the copied data.
+    ///
+    /// # Returns empty Vec:
+    /// * When the array in fact was empty or len was zero.
+    /// * When this function throws a Java Exception.
+    ///
+    /// # Throws Java Exception:
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `len` is larger than the amount of remaining elements in the array.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is negative.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` is larget than `env.GetArrayLength(array)`.
+    /// * `ArrayIndexOutOfBoundsException` - if `start` equals env.GetArrayLength(array) and `len` is larger than 0.
+    ///
+    /// # Panics
+    /// if asserts feature is enabled and UB was detected
+    ///
+    /// # Safety
+    /// Current thread must not be detached from JNI.
+    ///
+    /// Current thread must not be currently throwing an exception.
+    ///
+    /// Current thread does not hold a critical reference.
+    /// * <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetPrimitiveArrayCritical_ReleasePrimitiveArrayCritical>
+    ///
+    /// `array` must be a valid non-null reference to a jbooleanArray.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jni_simple::{*};
+    ///
+    /// unsafe fn copy_entire_java_array_to_rust(env: JNIEnv, array: jbooleanArray) -> Vec<bool> {
+    ///     if array.is_null() {
+    ///         panic!("Java Array is null")
+    ///     }
+    ///     env.GetBooleanArrayRegion_as_bool_vec(array, 0, None)
+    /// }
+    /// ```
+    ///
+    pub unsafe fn GetBooleanArrayRegion_as_bool_vec(&self, array: jbyteArray, start: jsize, len: Option<jsize>) -> Vec<bool> {
+        unsafe {
+            let len = len.unwrap_or_else(|| self.GetArrayLength(array).saturating_sub(start.max(0)).max(0));
+            if let Ok(len) = usize::try_from(len) {
+                let mut data = vec![jboolean::FALSE; len]; //We could un-init this, but better play it safe...
+                self.GetBooleanArrayRegion_into_slice(array, start, data.as_mut_slice());
+                if self.ExceptionCheck() {
+                    return Vec::new();
+                }
+
+                return jboolean::narrow_vec(data);
+            }
+
+            //Negative len
+            let mut sentinel_buffer = [jboolean::FALSE];
             self.GetBooleanArrayRegion(array, start, len.min(-1), sentinel_buffer.as_mut_ptr());
             Vec::new()
         }
@@ -21353,7 +21490,7 @@ impl JNIEnv {
     /// use jni_simple::{*};
     ///
     /// unsafe fn copy_chunk_from_java_to_rust(env: JNIEnv,
-    ///         array: jbooleanArray, chunk_buffer: &mut [bool], chunk_offset: usize) -> bool {
+    ///         array: jbooleanArray, chunk_buffer: &mut [jboolean], chunk_offset: usize) -> bool {
     ///     if array.is_null() {
     ///         panic!("Java Array is null")
     ///     }
@@ -23128,7 +23265,8 @@ impl JNIEnv {
     /// `array` must be a valid non-null reference to a jbooleanArray.
     /// `buf` must be at least `len` elements in size
     ///
-    pub unsafe fn SetBooleanArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *const jboolean) {
+    pub unsafe fn SetBooleanArrayRegion(&self, array: jbooleanArray, start: jsize, len: jsize, buf: *const impl JBooleanInputLayout) {
+        let ptr: *const jboolean = buf.cast();
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -23136,9 +23274,9 @@ impl JNIEnv {
                 self.check_no_exception("SetBooleanArrayRegion");
                 assert!(!array.is_null(), "SetBooleanArrayRegion jarray must not be null");
                 assert!(!buf.is_null(), "SetBooleanArrayRegion buf must not be null");
+                Self::check_bool_array_is_narrow("SetBooleanArrayRegion", ptr, len);
             }
-
-            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jboolean)>(207)(self.vtable, array, start, len, buf);
+            self.jni::<extern "system" fn(JNIEnvVTable, jbooleanArray, jsize, jsize, *const jboolean)>(207)(self.vtable, array, start, len, ptr);
         }
     }
 
@@ -23530,7 +23668,7 @@ impl JNIEnv {
     /// # Safety
     /// `array` must be valid non null reference to a array that is not already garbage collected
     ///
-    pub unsafe fn GetPrimitiveArrayCritical(&self, array: jarray, isCopy: *mut jboolean) -> *mut c_void {
+    pub unsafe fn GetPrimitiveArrayCritical(&self, array: jarray, isCopy: impl JBooleanMutPtr) -> *mut c_void {
         unsafe {
             #[cfg(all(feature = "asserts", feature = "std"))]
             {
@@ -23548,7 +23686,7 @@ impl JNIEnv {
                 assert!(!array.is_null(), "GetPrimitiveArrayCritical jarray must not be null");
             }
 
-            let crit = self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut jboolean) -> *mut c_void>(222)(self.vtable, array, isCopy);
+            let crit = isCopy.use_jboolean_mut(|isCopy| self.jni::<extern "system" fn(JNIEnvVTable, jarray, *mut jboolean) -> *mut c_void>(222)(self.vtable, array, isCopy));
 
             #[cfg(all(feature = "asserts", feature = "std"))]
             {
@@ -24017,7 +24155,8 @@ impl JNIEnv {
     /// `cls` must be a valid non-null reference to a Class and not be garbage collected.
     /// `jmethodID` must refer to a method in `cls` and must be either static or not static depending on the `isStatic` flag.
     ///
-    pub unsafe fn ToReflectedMethod(&self, cls: jclass, jmethodID: jmethodID, isStatic: jboolean) -> jobject {
+    pub unsafe fn ToReflectedMethod(&self, cls: jclass, jmethodID: jmethodID, isStatic: impl Into<jboolean>) -> jobject {
+        let isStatic = isStatic.into();
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -24025,6 +24164,7 @@ impl JNIEnv {
                 self.check_no_exception("ToReflectedMethod");
                 assert!(!cls.is_null(), "ToReflectedMethod class must not be null");
                 assert!(!jmethodID.is_null(), "ToReflectedMethod method must not be null");
+                assert!(!isStatic.is_wide(), "ToReflectedMethod isStatic is wide value");
             }
             self.jni::<extern "system" fn(JNIEnvVTable, jclass, jmethodID, jboolean) -> jobject>(9)(self.vtable, cls, jmethodID, isStatic)
         }
@@ -24105,7 +24245,8 @@ impl JNIEnv {
     /// `cls` must be a valid non-null reference to a Class and not be garbage collected.
     /// `jfieldID` must refer to a field in `cls` and must be either static or not static depending on the `isStatic` flag.
     ///
-    pub unsafe fn ToReflectedField(&self, cls: jclass, jfieldID: jfieldID, isStatic: jboolean) -> jobject {
+    pub unsafe fn ToReflectedField(&self, cls: jclass, jfieldID: jfieldID, isStatic: impl Into<jboolean>) -> jobject {
+        let isStatic = isStatic.into();
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -24113,6 +24254,7 @@ impl JNIEnv {
                 self.check_no_exception("ToReflectedField");
                 assert!(!cls.is_null(), "ToReflectedField class must not be null");
                 assert!(!jfieldID.is_null(), "ToReflectedField field must not be null");
+                assert!(!isStatic.is_wide(), "ToReflectedMethod isStatic is wide value");
             }
             self.jni::<extern "system" fn(JNIEnvVTable, jclass, jfieldID, jboolean) -> jobject>(12)(self.vtable, cls, jfieldID, isStatic)
         }
@@ -24231,7 +24373,7 @@ impl JNIEnv {
     ///
     /// `thread` must refer to a non-null java.lang.Thread that is not yet garbage collected.
     ///
-    pub unsafe fn IsVirtualThread(&self, thread: jobject) -> jboolean {
+    pub unsafe fn IsVirtualThread(&self, thread: jobject) -> bool {
         unsafe {
             #[cfg(feature = "asserts")]
             {
@@ -24239,7 +24381,7 @@ impl JNIEnv {
                 self.check_no_exception("IsVirtualThread");
                 assert!(self.GetVersion() >= JNI_VERSION_21);
             }
-            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jboolean>(234)(self.vtable, thread)
+            self.jni::<extern "system" fn(JNIEnvVTable, jobject) -> jboolean>(234)(self.vtable, thread).as_bool()
         }
     }
 
@@ -24289,6 +24431,29 @@ impl JNIEnv {
 
             self.DeleteLocalRef(cl);
             self.DeleteLocalRef(clazz);
+        }
+    }
+
+    /// Checks that all boolean values in the array determined by len are 0 or 1 in memory (aka not wide booleans)
+    #[cfg(feature = "asserts")]
+    unsafe fn check_bool_array_is_narrow(context: &str, ptr: *const jboolean, len: jsize) {
+        unsafe {
+            if ptr.is_null() {
+                return;
+            }
+
+            let Ok(len) = usize::try_from(len) else {
+                return;
+            };
+
+            let sl = core::slice::from_raw_parts(ptr, len);
+            for (idx, b) in sl.iter().enumerate() {
+                assert!(
+                    !b.is_wide(),
+                    "{context} boolean array contains a wide value {} in index {idx}. This would likely be UB in the JVM.",
+                    b.as_wide()
+                );
+            }
         }
     }
 

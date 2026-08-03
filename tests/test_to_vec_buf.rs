@@ -71,7 +71,7 @@ mod test {
 
     impl FromNum for jboolean {
         fn from(by: jbyte) -> Self {
-            by & 1 == 0
+            (by & 1 == 0).into()
         }
     }
 
