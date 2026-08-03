@@ -375,7 +375,7 @@ Should the std feature be disabled, then those checks are not done.
 ## Further Info
 
 ### ABI for bool, jboolean etc
-Thanks to Robin Stevi (https://github.com/rstenvi) for making me aware of this.
+Thanks to Robin Stenvi (https://github.com/rstenvi) for making me aware of this.
 See https://github.com/AlexanderSchuetz97/jni-simple/pull/5
 
 Basically JNI's bool type is an u8 where 0 is false and 1 true.
